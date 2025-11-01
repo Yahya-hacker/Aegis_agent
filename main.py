@@ -1,34 +1,68 @@
 #!/usr/bin/env python3
 """
-AEGIS AI SECURITY AGENT
-Advanced AI-powered penetration testing assistant
+AEGIS AI - AGENT AUTONOME DE PENTEST (v2.0)
+Point d'entrée principal
 """
 
 import asyncio
 import sys
 import os
+import logging
+from pathlib import Path
 
-# Add the current directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Configuration du logging (très important pour le debug)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('aegis_agent.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
-from agents.main_agent import AdvancedAegisAI
+logger = logging.getLogger(__name__)
+
+# Ajoute la racine du projet au PYTHONPATH
+sys.path.insert(0, str(Path(__file__).parent))
 
 async def main():
-    """Main entry point for Aegis AI"""
-    print("🚀 Starting Aegis AI Security Agent...")
+    """Point d'entrée principal pour la nouvelle architecture autonome."""
+    
+    # Importer les NOUVEAUX composants
+    try:
+        from agents.ai_core import AegisAI
+        from agents.conversational_agent import AegisConversation
+    except ImportError as e:
+        logger.error(f"Erreur d'importation critique : {e}")
+        print(f"❌ Erreur: Assurez-vous que vos fichiers (ai_core.py, conversational_agent.py) sont dans le dossier 'agents'.")
+        sys.exit(1)
+
+    print("🚀 Démarrage de l'Agent Autonome Aegis AI...")
     
     try:
-        # Initialize the AI agent
-        agent = AdvancedAegisAI()
+        # 1. Initialiser le Cerveau (AegisAI)
+        # C'est l'étape qui charge le modèle Dolphin-Mistral sur le GPU
+        ai_core = AegisAI()
+        await ai_core.initialize()
         
-        # Start interactive conversation
-        await agent.conversation.chat_interface()
+        # 2. Initialiser l'Orchestrateur (AegisConversation)
+        # On injecte le cerveau dans l'orchestrateur
+        conversation = AegisConversation(ai_core)
+        
+        # 3. Démarrer la boucle de conversation
+        # C'est l'orchestrateur qui prend le contrôle
+        await conversation.start()
         
     except KeyboardInterrupt:
-        print("\n\n🛡️  Aegis AI session terminated by user.")
+        print("\n\n🛡️  Session Aegis AI terminée par l'utilisateur.")
     except Exception as e:
-        print(f"❌ Error starting Aegis AI: {e}")
-        print("💡 Make sure all dependencies are installed and files are in place.")
+        logger.error(f"❌ Erreur critique au démarrage : {e}", exc_info=True)
+        print(f"❌ Une erreur fatale est survenue: {e}")
+        print("💡 Vérifiez le fichier 'aegis_agent.log' pour les détails.")
+        sys.exit(1)
 
 if __name__ == "__main__":
+    # S'assurer que webdriver-manager a les permissions (si besoin)
+    # os.environ['WDM_SSL_VERIFY'] = '0' # Décommentez si vous avez des erreurs SSL
+    
     asyncio.run(main())
