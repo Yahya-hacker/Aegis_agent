@@ -1,0 +1,26 @@
+{
+  "dirsearch": {
+    "command": "python3 tools/owasp_tools/A01-Broken_Access_Control/dirsearch/dirsearch.py -u {target} -e php,html,js -t 20",
+    "purpose": "Directory and file brute-forcing",
+    "category": "A01-Broken_Access_Control",
+    "output_type": "vulnerabilities"
+  },
+  "sqlmap": {
+    "command": "python3 tools/owasp_tools/A03-Injection/sqlmap/sqlmap.py -u '{target}' --batch --level=3 --risk=2",
+    "purpose": "Automatic SQL injection detection and exploitation",
+    "category": "A03-Injection",
+    "output_type": "vulnerabilities"
+  },
+  "nuclei": {
+    "command": "tools/owasp_tools/A05-Security_Misconfiguration/nuclei/nuclei -u {target} -t cves/ -t vulnerabilities/",
+    "purpose": "Fast vulnerability scanner based on templates",
+    "category": "A05-Security_Misconfiguration",
+    "output_type": "vulnerabilities"
+  },
+  "nikto": {
+    "command": "perl tools/owasp_tools/A05-Security_Misconfiguration/nikto/nikto.pl -h {target}",
+    "purpose": "Web server scanner for misconfigurations",
+    "category": "A05-Security_Misconfiguration",
+    "output_type": "misconfigurations"
+  }
+}

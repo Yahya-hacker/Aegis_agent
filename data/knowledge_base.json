@@ -1,0 +1,20 @@
+{
+  "vulnerabilities": {
+    "SQL Injection": [],
+    "XSS": [],
+    "Command Injection": [],
+    "SSRF": [],
+    "File Inclusion": []
+  },
+  "techniques": {
+    "successful_techniques": [],
+    "failed_techniques": []
+  },
+  "target_patterns": {},
+  "learning_data": {
+    "total_assessments": 0,
+    "successful_findings": 0,
+    "false_positives": 0,
+    "average_confidence": 0
+  }
+}

@@ -1,0 +1,201 @@
+# agents/conversation.py
+import asyncio
+import re
+import json
+from typing import Dict, List, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+class AegisConversation:
+    """
+    Interface de conversation et orchestrateur de la BOUCLE D'AGENT AUTONOME.
+    """
+    
+    def __init__(self, ai_core):
+        self.ai_core = ai_core
+        self.agent_memory = [] # Mémoire pour la boucle d'agent
+        self.global_findings = [] # Stocke toutes les trouvailles
+    
+    async def start(self):
+        """Démarre l'interface de conversation."""
+        self._print_welcome()
+        
+        while True:
+            try:
+                user_input = await self._get_user_input()
+                
+                if user_input.lower() in ['quit', 'exit', 'bye']:
+                    await self._handle_exit()
+                    break
+                elif user_input.lower() in ['help', '?']:
+                    self._print_help()
+                else:
+                    # Lancer la boucle d'agent
+                    await self.run_autonomous_loop(user_input)
+                    
+            except KeyboardInterrupt:
+                await self._handle_exit()
+                break
+            except Exception as e:
+                logger.error(f"Erreur de conversation : {e}", exc_info=True)
+                print(f"❌ Erreur critique: {e}")
+    
+    async def _get_user_input(self) -> str:
+        try:
+            return input("\n🧑‍💻 VOUS: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            raise
+
+    def _extract_target(self, text: str) -> str:
+        """Extrait le domaine cible."""
+        url_pattern = r'https?://([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+        matches = re.findall(url_pattern, text)
+        if matches:
+            return next(m for m in matches[0] if m)
+        return ""
+
+    async def run_autonomous_loop(self, user_input: str):
+        """
+        C'EST LA BOUCLE D'AGENT PRINCIPALE.
+        Penser -> Proposer -> Approuver -> Agir -> Observer
+        """
+        print("🤖 Aegis AI analyse la mission...")
+        target = self._extract_target(user_input)
+        
+        if not target:
+            print("❌ Cible non détectée. Essayez : 'scan example.com [règles]'")
+            return
+            
+        # --- DÉBUT DE LA BOUCLE D'AGENT ---
+        
+        # !! IMPORTANT !! Collez vos règles de BBP ici
+        bbp_rules = f"""
+        - CIBLE PRINCIPALE : {target}
+        - RÈGLE 1: "Ask before testing unscoped subdomains." (Utilise 'ask_user_for_approval')
+        - RÈGLE 2: "Do not engage in DDoS."
+        - RÈGLE 3: "NOT vulnerabilities: /v3/users or /v3/teams enumeration."
+        - RÈGLE 4: "Leak Credentials are out of scope."
+        - RÈGLE 5: {user_input} (Instructions de l'utilisateur)
+        """
+        
+        print(f"📜 Règles chargées pour {target}.")
+        
+        from agents.scanner import AegisScanner
+        scanner = AegisScanner(self.ai_core)
+        
+        # Initialise la mémoire de l'agent
+        self.agent_memory = [
+            {"type": "mission", "content": f"La mission est de scanner {target} en respectant les règles."},
+        ]
+        self.global_findings = []
+        
+        for step_count in range(20): # Limite à 20 étapes
+            print("\n" + "="*70)
+            print(f"🧠 ÉTAPE D'AGENT {step_count + 1}/20")
+            
+            # 1. PENSER: L'IA décide de la prochaine action
+            print("🧠 Aegis AI (Dolphin) réfléchit...")
+            action = self.ai_core.get_next_action(bbp_rules, self.agent_memory)
+            
+            print(f"🤖 PROPOSITION IA : {action}")
+            
+            # 2. GÉRER LES ACTIONS SYSTÈME
+            tool = action.get("tool")
+            args = action.get("args", {})
+            
+            if tool == "finish_mission":
+                print(f"🛡️ MISSION TERMINÉE : {args.get('reason')}")
+                break
+                
+            if tool == "ask_user_for_approval":
+                print(f"💡 REQUÊTE IA : {args.get('message')}")
+                # Tombe directement dans l'approbation humaine
+            
+            if tool == "system" or not tool:
+                print(f"⚠️ Alerte IA : {action.get('message', 'Action non valide')}")
+                self.agent_memory.append({"type": "observation", "content": "J'ai généré une action invalide. Je dois réessayer."})
+                continue 
+
+            # 3. APPROBATION HUMAINE (Human-in-the-Loop)
+            try:
+                response = input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip()
+            except EOFError:
+                break
+            
+            if response in ['q', 'quit', 'exit']:
+                print("🛑 Mission arrêtée par l'utilisateur.")
+                break
+                
+            if response in ['o', 'oui', 'y', 'yes', '']:
+                # 4. AGIR: Exécuter l'action
+                print(f"🚀 Exécution : {tool}...")
+                result = await scanner.execute_action(action)
+                
+                # 5. OBSERVER: Ajouter le résultat à la mémoire
+                print(f"📝 Résultat : {result.get('status', 'error')}")
+                
+                if result.get("status") == "success":
+                    data = result.get("data", "Aucune donnée retournée.")
+                    self.global_findings.append({"tool": tool, "args": args, "data": data})
+                    
+                    # Rendre l'observation lisible pour l'IA
+                    observation = f"Action {tool} réussie."
+                    if isinstance(data, list):
+                        observation += f" {len(data)} résultats trouvés."
+                        if len(data) > 10:
+                            observation += f" Voici les 10 premiers: {json.dumps(data[:10])}"
+                        else:
+                            observation += f" Résultats: {json.dumps(data)}"
+                    elif isinstance(data, dict):
+                        observation += f" Résultats: {json.dumps(data)}"
+                        
+                    self.agent_memory.append({"type": "observation", "content": observation})
+                    
+                else:
+                    # Dire à l'IA qu'il y a eu une erreur
+                    error_msg = result.get('error', 'Erreur inconnue')
+                    self.agent_memory.append({"type": "observation", "content": f"Action {tool} ÉCHOUÉE. Erreur: {error_msg}. Je dois essayer autre chose."})
+                    
+            else:
+                print("❌ Action annulée par l'utilisateur.")
+                self.agent_memory.append({"type": "observation", "content": "L'utilisateur a REFUSÉ cette action. Je dois proposer un plan alternatif."})
+        
+        print("\n" + "="*70)
+        print("Fin de la session de l'agent.")
+        print(f"Total des trouvailles : {len(self.global_findings)}")
+
+    # --- Fonctions utilitaires ---
+
+    def _print_welcome(self):
+        print("""
+🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v2.0)
+=================================================
+🤖 Cerveau: Dolphin-Mistral-7B (Non-Censuré)
+🛠️  Mode:   Autonome (Human-in-the-Loop)
+🔥 Cap.:   Analyse des règles, Raisonnement étape par étape
+
+Exemples de commandes:
+• "scan example.com"
+• "bug bounty konghq.com - ne pas scanner les blogs"
+
+Type 'help' pour commandes ou 'quit' pour sortir.
+        """)
+    
+    def _print_help(self):
+        print("""
+📖 AEGIS AI COMMANDS:
+====================
+AUTONOMOUS SCAN:
+• "scan [target] [instructions...]"
+  -> Lance la boucle d'agent autonome. L'IA lira vos instructions
+     et les règles (dans conversation.py) et proposera
+     des actions étape par étape pour votre approbation.
+
+QUICK ACTIONS:
+• "help" - Affiche ce message
+• "quit" - Quitte Aegis AI
+        """)
+    
+    async def _handle_exit(self):
+        print("\n🛡️ Session Aegis AI terminée.")
