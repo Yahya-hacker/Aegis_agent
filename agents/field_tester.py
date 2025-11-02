@@ -4,11 +4,12 @@
 import json
 from typing import Dict, List, Any
 import asyncio
-from agents.learning_engine import AegisLearningEngine # <-- AJOUTÉ
+# On importe AegisLearningEngine pour le type hinting
+from agents.learning_engine import AegisLearningEngine 
 
 class AegisFieldTester:
-    def __init__(self, learning_engine: AegisLearningEngine): # <-- MODIFIÉ
-        self.learning_engine = learning_engine # <-- AJOUTÉ
+    def __init__(self, learning_engine: AegisLearningEngine):
+        self.learning_engine = learning_engine
         self.verification_queue = []
         
     async def enter_manual_mode(self, findings: List[Dict]) -> List[Dict]:
