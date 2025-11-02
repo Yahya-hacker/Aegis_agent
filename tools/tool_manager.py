@@ -1,8 +1,11 @@
-# tools/real_tool_manager.py
+# tools/tool_manager.py
+# --- VERSION MODIFIÉE ---
+
 import asyncio
 import json
 import subprocess
 import logging
+import re  # <-- AJOUTÉ
 from pathlib import Path
 from typing import Dict, List, Any
 
@@ -16,8 +19,9 @@ class RealToolManager:
         logger.info(f"Outils CLI découverts : {list(self.tool_paths.keys())}")
     
     def _discover_tool_paths(self) -> Dict[str, str]:
-        """Trouve le chemin d'installation des outils Go."""
-        tools = ["subfinder", "nuclei", "naabu", "httpx", "amass", "waybackurls", "gau"]
+        """Trouve le chemin d'installation des outils."""
+        # AJOUT DE 'sqlmap' À LA LISTE
+        tools = ["subfinder", "nuclei", "naabu", "httpx", "amass", "waybackurls", "gau", "sqlmap"]
         paths = {}
         
         for tool in tools:
@@ -73,7 +77,6 @@ class RealToolManager:
         """Scan une URL avec Nuclei et parse la sortie JSONL."""
         output_dir = Path("data/sessions")
         output_dir.mkdir(exist_ok=True, parents=True)
-        # Utiliser un nom de fichier basé sur la cible
         safe_name = re.sub(r'[^a-zA-Z0-9]', '_', target_url)
         output_file = output_dir / f"nuclei_{safe_name}.jsonl"
 
@@ -112,14 +115,31 @@ class RealToolManager:
         """Découvre les URLs avec GAU et Waybackurls."""
         urls = set()
         
-        # GAU
         gau_result = await self._execute("gau", [domain])
         if gau_result["status"] == "success":
             urls.update(gau_result["stdout"].strip().split('\n'))
         
-        # Waybackurls
         wb_result = await self._execute("waybackurls", [domain])
         if wb_result["status"] == "success":
             urls.update(wb_result["stdout"].strip().split('\n'))
             
         return {"status": "success", "data": [u for u in urls if u.strip()]}
+
+    # --- NOUVELLE FONCTION SQLMAP ---
+    async def run_sqlmap(self, target_url: str) -> Dict:
+        """Exécute sqlmap sur une URL."""
+        logger.info(f"🔬 Lancement de SQLmap sur : {target_url}")
+        
+        # Commande SQLMap : --batch (non-interactif), --level=3, --risk=2
+        args = ["-u", target_url, "--batch", "--level=3", "--risk=2"]
+        result = await self._execute("sqlmap", args)
+        
+        if result["status"] == "error":
+            return result
+        
+        # Parsing basique de la sortie
+        stdout = result["stdout"]
+        if "is vulnerable" in stdout or "identified the following injection point" in stdout:
+            return {"status": "success", "data": {"vulnerable": True, "output": stdout}}
+        else:
+            return {"status": "success", "data": {"vulnerable": False, "output": stdout}}
