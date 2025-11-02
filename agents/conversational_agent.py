@@ -1,9 +1,12 @@
-# agents/conversation.py
+# agents/conversational_agent.py
+# --- VERSION MODIFIÉE ET CORRIGÉE ---
+
 import asyncio
 import re
 import json
 from typing import Dict, List, Any
 import logging
+from agents.field_tester import AegisFieldTester # <-- IMPORT AJOUTÉ
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +19,7 @@ class AegisConversation:
         self.ai_core = ai_core
         self.agent_memory = [] # Mémoire pour la boucle d'agent
         self.global_findings = [] # Stocke toutes les trouvailles
+        self.field_tester = AegisFieldTester() # <-- MODULE AJOUTÉ
     
     async def start(self):
         """Démarre l'interface de conversation."""
@@ -55,6 +59,23 @@ class AegisConversation:
             return next(m for m in matches[0] if m)
         return ""
 
+    # --- NOUVELLE FONCTION POUR LES RÈGLES ---
+    async def _get_bbp_rules(self) -> str:
+        """Demande à l'utilisateur de coller les règles du BBP."""
+        print("\n📜 Veuillez coller les règles du BBP (scope, out-of-scope, etc.).")
+        print("   Appuyez sur Entrée deux fois (ligne vide) lorsque vous avez terminé.")
+        
+        rules = []
+        while True:
+            try:
+                line = await self._get_user_input()
+                if line == "":
+                    break
+                rules.append(line)
+            except (EOFError, KeyboardInterrupt):
+                break
+        return "\n".join(rules)
+
     async def run_autonomous_loop(self, user_input: str):
         """
         C'EST LA BOUCLE D'AGENT PRINCIPALE.
@@ -69,14 +90,17 @@ class AegisConversation:
             
         # --- DÉBUT DE LA BOUCLE D'AGENT ---
         
-        # !! IMPORTANT !! Collez vos règles de BBP ici
+        # !! AMÉLIORATION : Règles BBP dynamiques !!
+        user_rules = await self._get_bbp_rules()
+        if not user_rules:
+            print("⚠️ Aucune règle fournie, l'agent fonctionnera en mode restreint.")
+            user_rules = "Pas de règles fournies. Être très prudent."
+
         bbp_rules = f"""
         - CIBLE PRINCIPALE : {target}
-        - RÈGLE 1: "Ask before testing unscoped subdomains." (Utilise 'ask_user_for_approval')
-        - RÈGLE 2: "Do not engage in DDoS."
-        - RÈGLE 3: "NOT vulnerabilities: /v3/users or /v3/teams enumeration."
-        - RÈGLE 4: "Leak Credentials are out of scope."
-        - RÈGLE 5: {user_input} (Instructions de l'utilisateur)
+        - INSTRUCTIONS UTILISATEUR : {user_input}
+        - RÈGLES BBP OFFICIELLES :
+        {user_rules}
         """
         
         print(f"📜 Règles chargées pour {target}.")
@@ -137,18 +161,22 @@ class AegisConversation:
                 
                 if result.get("status") == "success":
                     data = result.get("data", "Aucune donnée retournée.")
-                    self.global_findings.append({"tool": tool, "args": args, "data": data})
                     
                     # Rendre l'observation lisible pour l'IA
                     observation = f"Action {tool} réussie."
-                    if isinstance(data, list):
+                    if isinstance(data, list) and data:
                         observation += f" {len(data)} résultats trouvés."
+                        self.global_findings.extend(data) # Ajouter à la liste globale
+                        # Tronquer pour la mémoire de l'IA
                         if len(data) > 10:
                             observation += f" Voici les 10 premiers: {json.dumps(data[:10])}"
                         else:
                             observation += f" Résultats: {json.dumps(data)}"
-                    elif isinstance(data, dict):
+                    elif isinstance(data, dict) and data:
                         observation += f" Résultats: {json.dumps(data)}"
+                        self.global_findings.append(data) # Ajouter à la liste globale
+                    else:
+                        observation += " Aucun résultat trouvé."
                         
                     self.agent_memory.append({"type": "observation", "content": observation})
                     
@@ -163,13 +191,30 @@ class AegisConversation:
         
         print("\n" + "="*70)
         print("Fin de la session de l'agent.")
-        print(f"Total des trouvailles : {len(self.global_findings)}")
+        
+        # --- AMÉLIORATION : Intégration du Field Tester ---
+        if self.global_findings:
+            print(f"\n🔍 L'agent a trouvé {len(self.global_findings)} éléments. Lancement du mode de vérification...")
+            # Simplifier les 'findings' pour le field_tester
+            simplified_findings = []
+            for item in self.global_findings:
+                if isinstance(item, dict):
+                    simplified_findings.append({
+                        "type": item.get("template-id", item.get("type", "Info")),
+                        "target": item.get("host", item.get("location", target)),
+                        "description": item.get("description", json.dumps(item))
+                    })
+            
+            verified = await self.field_tester.enter_manual_mode(simplified_findings)
+            print(f"✅ {len(verified)} vulnérabilités confirmées.")
+        else:
+            print("ℹ️ L'agent n'a trouvé aucune vulnérabilité exploitable.")
 
     # --- Fonctions utilitaires ---
 
     def _print_welcome(self):
         print("""
-🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v2.0)
+🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v2.1)
 =================================================
 🤖 Cerveau: Dolphin-Mistral-7B (Non-Censuré)
 🛠️  Mode:   Autonome (Human-in-the-Loop)
@@ -177,7 +222,7 @@ class AegisConversation:
 
 Exemples de commandes:
 • "scan example.com"
-• "bug bounty konghq.com - ne pas scanner les blogs"
+• "bug bounty konghq.com"
 
 Type 'help' pour commandes ou 'quit' pour sortir.
         """)
@@ -187,10 +232,10 @@ Type 'help' pour commandes ou 'quit' pour sortir.
 📖 AEGIS AI COMMANDS:
 ====================
 AUTONOMOUS SCAN:
-• "scan [target] [instructions...]"
-  -> Lance la boucle d'agent autonome. L'IA lira vos instructions
-     et les règles (dans conversation.py) et proposera
-     des actions étape par étape pour votre approbation.
+• "scan [target]"
+  -> Lance la boucle d'agent autonome. L'agent vous demandera
+     de coller les règles BBP, puis proposera des actions
+     étape par étape pour votre approbation.
 
 QUICK ACTIONS:
 • "help" - Affiche ce message
