@@ -1,19 +1,27 @@
 """
-Aegis AI Agents Package (v2.0 - Autonome)
+Aegis AI Agents Package (v6.0 - Multi-LLM)
 """
 
-from .ai_core import AegisAI
+from .enhanced_ai_core import EnhancedAegisAI
+from .multi_llm_orchestrator import MultiLLMOrchestrator
 from .conversational_agent import AegisConversation
 from .scanner import AegisScanner
-
-# Ces fichiers sont gardés pour une utilisation future (apprentissage, etc.)
 from .learning_engine import AegisLearningEngine
 from .field_tester import AegisFieldTester
 
+# Legacy import for backwards compatibility (deprecated)
+try:
+    from .ai_core import AegisAI
+except SyntaxError:
+    # Old ai_core.py is incomplete, use enhanced version
+    AegisAI = EnhancedAegisAI
+
 __all__ = [
-    'AegisAI',
+    'EnhancedAegisAI',
+    'MultiLLMOrchestrator',
     'AegisConversation', 
     'AegisScanner',
     'AegisLearningEngine',
-    'AegisFieldTester'
+    'AegisFieldTester',
+    'AegisAI',  # Legacy support
 ]
