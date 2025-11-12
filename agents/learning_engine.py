@@ -58,3 +58,36 @@ class AegisLearningEngine:
         # Save patterns
         with open('data/patterns.json', 'w') as f:
             json.dump(self.pattern_recognition, f, indent=2)
+    
+    def load_learned_patterns(self) -> str:
+        """Load learned patterns and return as formatted string for AI context"""
+        try:
+            with open('data/patterns.json', 'r') as f:
+                patterns = json.load(f)
+            
+            if not patterns:
+                return "No learned patterns available yet."
+            
+            # Format patterns for AI consumption
+            formatted = ["LEARNED PATTERNS FROM PREVIOUS MISSIONS:"]
+            
+            for vuln_type, data in patterns.items():
+                formatted.append(f"\n{vuln_type}:")
+                
+                if 'most_effective_techniques' in data:
+                    formatted.append("  Effective techniques:")
+                    for technique, count in data['most_effective_techniques']:
+                        formatted.append(f"    - {technique} (success rate: {count})")
+                
+                if 'successful_payloads' in data:
+                    formatted.append("  Successful payloads:")
+                    for payload, count in data['successful_payloads'][:5]:  # Top 5 only
+                        if payload != 'unknown':
+                            formatted.append(f"    - {payload}")
+            
+            return "\n".join(formatted)
+            
+        except FileNotFoundError:
+            return "No learned patterns available yet."
+        except Exception as e:
+            return f"Error loading patterns: {str(e)}"

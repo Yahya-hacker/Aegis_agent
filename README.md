@@ -1,6 +1,13 @@
-Aegis Agent — Pentesting & Ethical Hacking AI Agent
+Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v6.0)
 
 Aegis Agent is an AI-powered autonomous assistant implemented in Python, built specifically to help security researchers, penetration testers, and bug bounty hunters with reconnaissance, vulnerability discovery, exploitation support (POC generation and safe validation), and reporting. It is a tool to accelerate and organize security testing workflows — it does not replace human judgment or authorization.
+
+**NEW in v6.0**: Multi-LLM Architecture using Together AI
+- 🧠 **Llama 70B** for strategic planning and triage
+- 🎯 **Mixtral 8x7B** for vulnerability analysis and exploitation
+- 💻 **Qwen-coder** for code analysis and payload generation
+
+Each LLM is automatically selected based on the task type, providing specialized expertise where it's needed most. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for detailed information.
 
 Important statement: this doesn't mean to do what you want — always get explicit authorization before testing any target.
 
@@ -41,4 +48,97 @@ Limitations
 - Not a substitute for an experienced human pentester — the agent assists and speeds up routine work but cannot fully reason about complex business-logic flaws or nuanced exploit chains.
 - Dependent on configured tools and data sources; it cannot invent zero-day exploits on its own.
 - Proper configuration is essential to avoid accidental out-of-scope testing.
+
+## Setup & Installation
+
+### Prerequisites
+- Python 3.8 or higher
+- Together AI API key (get one at https://api.together.xyz/)
+
+### Quick Start
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/Yahya-hacker/Aegis_agent.git
+cd Aegis_agent
+```
+
+2. **Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+3. **Configure Together AI API**
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your Together AI API key
+nano .env  # or use your preferred editor
+```
+
+Add your API key:
+```
+TOGETHER_API_KEY=your_actual_api_key_here
+```
+
+4. **Run Aegis Agent**
+```bash
+python main.py
+```
+
+### Multi-LLM Architecture
+
+Aegis v6.0 uses three specialized LLMs:
+
+- **Llama 70B** (`meta-llama/Llama-3-70b-chat-hf`)
+  - Strategic planning, mission triage, scope analysis
+  
+- **Mixtral 8x7B** (`mistralai/Mixtral-8x7B-Instruct-v0.1`)
+  - Vulnerability analysis, exploitation planning, security assessment
+  
+- **Qwen-coder** (`Qwen/Qwen2.5-Coder-32B-Instruct`)
+  - Code analysis, payload generation, technical implementation
+
+The orchestrator automatically selects the best LLM for each task. For detailed information, see [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md).
+
+### Optional: Install Security Tools
+
+For full functionality, install these security tools:
+```bash
+# Subdomain enumeration
+go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+# Port scanning
+go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+
+# Vulnerability scanning
+go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+
+# URL discovery
+go install github.com/lc/gau/v2/cmd/gau@latest
+go install github.com/tomnomnom/waybackurls@latest
+
+# HTTP probing
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+```
+
+### Configuration
+
+Edit `.env` to customize model selection and parameters:
+```bash
+# Override default models (optional)
+STRATEGIC_MODEL=meta-llama/Llama-3-70b-chat-hf
+VULNERABILITY_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
+CODER_MODEL=Qwen/Qwen2.5-Coder-32B-Instruct
+
+# Adjust generation parameters
+DEFAULT_TEMPERATURE=0.7
+DEFAULT_MAX_TOKENS=2048
+```
+
+## Documentation
+
+- [Multi-LLM Architecture Guide](MULTI_LLM_GUIDE.md) - Detailed guide on the three-LLM system
+- [Requirements](requirements.txt) - Python dependencies
 

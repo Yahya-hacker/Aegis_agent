@@ -4,7 +4,7 @@
 import logging
 from typing import Dict, List, Any
 from urllib.parse import urlparse
-from tools.real_tool_manager import RealToolManager
+from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
 
 logger = logging.getLogger(__name__)

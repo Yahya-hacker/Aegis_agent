@@ -7,6 +7,7 @@ import json
 from typing import Dict, List, Any
 import logging
 from agents.field_tester import AegisFieldTester # <-- IMPORT AJOUTÉ
+from agents.learning_engine import AegisLearningEngine
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,9 @@ class AegisConversation:
         self.ai_core = ai_core
         self.agent_memory = [] # Mémoire pour la boucle d'agent
         self.global_findings = [] # Stocke toutes les trouvailles
-        self.field_tester = AegisFieldTester() # <-- MODULE AJOUTÉ
+        # Initialize learning engine if not already present
+        learning_engine = getattr(ai_core, 'learning_engine', None) or AegisLearningEngine()
+        self.field_tester = AegisFieldTester(learning_engine) # <-- MODULE AJOUTÉ avec learning_engine
     
     async def start(self):
         """Démarre l'interface de conversation."""
@@ -214,11 +217,14 @@ class AegisConversation:
 
     def _print_welcome(self):
         print("""
-🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v2.1)
-=================================================
-🤖 Cerveau: Dolphin-Mistral-7B (Non-Censuré)
+🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v6.0 - Multi-LLM)
+=============================================================
+🤖 Cerveaux Multi-LLM via Together AI:
+   • Llama 70B:     Planification stratégique et triage
+   • Mixtral 8x7B:  Analyse vulnérabilités et exploitation
+   • Qwen-coder:    Analyse code et génération de payloads
 🛠️  Mode:   Autonome (Human-in-the-Loop)
-🔥 Cap.:   Analyse des règles, Raisonnement étape par étape
+🔥 Cap.:   Analyse règles, Raisonnement multi-agent, Auto-apprentissage
 
 Exemples de commandes:
 • "scan example.com"

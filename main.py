@@ -30,26 +30,33 @@ async def main():
     
     # Importer les NOUVEAUX composants
     try:
-        from agents.ai_core import AegisAI
+        from agents.enhanced_ai_core import EnhancedAegisAI
         from agents.conversational_agent import AegisConversation
+        from agents.learning_engine import AegisLearningEngine
     except ImportError as e:
         logger.error(f"Erreur d'importation critique : {e}")
-        print(f"❌ Erreur: Assurez-vous que vos fichiers (ai_core.py, conversational_agent.py) sont dans le dossier 'agents'.")
+        print(f"❌ Erreur: Assurez-vous que vos fichiers sont dans le dossier 'agents'.")
         sys.exit(1)
 
-    print("🚀 Démarrage de l'Agent Autonome Aegis AI...")
+    print("🚀 Démarrage de l'Agent Autonome Aegis AI avec Multi-LLM...")
+    print("📋 LLMs configurés:")
+    print("   • Llama 70B: Planification stratégique et triage")
+    print("   • Mixtral 8x7B: Analyse de vulnérabilités et exploitation")
+    print("   • Qwen-coder: Analyse de code et génération de payloads")
     
     try:
-        # 1. Initialiser le Cerveau (AegisAI)
-        # C'est l'étape qui charge le modèle Dolphin-Mistral sur le GPU
-        ai_core = AegisAI()
+        # 1. Initialiser le moteur d'apprentissage
+        learning_engine = AegisLearningEngine()
+        
+        # 2. Initialiser le Cerveau Multi-LLM (EnhancedAegisAI)
+        ai_core = EnhancedAegisAI(learning_engine)
         await ai_core.initialize()
         
-        # 2. Initialiser l'Orchestrateur (AegisConversation)
+        # 3. Initialiser l'Orchestrateur (AegisConversation)
         # On injecte le cerveau dans l'orchestrateur
         conversation = AegisConversation(ai_core)
         
-        # 3. Démarrer la boucle de conversation
+        # 4. Démarrer la boucle de conversation
         # C'est l'orchestrateur qui prend le contrôle
         await conversation.start()
         
