@@ -8,6 +8,7 @@ from typing import Dict, List, Any
 import logging
 from agents.field_tester import AegisFieldTester # <-- IMPORT AJOUTÉ
 from agents.learning_engine import AegisLearningEngine
+from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class AegisConversation:
         # Initialize learning engine if not already present
         learning_engine = getattr(ai_core, 'learning_engine', None) or AegisLearningEngine()
         self.field_tester = AegisFieldTester(learning_engine) # <-- MODULE AJOUTÉ avec learning_engine
+        self.reasoning_display = get_reasoning_display(verbose=True)
     
     async def start(self):
         """Démarre l'interface de conversation."""
@@ -121,8 +123,25 @@ class AegisConversation:
             print("\n" + "="*70)
             print(f"🧠 ÉTAPE D'AGENT {step_count + 1}/20")
             
+            # Show step start in reasoning display
+            self.reasoning_display.show_thought(
+                f"Starting autonomous step {step_count + 1} of 20",
+                thought_type="planning",
+                metadata={
+                    "step": step_count + 1,
+                    "total_steps": 20,
+                    "memory_size": len(self.agent_memory),
+                    "findings_count": len(self.global_findings)
+                }
+            )
+            
             # 1. PENSER: L'IA décide de la prochaine action
-            print("🧠 Aegis AI (Dolphin) réfléchit...")
+            print("🧠 Aegis AI réfléchit...")
+            self.reasoning_display.show_thought(
+                "Agent is analyzing current state and determining next action",
+                thought_type="analysis"
+            )
+            
             action = self.ai_core.get_next_action(bbp_rules, self.agent_memory)
             
             print(f"🤖 PROPOSITION IA : {action}")
@@ -157,6 +176,13 @@ class AegisConversation:
             if response in ['o', 'oui', 'y', 'yes', '']:
                 # 4. AGIR: Exécuter l'action
                 print(f"🚀 Exécution : {tool}...")
+                
+                self.reasoning_display.show_thought(
+                    f"Executing approved action: {tool}",
+                    thought_type="execution",
+                    metadata={"tool": tool, "args": args}
+                )
+                
                 result = await scanner.execute_action(action)
                 
                 # 5. OBSERVER: Ajouter le résultat à la mémoire
@@ -180,16 +206,37 @@ class AegisConversation:
                         self.global_findings.append(data) # Ajouter à la liste globale
                     else:
                         observation += " Aucun résultat trouvé."
+                    
+                    # Show observation in reasoning display
+                    self.reasoning_display.show_thought(
+                        observation,
+                        thought_type="observation",
+                        metadata={"action": tool, "status": "success", "results_count": len(data) if isinstance(data, list) else 1}
+                    )
                         
                     self.agent_memory.append({"type": "observation", "content": observation})
                     
                 else:
                     # Dire à l'IA qu'il y a eu une erreur
                     error_msg = result.get('error', 'Erreur inconnue')
+                    
+                    self.reasoning_display.show_thought(
+                        f"Action {tool} failed: {error_msg}",
+                        thought_type="error",
+                        metadata={"action": tool, "error": error_msg}
+                    )
+                    
                     self.agent_memory.append({"type": "observation", "content": f"Action {tool} ÉCHOUÉE. Erreur: {error_msg}. Je dois essayer autre chose."})
                     
             else:
                 print("❌ Action annulée par l'utilisateur.")
+                
+                self.reasoning_display.show_thought(
+                    f"User rejected the proposed action: {tool}",
+                    thought_type="decision",
+                    metadata={"action": tool, "user_decision": "rejected"}
+                )
+                
                 self.agent_memory.append({"type": "observation", "content": "L'utilisateur a REFUSÉ cette action. Je dois proposer un plan alternatif."})
         
         print("\n" + "="*70)

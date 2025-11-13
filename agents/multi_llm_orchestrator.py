@@ -13,6 +13,7 @@ import os
 import aiohttp
 from typing import Dict, List, Any, Optional
 import logging
+from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class MultiLLMOrchestrator:
     def __init__(self):
         self.api_key = None
         self.is_initialized = False
+        self.reasoning_display = get_reasoning_display(verbose=True)
         
         # Define the three specialized LLMs
         self.llms = {
@@ -135,6 +137,19 @@ class MultiLLMOrchestrator:
         
         selected = task_mapping.get(task_type, 'strategic')
         logger.info(f"🎯 Task '{task_type}' → LLM: {self.llms[selected].role}")
+        
+        # Show reasoning about LLM selection
+        self.reasoning_display.show_thought(
+            f"Selected {self.llms[selected].role} for task type '{task_type}'",
+            thought_type="decision",
+            metadata={
+                "task_type": task_type,
+                "selected_llm": selected,
+                "model": self.llms[selected].model_name,
+                "specialization": self.llms[selected].specialization
+            }
+        )
+        
         return selected
     
     async def call_llm(
@@ -166,6 +181,21 @@ class MultiLLMOrchestrator:
         
         try:
             logger.info(f"🔄 Calling {config.role} ({config.model_name})...")
+            
+            # Show reasoning about the LLM call
+            user_message = next((m['content'] for m in messages if m['role'] == 'user'), "")
+            system_message = next((m['content'] for m in messages if m['role'] == 'system'), "")
+            
+            self.reasoning_display.show_thought(
+                f"Preparing to call {config.role} for task execution",
+                thought_type="llm_call",
+                metadata={
+                    "model": config.model_name,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "message_preview": user_message[:100] + "..." if len(user_message) > 100 else user_message
+                }
+            )
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -203,6 +233,19 @@ class MultiLLMOrchestrator:
                     content = result['choices'][0]['message']['content']
                     
                     logger.info(f"✅ Response received from {config.role}")
+                    
+                    # Display the LLM interaction with full reasoning
+                    self.reasoning_display.show_llm_interaction(
+                        llm_name=config.role,
+                        prompt=user_message,
+                        response=content,
+                        metadata={
+                            "model": config.model_name,
+                            "usage": result.get('usage', {}),
+                            "temperature": temperature,
+                            "max_tokens": max_tokens
+                        }
+                    )
                     
                     return {
                         'content': content,

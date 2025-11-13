@@ -9,6 +9,7 @@ from typing import Dict, List, Any
 import logging
 from agents.learning_engine import AegisLearningEngine
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
+from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class EnhancedAegisAI:
         self.learning_engine = learning_engine or AegisLearningEngine()
         self.learned_patterns = ""
         self.is_initialized = False
+        self.reasoning_display = get_reasoning_display(verbose=True)
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -64,6 +66,16 @@ class EnhancedAegisAI:
         """
         if not self.is_initialized:
             return {"response_type": "error", "text": "AI not initialized."}
+        
+        # Show reasoning about mission triage
+        self.reasoning_display.show_thought(
+            "Analyzing conversation to determine mission readiness",
+            thought_type="strategic",
+            metadata={
+                "conversation_length": len(conversation_history),
+                "function": "triage_mission"
+            }
+        )
         
         system_prompt = """You are Aegis AI, a cybersecurity mission planner. Your goal is to gather ALL necessary information before launching a mission.
 
@@ -120,18 +132,42 @@ Analyze this conversation and determine if we have all information (target and r
             json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group(1))
+                
+                # Show reasoning about the triage decision
+                self.reasoning_display.show_thought(
+                    f"Triage decision: {result.get('response_type', 'unknown')}",
+                    thought_type="decision",
+                    metadata=result
+                )
+                
                 return result
             
             # Try to parse as direct JSON
             try:
                 result = json.loads(content)
+                
+                # Show reasoning about the triage decision
+                self.reasoning_display.show_thought(
+                    f"Triage decision: {result.get('response_type', 'unknown')}",
+                    thought_type="decision",
+                    metadata=result
+                )
+                
                 return result
             except json.JSONDecodeError:
                 # Fallback: treat as conversational response
-                return {
+                result = {
                     "response_type": "question",
                     "text": content
                 }
+                
+                self.reasoning_display.show_thought(
+                    "Could not parse as JSON, treating as conversational response",
+                    thought_type="warning",
+                    metadata={"raw_response": content[:200]}
+                )
+                
+                return result
                 
         except Exception as e:
             logger.error(f"Error in triage_mission: {e}", exc_info=True)
@@ -156,11 +192,23 @@ Analyze this conversation and determine if we have all information (target and r
         if not self.is_initialized:
             return {"tool": "system", "message": "AI not initialized"}
         
-        system_prompt = f"""You are an autonomous penetration testing agent. You decide the next action based on the mission rules and your observations.
+        # Show reasoning about next action decision
+        self.reasoning_display.show_thought(
+            "Determining next action based on mission rules and agent memory",
+            thought_type="tactical",
+            metadata={
+                "memory_items": len(agent_memory),
+                "last_observation": agent_memory[-1] if agent_memory else None
+            }
+        )
+        
+        system_prompt = f"""You are an advanced autonomous penetration testing agent with sophisticated reasoning capabilities.
+Your task is to decide the next action based on mission rules, observations, and learned patterns.
 
 MISSION RULES:
 {bbp_rules}
 
+LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 {self.learned_patterns}
 
 AVAILABLE TOOLS:
@@ -176,19 +224,46 @@ AVAILABLE TOOLS:
 - finish_mission: Complete mission (args: reason)
 - ask_user_for_approval: Ask for guidance (args: message)
 
-INSTRUCTIONS:
-- Analyze the agent memory to understand what's been done
-- Choose the MOST LOGICAL next step
+ENHANCED REASONING FRAMEWORK:
+1. ANALYSIS: Carefully analyze the agent memory to understand:
+   - What has been done already
+   - What vulnerabilities or findings have been discovered
+   - What areas remain unexplored
+   - Any patterns or anomalies in the results
+
+2. STRATEGIC THINKING: Consider multiple approaches:
+   - What is the most efficient next step?
+   - What will provide the most valuable information?
+   - Are there any dependencies or prerequisites?
+   - What are the risks vs rewards?
+
+3. COMPREHENSIVE COVERAGE: Ensure thorough testing by:
+   - Testing different attack surfaces
+   - Following up on interesting findings
+   - Validating potential vulnerabilities
+   - Exploring both breadth and depth
+
+4. DECISION MAKING: Choose the action that:
+   - Maximizes detection chances
+   - Follows a logical progression
+   - Respects mission rules and scope
+   - Provides actionable intelligence
+
+IMPORTANT INSTRUCTIONS:
+- Show ALL your reasoning and thought process
+- Explain WHY you chose this specific action
+- Consider multiple options before deciding
 - Follow the rules STRICTLY (no out-of-scope testing)
 - If mission is complete, use finish_mission
-- If uncertain, use ask_user_for_approval
+- If uncertain or need guidance, use ask_user_for_approval
+- Be thorough and methodical in your approach
 
-Respond with JSON ONLY:
+Respond with JSON ONLY including detailed reasoning:
 ```json
 {{
   "tool": "tool_name",
   "args": {{"param": "value"}},
-  "reasoning": "why this action"
+  "reasoning": "Detailed explanation of your thought process: What you observed, why this action is optimal, what you expect to discover, and how it fits into the overall strategy"
 }}
 ```"""
 
@@ -218,14 +293,35 @@ Based on this context, what should be the next action? Respond with JSON only.""
             json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
             if json_match:
                 action = json.loads(json_match.group(1))
+                
+                # Display the proposed action with reasoning
+                self.reasoning_display.show_action_proposal(
+                    action=action,
+                    reasoning=action.get('reasoning', 'No explicit reasoning provided')
+                )
+                
                 return action
             
             # Try direct JSON parse
             try:
                 action = json.loads(content)
+                
+                # Display the proposed action with reasoning
+                self.reasoning_display.show_action_proposal(
+                    action=action,
+                    reasoning=action.get('reasoning', 'No explicit reasoning provided')
+                )
+                
                 return action
             except json.JSONDecodeError:
                 logger.warning(f"Could not parse action as JSON: {content}")
+                
+                self.reasoning_display.show_thought(
+                    f"Failed to parse LLM response as action JSON",
+                    thought_type="error",
+                    metadata={"raw_response": content[:200]}
+                )
+                
                 return {
                     "tool": "system",
                     "message": "Failed to parse action. Please reformulate."

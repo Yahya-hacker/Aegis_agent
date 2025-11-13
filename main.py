@@ -33,6 +33,7 @@ async def main():
         from agents.enhanced_ai_core import EnhancedAegisAI
         from agents.conversational_agent import AegisConversation
         from agents.learning_engine import AegisLearningEngine
+        from utils.keep_alive import start_keep_alive, stop_keep_alive
     except ImportError as e:
         logger.error(f"Erreur d'importation critique : {e}")
         print(f"❌ Erreur: Assurez-vous que vos fichiers sont dans le dossier 'agents'.")
@@ -43,6 +44,10 @@ async def main():
     print("   • Llama 70B: Planification stratégique et triage")
     print("   • Mixtral 8x7B: Analyse de vulnérabilités et exploitation")
     print("   • Qwen-coder: Analyse de code et génération de payloads")
+    
+    # Start keep-alive mechanism to prevent terminal from sleeping
+    keep_alive = start_keep_alive(interval=60)
+    print("🔋 Keep-alive mechanism activated (prevents terminal sleep)")
     
     try:
         # 1. Initialiser le moteur d'apprentissage
@@ -67,6 +72,10 @@ async def main():
         print(f"❌ Une erreur fatale est survenue: {e}")
         print("💡 Vérifiez le fichier 'aegis_agent.log' pour les détails.")
         sys.exit(1)
+    finally:
+        # Stop keep-alive mechanism when exiting
+        stop_keep_alive()
+        print("🔋 Keep-alive mechanism stopped")
 
 if __name__ == "__main__":
     # S'assurer que webdriver-manager a les permissions (si besoin)
