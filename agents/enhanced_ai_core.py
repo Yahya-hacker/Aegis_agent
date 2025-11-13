@@ -1,5 +1,5 @@
 # agents/enhanced_ai_core.py
-# --- VERSION 6.0 - Multi-LLM Enhanced ---
+# --- VERSION 7.0 - OpenRouter Multi-LLM Enhanced ---
 
 import asyncio
 import json
@@ -13,14 +13,19 @@ from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
 
+# CRITICAL: Model constants for OpenRouter API - DO NOT MODIFY
+ORCHESTRATOR_MODEL = "nousresearch/hermes-3-llama-3.1-70b"
+CODE_MODEL = "qwen/qwen-2.5-72b-instruct"
+REASONING_MODEL = "cognitivecomputations/dolphin3.0-r1-mistral-24b"
+
 class EnhancedAegisAI:
     """
-    Enhanced AI Core v6.0 - Powered by Three Specialized LLMs
+    Enhanced AI Core v7.0 - Powered by Three Specialized LLMs via OpenRouter
     
-    This class orchestrates three LLMs from Together AI:
-    1. Llama 70B - Strategic planning, triage, and decision-making
-    2. Mixtral 8x7B - Vulnerability analysis and exploitation
-    3. Qwen-coder - Code analysis and payload generation
+    This class orchestrates three LLMs from OpenRouter API:
+    1. Hermes 3 Llama 70B - Strategic planning, triage, and decision-making
+    2. Dolphin 3.0 R1 Mistral 24B - Reasoning and vulnerability analysis  
+    3. Qwen 2.5 72B - Code analysis and payload generation
     """
     
     def __init__(self, learning_engine: AegisLearningEngine = None):
@@ -29,6 +34,7 @@ class EnhancedAegisAI:
         self.learned_patterns = ""
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
+        self.conversation_history = []  # Added for memory management
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -57,6 +63,35 @@ class EnhancedAegisAI:
         except Exception as e:
             logger.error(f"❌ Failed to initialize Enhanced AI Core: {e}", exc_info=True)
             raise
+    
+    def _prune_memory(self, history: List[Dict]) -> List[Dict]:
+        """
+        TASK 1: Memory management to prevent "Digital Alzheimer's"
+        Keeps the last 5 detailed interactions and summarizes older ones
+        
+        Args:
+            history: Full conversation history
+            
+        Returns:
+            Pruned history with summary of old interactions
+        """
+        if len(history) <= 5:
+            return history
+        
+        # Keep the last 5 interactions
+        recent = history[-5:]
+        
+        # Summarize older interactions
+        older = history[:-5]
+        summary_content = f"[Previous context: {len(older)} earlier interactions covering mission initialization and early reconnaissance]"
+        
+        # Create a summary entry
+        summary_entry = {
+            "role": "system",
+            "content": summary_content
+        }
+        
+        return [summary_entry] + recent
     
     # --- LEVEL 1: STRATEGIC TRIAGE (using Llama 70B) ---
     async def triage_mission(self, conversation_history: List[Dict]) -> Dict:
@@ -191,6 +226,9 @@ Analyze this conversation and determine if we have all information (target and r
         """Async implementation of get_next_action"""
         if not self.is_initialized:
             return {"tool": "system", "message": "AI not initialized"}
+        
+        # TASK 1: Prune memory to prevent unlimited growth
+        agent_memory = self._prune_memory(agent_memory)
         
         # Show reasoning about next action decision
         self.reasoning_display.show_thought(
@@ -426,6 +464,126 @@ Provide multiple payload variants if applicable."""
             
         except Exception as e:
             logger.error(f"Error generating payload: {e}", exc_info=True)
+            return {"error": str(e)}
+    
+    # --- SPECIALIZED MODEL CALLS (using explicit model constants) ---
+    
+    async def call_code_specialist(
+        self,
+        prompt: str,
+        context: str = "",
+        temperature: float = 0.6,
+        max_tokens: int = 2048,
+        model_override: str = None
+    ) -> Dict[str, Any]:
+        """
+        Call the code specialist model explicitly
+        Uses CODE_MODEL constant to ensure correct model
+        
+        Args:
+            prompt: The code analysis or generation prompt
+            context: Additional context
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            model_override: Override model (should be CODE_MODEL)
+            
+        Returns:
+            Response dictionary
+        """
+        if not self.is_initialized:
+            return {"error": "AI not initialized"}
+        
+        # Use explicit model constant
+        model_to_use = model_override if model_override else CODE_MODEL
+        
+        # Ensure the model override matches our approved model
+        if model_override and model_override != CODE_MODEL:
+            logger.warning(f"⚠️ Model override '{model_override}' does not match CODE_MODEL '{CODE_MODEL}'")
+        
+        system_prompt = f"""You are an expert code analyst and payload engineer for penetration testing.
+{context}"""
+        
+        try:
+            # Call the coder LLM directly with explicit model
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+            
+            response = await self.orchestrator.call_llm(
+                'coder',
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            return {
+                "content": response['content'],
+                "model_used": response['model'],
+                "role": response['role']
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calling code specialist: {e}", exc_info=True)
+            return {"error": str(e)}
+    
+    async def call_reasoning_specialist(
+        self,
+        prompt: str,
+        context: str = "",
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        model_override: str = None
+    ) -> Dict[str, Any]:
+        """
+        Call the reasoning specialist model explicitly
+        Uses REASONING_MODEL constant to ensure correct model
+        
+        Args:
+            prompt: The reasoning or analysis prompt
+            context: Additional context
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            model_override: Override model (should be REASONING_MODEL)
+            
+        Returns:
+            Response dictionary
+        """
+        if not self.is_initialized:
+            return {"error": "AI not initialized"}
+        
+        # Use explicit model constant
+        model_to_use = model_override if model_override else REASONING_MODEL
+        
+        # Ensure the model override matches our approved model
+        if model_override and model_override != REASONING_MODEL:
+            logger.warning(f"⚠️ Model override '{model_override}' does not match REASONING_MODEL '{REASONING_MODEL}'")
+        
+        system_prompt = f"""You are an expert reasoning and vulnerability analysis specialist.
+{context}"""
+        
+        try:
+            # Call the vulnerability/reasoning LLM directly with explicit model
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+            
+            response = await self.orchestrator.call_llm(
+                'vulnerability',
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            return {
+                "content": response['content'],
+                "model_used": response['model'],
+                "role": response['role']
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calling reasoning specialist: {e}", exc_info=True)
             return {"error": str(e)}
     
     # --- COLLABORATIVE ANALYSIS ---

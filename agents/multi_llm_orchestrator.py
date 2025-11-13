@@ -1,10 +1,10 @@
 # agents/multi_llm_orchestrator.py
 """
-Multi-LLM Orchestrator for Aegis AI - v6.0
-Manages three specialized LLMs via Together AI API:
-- Llama 70B: Strategic planning, triage, and high-level decision making
-- Mixtral 8x7B: Vulnerability analysis and exploitation planning
-- Qwen-coder: Code analysis, payload generation, and technical implementation
+Multi-LLM Orchestrator for Aegis AI - v7.0
+Manages three specialized LLMs via OpenRouter API:
+- Hermes 3 Llama 70B: Strategic planning, triage, and high-level decision making
+- Dolphin 3.0 R1 Mistral 24B: Reasoning and vulnerability analysis
+- Qwen 2.5 72B: Code analysis, payload generation, and technical implementation
 """
 
 import asyncio
@@ -23,7 +23,7 @@ class LLMConfig:
         self.model_name = model_name
         self.role = role
         self.specialization = specialization
-        self.api_url = "https://api.together.xyz/v1/chat/completions"
+        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
 
 class MultiLLMOrchestrator:
     """
@@ -35,10 +35,10 @@ class MultiLLMOrchestrator:
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
         
-        # Define the three specialized LLMs
+        # Define the three specialized LLMs (using OpenRouter-compatible model IDs)
         self.llms = {
             'strategic': LLMConfig(
-                model_name="meta-llama/Llama-3-70b-chat-hf",
+                model_name="nousresearch/hermes-3-llama-3.1-70b",
                 role="Strategic Planner & Triage Agent",
                 specialization=[
                     "mission_planning",
@@ -50,8 +50,8 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'vulnerability': LLMConfig(
-                model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
-                role="Vulnerability Analyst & Exploitation Expert",
+                model_name="cognitivecomputations/dolphin3.0-r1-mistral-24b",
+                role="Reasoning & Vulnerability Analyst",
                 specialization=[
                     "vulnerability_analysis",
                     "exploit_planning",
@@ -62,7 +62,7 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'coder': LLMConfig(
-                model_name="Qwen/Qwen2.5-Coder-32B-Instruct",
+                model_name="qwen/qwen-2.5-72b-instruct",
                 role="Code Analyst & Payload Engineer",
                 specialization=[
                     "code_analysis",
@@ -80,13 +80,13 @@ class MultiLLMOrchestrator:
         try:
             logger.info("🤖 Initializing Multi-LLM Orchestrator...")
             
-            self.api_key = os.environ.get("TOGETHER_API_KEY")
+            self.api_key = os.environ.get("OPENROUTER_API_KEY")
             if not self.api_key:
-                logger.error("❌ TOGETHER_API_KEY environment variable not set.")
-                raise ValueError("TOGETHER_API_KEY must be set to use the AI.")
+                logger.error("❌ OPENROUTER_API_KEY environment variable not set.")
+                raise ValueError("OPENROUTER_API_KEY must be set to use the AI.")
             
             logger.info("✅ API Key loaded successfully.")
-            logger.info(f"📋 Configured LLMs:")
+            logger.info(f"📋 Configured LLMs (via OpenRouter):")
             for llm_type, config in self.llms.items():
                 logger.info(f"   • {config.role}: {config.model_name}")
             

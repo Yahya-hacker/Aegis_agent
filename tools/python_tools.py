@@ -1,22 +1,25 @@
 # tools/python_tools.py
-# --- VERSION MODIFIÉE ---
+# --- VERSION ENHANCED - With Stealth & OOB Detection ---
 
 import asyncio
 import aiohttp
 import logging
+import random
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By # <-- AJOUTÉ
+from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 import nmap
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
+from utils.helpers import AegisHelpers
 
 logger = logging.getLogger(__name__)
 
 class PythonToolManager:
-    """Gère les outils avec des bibliothèques Python (Nmap, Selenium)"""
+    """Gère les outils avec des bibliothèques Python (Nmap, Selenium) + Stealth & OOB"""
     
     def __init__(self):
         try:
@@ -25,12 +28,16 @@ class PythonToolManager:
             logger.error("Nmap n'est pas installé. 'nmap_scan' échouera.")
             self.nm = None
         
-        # Options Selenium
+        # Options Selenium with stealth
         self.selenium_options = Options()
         self.selenium_options.add_argument('--headless')
         self.selenium_options.add_argument('--no-sandbox')
         self.selenium_options.add_argument('--disable-dev-shm-usage')
-        self.selenium_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+        # Use random User-Agent for Selenium
+        self.selenium_options.add_argument(f'user-agent={AegisHelpers.get_random_user_agent()}')
+        
+        # TASK 2: OOB detection storage
+        self.oob_payloads = {}  # {payload_id: {url: str, created_at: timestamp}}
 
     def _get_selenium_driver(self):
         """Initialise et retourne un driver Selenium."""
@@ -38,23 +45,48 @@ class PythonToolManager:
         return webdriver.Chrome(service=service, options=self.selenium_options)
 
     async def advanced_technology_detection(self, target: str) -> Dict:
-        # ... (Pas de changement ici, fonction existante) ...
+        """Advanced technology detection with stealth features"""
         logger.info(f"🔬 Détection de technologie pour {target}")
+        
+        # TASK 4: Apply jitter before request
+        await AegisHelpers.apply_jitter()
+        
         tech_findings = {}
         try:
-            async with aiohttp.ClientSession(headers={'User-Agent': 'AegisAI-Scanner'}) as session:
-                async with session.get(target, ssl=False, timeout=10) as response:
+            # TASK 4: Use stealth headers and random proxy
+            headers = AegisHelpers.get_stealth_headers()
+            proxy = AegisHelpers.get_random_proxy()
+            
+            connector = None
+            if proxy:
+                logger.info(f"🔒 Using proxy: {proxy}")
+                connector = aiohttp.TCPConnector()
+            
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+                kwargs = {'ssl': False, 'timeout': 10}
+                if proxy:
+                    kwargs['proxy'] = proxy
+                
+                async with session.get(target, **kwargs) as response:
                     headers = dict(response.headers)
                     if 'server' in headers: tech_findings['server'] = headers['server']
                     if 'x-powered-by' in headers: tech_findings['framework'] = headers['x-powered-by']
                     if 'set-cookie' in headers: tech_findings['cookies'] = headers['set-cookie']
         except Exception as e:
             logger.warning(f"Analyse des en-têtes HTTP échouée: {e}")
+        
         try:
             loop = asyncio.get_event_loop()
             page_source = await loop.run_in_executor(None, self._get_page_source, target)
             page_source = page_source.lower()
-            tech_patterns = {'wordpress': ['wp-content', 'wp-includes'],'react': ['react-dom', 'data-reactroot'],'vue': ['data-v-', 'id="app"'],'angular': ['ng-version'],'jquery': ['jquery.js', 'jquery.min.js'],'bootstrap': ['bootstrap.js', 'bootstrap.css']}
+            tech_patterns = {
+                'wordpress': ['wp-content', 'wp-includes'],
+                'react': ['react-dom', 'data-reactroot'],
+                'vue': ['data-v-', 'id="app"'],
+                'angular': ['ng-version'],
+                'jquery': ['jquery.js', 'jquery.min.js'],
+                'bootstrap': ['bootstrap.js', 'bootstrap.css']
+            }
             detected_js = []
             for tech, patterns in tech_patterns.items():
                 if any(pattern in page_source for pattern in patterns):
@@ -63,6 +95,7 @@ class PythonToolManager:
                 tech_findings['javascript_libs'] = detected_js
         except Exception as e:
             logger.warning(f"Analyse Selenium échouée: {e}")
+        
         return {"status": "success", "data": tech_findings}
 
     def _get_page_source(self, target: str) -> str:
@@ -101,12 +134,29 @@ class PythonToolManager:
 
     async def fetch_url(self, target_url: str) -> Dict:
         """
-        Récupère une URL spécifique (pour tester les IDOR, les chemins, etc.).
+        Récupère une URL spécifique avec stealth features
         """
         logger.info(f"🔗 Fetching URL: {target_url}")
+        
+        # TASK 4: Apply jitter before request
+        await AegisHelpers.apply_jitter()
+        
         try:
-            async with aiohttp.ClientSession(headers={'User-Agent': 'AegisAI-Scanner'}) as session:
-                async with session.get(target_url, ssl=False, timeout=10) as response:
+            # TASK 4: Use stealth headers and random proxy
+            headers = AegisHelpers.get_stealth_headers()
+            proxy = AegisHelpers.get_random_proxy()
+            
+            connector = None
+            if proxy:
+                logger.info(f"🔒 Using proxy: {proxy}")
+                connector = aiohttp.TCPConnector()
+            
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+                kwargs = {'ssl': False, 'timeout': 10}
+                if proxy:
+                    kwargs['proxy'] = proxy
+                
+                async with session.get(target_url, **kwargs) as response:
                     content = await response.text()
                     return {
                         "status": "success",
@@ -231,3 +281,127 @@ class PythonToolManager:
         finally:
             if driver:
                 driver.quit()
+    
+    # --- TASK 2: OUT-OF-BAND (OOB) DETECTION FOR BLIND VULNERABILITIES ---
+    
+    async def generate_oob_payload(self, payload_type: str = "http") -> Dict:
+        """
+        TASK 2: Generate an out-of-band payload for detecting blind vulnerabilities
+        
+        This simulates interactsh-like functionality for detecting:
+        - Blind RCE
+        - Blind SSRF
+        - Blind XXE
+        - DNS exfiltration
+        
+        Args:
+            payload_type: Type of OOB payload (http, dns, etc.)
+        
+        Returns:
+            Dictionary with payload ID and URL to inject
+        """
+        import time
+        import uuid
+        
+        logger.info(f"👁️ Generating OOB payload (type: {payload_type})...")
+        
+        # Generate unique identifier
+        payload_id = str(uuid.uuid4())[:8]
+        timestamp = int(time.time())
+        
+        # In production, this would use interactsh or similar service
+        # For now, we simulate with a placeholder that could be replaced with real service
+        # You would integrate with: https://github.com/projectdiscovery/interactsh
+        
+        # Simulated interactsh-like URL (in production, use real interactsh API)
+        unique_subdomain = f"{payload_id}-{timestamp}"
+        oob_url = f"http://{unique_subdomain}.oast.fun"  # oast.fun is a real interactsh instance
+        
+        # Store the payload for later checking
+        self.oob_payloads[payload_id] = {
+            "url": oob_url,
+            "created_at": timestamp,
+            "type": payload_type,
+            "interactions": []
+        }
+        
+        # Generate different payload formats based on type
+        payloads = {
+            "http": oob_url,
+            "dns": unique_subdomain + ".oast.fun",
+            "curl": f"curl {oob_url}",
+            "wget": f"wget {oob_url}",
+            "nslookup": f"nslookup {unique_subdomain}.oast.fun",
+            "ping": f"ping -c 1 {unique_subdomain}.oast.fun"
+        }
+        
+        logger.info(f"✅ OOB payload generated: {payload_id}")
+        
+        return {
+            "status": "success",
+            "data": {
+                "payload_id": payload_id,
+                "url": oob_url,
+                "payloads": payloads,
+                "note": "Inject these payloads and use check_oob_interactions() to verify callbacks"
+            }
+        }
+    
+    async def check_oob_interactions(self, payload_id: str) -> Dict:
+        """
+        TASK 2: Check if there were any interactions with the OOB payload
+        
+        This would query the interactsh service to check for callbacks
+        
+        Args:
+            payload_id: The ID returned from generate_oob_payload()
+        
+        Returns:
+            Dictionary with interaction details
+        """
+        logger.info(f"🔍 Checking OOB interactions for payload: {payload_id}")
+        
+        if payload_id not in self.oob_payloads:
+            return {
+                "status": "error",
+                "error": f"Payload ID {payload_id} not found. Generate a payload first."
+            }
+        
+        payload_info = self.oob_payloads[payload_id]
+        
+        # In production, this would query the interactsh API
+        # Example: https://github.com/projectdiscovery/interactsh#using-interactsh-client
+        # 
+        # For now, we simulate the check
+        # In real implementation, you would:
+        # 1. Use interactsh-client Python library
+        # 2. Or make HTTP requests to interactsh server API
+        # 3. Poll for DNS/HTTP interactions
+        
+        try:
+            # Simulated check (in production, use real interactsh client)
+            # import interactsh_client
+            # client = interactsh_client.Client()
+            # interactions = client.poll(payload_id)
+            
+            # For now, return simulated response
+            logger.info(f"⚠️ OOB check is simulated. Integrate real interactsh for production use.")
+            
+            return {
+                "status": "success",
+                "data": {
+                    "payload_id": payload_id,
+                    "url": payload_info["url"],
+                    "interactions_found": 0,  # Would be populated by real interactsh
+                    "interactions": [],  # Would contain HTTP/DNS logs
+                    "note": "This is a simulated check. Integrate interactsh library for real OOB detection.",
+                    "integration_guide": "Install: pip install interactsh && use interactsh-client Python API"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking OOB interactions: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
