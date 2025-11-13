@@ -9,6 +9,14 @@ Aegis Agent is an AI-powered autonomous assistant implemented in Python, built s
 
 Each LLM is automatically selected based on the task type, providing specialized expertise where it's needed most. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for detailed information.
 
+**ENHANCED**: Transparent Reasoning & Reliability Features
+- 💭 **Reasoning Display** - See all agent thoughts and decision-making processes in real-time
+- 🔋 **Keep-Alive Mechanism** - Prevents terminal from sleeping during long operations
+- 🎯 **Enhanced Decision Framework** - Improved sophistication for better detection chances
+- 📊 **Comprehensive Logging** - Export reasoning history for analysis and debugging
+
+See [REASONING_FEATURES.md](REASONING_FEATURES.md) for detailed information about these features.
+
 Important statement: this doesn't mean to do what you want — always get explicit authorization before testing any target.
 
 Core capabilities
