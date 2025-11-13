@@ -63,3 +63,4 @@ reports/
 tmp/
 temp/
 *.tmp
+test_refactoring.py
