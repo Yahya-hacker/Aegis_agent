@@ -45,7 +45,7 @@ class PythonToolManager:
         return webdriver.Chrome(service=service, options=self.selenium_options)
 
     async def advanced_technology_detection(self, target: str) -> Dict:
-        """Advanced technology detection with stealth features"""
+        """Advanced technology detection with stealth features + session injection"""
         logger.info(f"🔬 Détection de technologie pour {target}")
         
         # TASK 4: Apply jitter before request
@@ -57,13 +57,16 @@ class PythonToolManager:
             headers = AegisHelpers.get_stealth_headers()
             proxy = AegisHelpers.get_random_proxy()
             
+            # TASK 1: Inject session data
+            headers, cookies = self._inject_session_data(headers)
+            
             connector = None
             if proxy:
                 logger.info(f"🔒 Using proxy: {proxy}")
                 connector = aiohttp.TCPConnector()
             
             async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-                kwargs = {'ssl': False, 'timeout': 10}
+                kwargs = {'ssl': False, 'timeout': 10, 'cookies': cookies}
                 if proxy:
                     kwargs['proxy'] = proxy
                 
@@ -131,10 +134,40 @@ class PythonToolManager:
             return {"status": "error", "error": str(e)}
 
     # --- NOUVELLES FONCTIONS SOPHISTIQUÉES ---
+    
+    def _inject_session_data(self, headers: Dict, cookies: Dict = None) -> tuple:
+        """
+        TASK 1: Inject session cookies and headers into requests
+        
+        Args:
+            headers: Base headers dictionary
+            cookies: Optional cookies dictionary to update
+            
+        Returns:
+            Tuple of (updated_headers, cookies_dict)
+        """
+        session_data = self._load_session_data()
+        
+        if not session_data:
+            return headers, cookies or {}
+        
+        logger.info("🔐 Injecting authenticated session data into request")
+        
+        # Merge session headers
+        if 'headers' in session_data:
+            headers.update(session_data['headers'])
+        
+        # Prepare cookies
+        cookie_dict = cookies or {}
+        if 'cookies' in session_data:
+            for cookie in session_data['cookies']:
+                cookie_dict[cookie['name']] = cookie['value']
+        
+        return headers, cookie_dict
 
     async def fetch_url(self, target_url: str) -> Dict:
         """
-        Récupère une URL spécifique avec stealth features
+        Récupère une URL spécifique avec stealth features + session injection
         """
         logger.info(f"🔗 Fetching URL: {target_url}")
         
@@ -146,13 +179,16 @@ class PythonToolManager:
             headers = AegisHelpers.get_stealth_headers()
             proxy = AegisHelpers.get_random_proxy()
             
+            # TASK 1: Inject session data
+            headers, cookies = self._inject_session_data(headers)
+            
             connector = None
             if proxy:
                 logger.info(f"🔒 Using proxy: {proxy}")
                 connector = aiohttp.TCPConnector()
             
             async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-                kwargs = {'ssl': False, 'timeout': 10}
+                kwargs = {'ssl': False, 'timeout': 10, 'cookies': cookies}
                 if proxy:
                     kwargs['proxy'] = proxy
                 
@@ -405,3 +441,167 @@ class PythonToolManager:
                 "status": "error",
                 "error": str(e)
             }
+    
+    # --- TASK 1: AUTHENTICATED SESSION MANAGEMENT ---
+    
+    async def manage_session(self, action: str, credentials: Dict[str, str] = None) -> Dict:
+        """
+        TASK 1: Manage authenticated sessions for scanning authenticated areas
+        
+        This tool allows the agent to:
+        - Login to a web application using Selenium
+        - Save cookies and headers to data/session.json
+        - Logout and clear session data
+        
+        Args:
+            action: 'login' or 'logout'
+            credentials: Dictionary with login credentials
+                - 'url': Login page URL
+                - 'username_field': CSS selector for username field
+                - 'password_field': CSS selector for password field
+                - 'username': Username to login with
+                - 'password': Password to login with
+                - 'submit_button': CSS selector for submit button (optional)
+                
+        Returns:
+            Dictionary with status and session data
+        """
+        from pathlib import Path
+        import json
+        
+        session_file = Path("data/session.json")
+        session_file.parent.mkdir(exist_ok=True, parents=True)
+        
+        if action == "logout":
+            # Clear session file
+            if session_file.exists():
+                session_file.unlink()
+                logger.info("🚪 Session cleared successfully")
+                return {
+                    "status": "success",
+                    "data": {"message": "Session cleared"}
+                }
+            else:
+                return {
+                    "status": "success",
+                    "data": {"message": "No active session to clear"}
+                }
+        
+        elif action == "login":
+            if not credentials:
+                return {
+                    "status": "error",
+                    "error": "Credentials required for login action"
+                }
+            
+            required_fields = ['url', 'username_field', 'password_field', 'username', 'password']
+            missing = [f for f in required_fields if f not in credentials]
+            if missing:
+                return {
+                    "status": "error",
+                    "error": f"Missing required credentials: {', '.join(missing)}"
+                }
+            
+            logger.info(f"🔐 Attempting login to {credentials['url']}...")
+            
+            try:
+                loop = asyncio.get_event_loop()
+                session_data = await loop.run_in_executor(
+                    None, self._perform_login, credentials
+                )
+                
+                # Save session data to file
+                with open(session_file, 'w') as f:
+                    json.dump(session_data, f, indent=2)
+                
+                logger.info(f"✅ Login successful, session saved to {session_file}")
+                
+                return {
+                    "status": "success",
+                    "data": {
+                        "message": "Login successful, session saved",
+                        "cookies_count": len(session_data.get('cookies', [])),
+                        "session_file": str(session_file)
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Login failed: {e}")
+                return {
+                    "status": "error",
+                    "error": f"Login failed: {str(e)}"
+                }
+        
+        else:
+            return {
+                "status": "error",
+                "error": f"Unknown action: {action}. Use 'login' or 'logout'"
+            }
+    
+    def _perform_login(self, credentials: Dict[str, str]) -> Dict:
+        """Perform login using Selenium and capture session data"""
+        driver = None
+        try:
+            driver = self._get_selenium_driver()
+            driver.get(credentials['url'])
+            driver.implicitly_wait(3)
+            
+            # Find and fill username field
+            username_field = driver.find_element(By.CSS_SELECTOR, credentials['username_field'])
+            username_field.clear()
+            username_field.send_keys(credentials['username'])
+            
+            # Find and fill password field
+            password_field = driver.find_element(By.CSS_SELECTOR, credentials['password_field'])
+            password_field.clear()
+            password_field.send_keys(credentials['password'])
+            
+            # Submit the form
+            if 'submit_button' in credentials:
+                submit_button = driver.find_element(By.CSS_SELECTOR, credentials['submit_button'])
+                submit_button.click()
+            else:
+                # Try to submit via form or press Enter
+                password_field.submit()
+            
+            # Wait for page to load after login
+            driver.implicitly_wait(5)
+            
+            # Capture cookies
+            cookies = driver.get_cookies()
+            
+            # Capture current URL (to detect redirects)
+            current_url = driver.current_url
+            
+            # Build session data
+            session_data = {
+                "cookies": cookies,
+                "headers": {
+                    "User-Agent": driver.execute_script("return navigator.userAgent;"),
+                    "Referer": current_url
+                },
+                "login_url": credentials['url'],
+                "current_url": current_url,
+                "timestamp": asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0
+            }
+            
+            return session_data
+            
+        finally:
+            if driver:
+                driver.quit()
+    
+    def _load_session_data(self) -> Dict:
+        """Load session data from file if it exists"""
+        from pathlib import Path
+        import json
+        
+        session_file = Path("data/session.json")
+        if session_file.exists():
+            try:
+                with open(session_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load session data: {e}")
+        
+        return None

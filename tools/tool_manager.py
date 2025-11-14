@@ -18,6 +18,29 @@ class RealToolManager:
         self.tool_paths = self._discover_tool_paths()
         logger.info(f"Outils CLI découverts : {list(self.tool_paths.keys())}")
     
+    def _load_session_data(self) -> Dict:
+        """TASK 1: Load session data from file if it exists"""
+        session_file = Path("data/session.json")
+        if session_file.exists():
+            try:
+                with open(session_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load session data: {e}")
+        
+        return None
+    
+    def _build_cookie_header(self, session_data: Dict) -> str:
+        """TASK 1: Build cookie header from session data"""
+        if not session_data or 'cookies' not in session_data:
+            return ""
+        
+        cookie_pairs = []
+        for cookie in session_data['cookies']:
+            cookie_pairs.append(f"{cookie['name']}={cookie['value']}")
+        
+        return "; ".join(cookie_pairs)
+    
     def _discover_tool_paths(self) -> Dict[str, str]:
         """Trouve le chemin d'installation des outils."""
         # AJOUT DE 'sqlmap' À LA LISTE
@@ -74,13 +97,22 @@ class RealToolManager:
         return {"status": "success", "data": subdomains}
         
     async def vulnerability_scan(self, target_url: str) -> Dict:
-        """Scan une URL avec Nuclei et parse la sortie JSONL."""
+        """Scan une URL avec Nuclei et parse la sortie JSONL (with session injection)"""
         output_dir = Path("data/sessions")
         output_dir.mkdir(exist_ok=True, parents=True)
         safe_name = re.sub(r'[^a-zA-Z0-9]', '_', target_url)
         output_file = output_dir / f"nuclei_{safe_name}.jsonl"
 
         args = ["-u", target_url, "-severity", "low,medium,high,critical", "-jsonl", "-o", str(output_file)]
+        
+        # TASK 1: Inject session cookies if available
+        session_data = self._load_session_data()
+        if session_data:
+            cookie_header = self._build_cookie_header(session_data)
+            if cookie_header:
+                logger.info("🔐 Injecting session cookies into Nuclei scan")
+                args.extend(["-H", f"Cookie: {cookie_header}"])
+        
         result = await self._execute("nuclei", args)
         if result["status"] == "error": return result
         
@@ -127,11 +159,20 @@ class RealToolManager:
 
     # --- NOUVELLE FONCTION SQLMAP ---
     async def run_sqlmap(self, target_url: str) -> Dict:
-        """Exécute sqlmap sur une URL."""
+        """Exécute sqlmap sur une URL (with session injection)"""
         logger.info(f"🔬 Lancement de SQLmap sur : {target_url}")
         
         # Commande SQLMap : --batch (non-interactif), --level=3, --risk=2
         args = ["-u", target_url, "--batch", "--level=3", "--risk=2"]
+        
+        # TASK 1: Inject session cookies if available
+        session_data = self._load_session_data()
+        if session_data:
+            cookie_header = self._build_cookie_header(session_data)
+            if cookie_header:
+                logger.info("🔐 Injecting session cookies into SQLmap")
+                args.extend(["--cookie", cookie_header])
+        
         result = await self._execute("sqlmap", args)
         
         if result["status"] == "error":

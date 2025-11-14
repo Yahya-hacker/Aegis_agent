@@ -259,6 +259,12 @@ AVAILABLE TOOLS:
 - discover_interactables: Find forms and inputs (args: target)
 - test_form_payload: Test form with payload (args: target, form_identifier, input_payloads)
 - fetch_url: Fetch a URL (args: target)
+- manage_session: Manage authenticated session (args: action[login/logout], credentials)
+- db_add_finding: Add a finding to database (args: type, url, severity, description, evidence)
+- db_get_findings: Get findings from database (args: severity, verified)
+- db_is_scanned: Check if target was scanned (args: target, scan_type)
+- db_mark_scanned: Mark target as scanned (args: target, scan_type, result)
+- db_get_statistics: Get mission statistics (args: none)
 - finish_mission: Complete mission (args: reason)
 - ask_user_for_approval: Ask for guidance (args: message)
 

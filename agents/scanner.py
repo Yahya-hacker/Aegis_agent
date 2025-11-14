@@ -6,6 +6,7 @@ from typing import Dict, List, Any
 from urllib.parse import urlparse
 from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
+from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class AegisScanner:
         self.ai_core = ai_core
         self.real_tools = RealToolManager()
         self.python_tools = PythonToolManager()
+        self.db = get_database()  # Mission database
 
     async def execute_action(self, action: Dict) -> Dict:
         """Orchestrateur qui exécute l'action demandée par l'IA."""
@@ -84,6 +86,64 @@ class AegisScanner:
                 target_url = args.get("target")
                 if not target_url: return {"status": "error", "error": "Cible URL manquante"}
                 return await self.python_tools.fetch_url(target_url)
+            
+            # Session Management Tool (TASK 1)
+            elif tool == "manage_session":
+                action = args.get("action")
+                credentials = args.get("credentials", {})
+                if not action:
+                    return {"status": "error", "error": "Action manquante (login/logout)"}
+                return await self.python_tools.manage_session(action, credentials)
+            
+            # Database Tools (TASK 2)
+            elif tool == "db_add_finding":
+                finding_type = args.get("type")
+                url = args.get("url")
+                severity = args.get("severity")
+                description = args.get("description", "")
+                evidence = args.get("evidence", "")
+                
+                if not all([finding_type, url, severity]):
+                    return {"status": "error", "error": "Arguments manquants (type, url, severity requis)"}
+                
+                finding_id = self.db.add_finding(finding_type, url, severity, description, evidence)
+                if finding_id > 0:
+                    return {"status": "success", "data": {"finding_id": finding_id, "message": "Finding added"}}
+                else:
+                    return {"status": "error", "error": "Failed to add finding"}
+            
+            elif tool == "db_get_findings":
+                severity = args.get("severity")
+                verified = args.get("verified")
+                findings = self.db.get_findings(severity=severity, verified=verified)
+                return {"status": "success", "data": findings}
+            
+            elif tool == "db_is_scanned":
+                target = args.get("target")
+                scan_type = args.get("scan_type")
+                if not target:
+                    return {"status": "error", "error": "Target manquant"}
+                
+                is_scanned = self.db.is_scanned(target, scan_type)
+                return {"status": "success", "data": {"target": target, "scan_type": scan_type, "is_scanned": is_scanned}}
+            
+            elif tool == "db_mark_scanned":
+                target = args.get("target")
+                scan_type = args.get("scan_type")
+                result = args.get("result", "")
+                
+                if not all([target, scan_type]):
+                    return {"status": "error", "error": "Arguments manquants (target, scan_type requis)"}
+                
+                success = self.db.mark_scanned(target, scan_type, result)
+                if success:
+                    return {"status": "success", "data": {"message": "Target marked as scanned"}}
+                else:
+                    return {"status": "error", "error": "Failed to mark target as scanned"}
+            
+            elif tool == "db_get_statistics":
+                stats = self.db.get_statistics()
+                return {"status": "success", "data": stats}
 
             else:
                 logger.warning(f"Outil inconnu demandé par l'IA : {tool}")
