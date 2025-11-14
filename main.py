@@ -34,6 +34,7 @@ async def main():
         from agents.conversational_agent import AegisConversation
         from agents.learning_engine import AegisLearningEngine
         from utils.keep_alive import start_keep_alive, stop_keep_alive
+        from utils.dynamic_tool_loader import get_tool_loader
     except ImportError as e:
         logger.error(f"Erreur d'importation critique : {e}")
         print(f"❌ Erreur: Assurez-vous que vos fichiers sont dans le dossier 'agents'.")
@@ -45,9 +46,18 @@ async def main():
     print("   • Mixtral 8x7B: Analyse de vulnérabilités et exploitation")
     print("   • Qwen-coder: Analyse de code et génération de payloads")
     
+    # TASK 3: Initialize dynamic tool loader
+    print("\n🔧 Initializing dynamic tool arsenal...")
+    tool_loader = get_tool_loader()
+    stats = tool_loader.get_statistics()
+    print(f"   • {stats['available_tools']}/{stats['total_tools']} tools available")
+    print(f"   • {stats['intrusive_tools']} intrusive tools")
+    print(f"   • {stats['non_intrusive_tools']} non-intrusive tools")
+    print(f"   • Categories: {', '.join(stats['categories'])}")
+    
     # Start keep-alive mechanism to prevent terminal from sleeping
     keep_alive = start_keep_alive(interval=60)
-    print("🔋 Keep-alive mechanism activated (prevents terminal sleep)")
+    print("\n🔋 Keep-alive mechanism activated (prevents terminal sleep)")
     
     try:
         # 1. Initialiser le moteur d'apprentissage

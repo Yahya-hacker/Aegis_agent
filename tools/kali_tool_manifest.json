@@ -1,0 +1,328 @@
+{
+  "tools": [
+    {
+      "tool_name": "subdomain_enumeration",
+      "binary_name": "subfinder",
+      "description": "Find subdomains using passive sources",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "domain": {
+          "type": "string",
+          "required": true,
+          "description": "Target domain to enumerate"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"subdomain_enumeration\", \"args\": {\"domain\": \"<DOMAIN>\"}}"
+    },
+    {
+      "tool_name": "port_scanning",
+      "binary_name": "naabu",
+      "description": "Fast port scanner to discover open ports",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target host or IP"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"port_scanning\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "nmap_scan",
+      "binary_name": "nmap",
+      "description": "Detailed network scan with service detection",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target host or IP"
+        },
+        "ports": {
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated port list (default: 80,443,8080,8443)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\"}}"
+    },
+    {
+      "tool_name": "url_discovery",
+      "binary_name": "gau",
+      "description": "Discover URLs and endpoints from archives",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "domain": {
+          "type": "string",
+          "required": true,
+          "description": "Target domain"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"url_discovery\", \"args\": {\"domain\": \"<DOMAIN>\"}}"
+    },
+    {
+      "tool_name": "tech_detection",
+      "binary_name": "python",
+      "description": "Detect web technologies and frameworks",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"tech_detection\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "vulnerability_scan",
+      "binary_name": "nuclei",
+      "description": "Fast vulnerability scanner using templates",
+      "intrusive": true,
+      "category": "vulnerability_assessment",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL to scan"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "run_sqlmap",
+      "binary_name": "sqlmap",
+      "description": "SQL injection detection and exploitation",
+      "intrusive": true,
+      "category": "exploitation",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL with parameter"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "discover_interactables",
+      "binary_name": "python",
+      "description": "Use Selenium to find forms and interactive elements",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"discover_interactables\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "test_form_payload",
+      "binary_name": "python",
+      "description": "Test form inputs with payloads (XSS, SQLi, etc.)",
+      "intrusive": true,
+      "category": "exploitation",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL with form"
+        },
+        "form_identifier": {
+          "type": "string",
+          "required": true,
+          "description": "Form ID or XPath selector"
+        },
+        "input_payloads": {
+          "type": "object",
+          "required": true,
+          "description": "Dictionary of field names to payload values"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"test_form_payload\", \"args\": {\"target\": \"<TARGET>\", \"form_identifier\": \"<FORM_ID>\", \"input_payloads\": {\"<FIELD_NAME>\": \"<PAYLOAD>\"}}}"
+    },
+    {
+      "tool_name": "fetch_url",
+      "binary_name": "python",
+      "description": "Fetch and analyze a specific URL",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL to fetch"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"fetch_url\", \"args\": {\"target\": \"<TARGET>\"}}"
+    },
+    {
+      "tool_name": "manage_session",
+      "binary_name": "python",
+      "description": "Manage authenticated sessions (login/logout)",
+      "intrusive": false,
+      "category": "session_management",
+      "args_schema": {
+        "action": {
+          "type": "string",
+          "required": true,
+          "description": "Action: 'login' or 'logout'"
+        },
+        "credentials": {
+          "type": "object",
+          "required": false,
+          "description": "Login credentials (required for login action)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"manage_session\", \"args\": {\"action\": \"<ACTION>\", \"credentials\": {\"url\": \"<LOGIN_URL>\", \"username_field\": \"<USERNAME_SELECTOR>\", \"password_field\": \"<PASSWORD_SELECTOR>\", \"username\": \"<USERNAME>\", \"password\": \"<PASSWORD>\"}}}"
+    },
+    {
+      "tool_name": "db_add_finding",
+      "binary_name": "python",
+      "description": "Add a security finding to mission database",
+      "intrusive": false,
+      "category": "database",
+      "args_schema": {
+        "type": {
+          "type": "string",
+          "required": true,
+          "description": "Finding type (e.g., XSS, SQLi, IDOR)"
+        },
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "URL where finding was discovered"
+        },
+        "severity": {
+          "type": "string",
+          "required": true,
+          "description": "Severity: critical, high, medium, low, info"
+        },
+        "description": {
+          "type": "string",
+          "required": false,
+          "description": "Detailed description"
+        },
+        "evidence": {
+          "type": "string",
+          "required": false,
+          "description": "Evidence or proof"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"db_add_finding\", \"args\": {\"type\": \"<TYPE>\", \"url\": \"<URL>\", \"severity\": \"<SEVERITY>\", \"description\": \"<DESCRIPTION>\", \"evidence\": \"<EVIDENCE>\"}}"
+    },
+    {
+      "tool_name": "db_get_findings",
+      "binary_name": "python",
+      "description": "Retrieve findings from mission database",
+      "intrusive": false,
+      "category": "database",
+      "args_schema": {
+        "severity": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by severity"
+        },
+        "verified": {
+          "type": "boolean",
+          "required": false,
+          "description": "Filter by verification status"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"db_get_findings\", \"args\": {\"severity\": \"<SEVERITY>\", \"verified\": <VERIFIED>}}"
+    },
+    {
+      "tool_name": "db_is_scanned",
+      "binary_name": "python",
+      "description": "Check if a target was already scanned",
+      "intrusive": false,
+      "category": "database",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target to check"
+        },
+        "scan_type": {
+          "type": "string",
+          "required": false,
+          "description": "Specific scan type to check"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"db_is_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\"}}"
+    },
+    {
+      "tool_name": "db_mark_scanned",
+      "binary_name": "python",
+      "description": "Mark a target as scanned to avoid duplication",
+      "intrusive": false,
+      "category": "database",
+      "args_schema": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "description": "Target that was scanned"
+        },
+        "scan_type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of scan performed"
+        },
+        "result": {
+          "type": "string",
+          "required": false,
+          "description": "Summary of scan results"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"db_mark_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\", \"result\": \"<RESULT>\"}}"
+    },
+    {
+      "tool_name": "db_get_statistics",
+      "binary_name": "python",
+      "description": "Get mission statistics from database",
+      "intrusive": false,
+      "category": "database",
+      "args_schema": {},
+      "json_prompt_template": "{\"tool\": \"db_get_statistics\", \"args\": {}}"
+    },
+    {
+      "tool_name": "finish_mission",
+      "binary_name": "internal",
+      "description": "Complete the current mission",
+      "intrusive": false,
+      "category": "control",
+      "args_schema": {
+        "reason": {
+          "type": "string",
+          "required": true,
+          "description": "Reason for finishing"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"finish_mission\", \"args\": {\"reason\": \"<REASON>\"}}"
+    },
+    {
+      "tool_name": "ask_user_for_approval",
+      "binary_name": "internal",
+      "description": "Ask user for guidance or approval",
+      "intrusive": false,
+      "category": "control",
+      "args_schema": {
+        "message": {
+          "type": "string",
+          "required": true,
+          "description": "Message to show to user"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"ask_user_for_approval\", \"args\": {\"message\": \"<MESSAGE>\"}}"
+    }
+  ]
+}

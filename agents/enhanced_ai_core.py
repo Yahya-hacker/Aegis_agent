@@ -35,6 +35,7 @@ class EnhancedAegisAI:
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
         self.conversation_history = []  # Added for memory management
+        self.dynamic_tool_prompt = ""  # TASK 3: Dynamic tool prompt
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -43,6 +44,12 @@ class EnhancedAegisAI:
             
             # Initialize the orchestrator
             await self.orchestrator.initialize()
+            
+            # TASK 3: Load dynamic tool prompt
+            from utils.dynamic_tool_loader import get_tool_loader
+            tool_loader = get_tool_loader()
+            self.dynamic_tool_prompt = tool_loader.build_dynamic_tool_prompt()
+            logger.info("✅ Dynamic tool prompt loaded.")
             
             # Load learned patterns if learning engine is available
             if self.learning_engine:
@@ -249,24 +256,7 @@ MISSION RULES:
 LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 {self.learned_patterns}
 
-AVAILABLE TOOLS:
-- subdomain_enumeration: Find subdomains (args: domain)
-- port_scanning: Scan open ports (args: target)
-- nmap_scan: Detailed nmap scan (args: target, ports)
-- url_discovery: Discover URLs and endpoints (args: domain)
-- tech_detection: Detect technologies (args: target)
-- vulnerability_scan: Scan for vulnerabilities (args: target)
-- discover_interactables: Find forms and inputs (args: target)
-- test_form_payload: Test form with payload (args: target, form_identifier, input_payloads)
-- fetch_url: Fetch a URL (args: target)
-- manage_session: Manage authenticated session (args: action[login/logout], credentials)
-- db_add_finding: Add a finding to database (args: type, url, severity, description, evidence)
-- db_get_findings: Get findings from database (args: severity, verified)
-- db_is_scanned: Check if target was scanned (args: target, scan_type)
-- db_mark_scanned: Mark target as scanned (args: target, scan_type, result)
-- db_get_statistics: Get mission statistics (args: none)
-- finish_mission: Complete mission (args: reason)
-- ask_user_for_approval: Ask for guidance (args: message)
+{self.dynamic_tool_prompt}
 
 ENHANCED REASONING FRAMEWORK:
 1. ANALYSIS: Carefully analyze the agent memory to understand:

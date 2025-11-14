@@ -163,11 +163,23 @@ class AegisConversation:
                 self.agent_memory.append({"type": "observation", "content": "J'ai généré une action invalide. Je dois réessayer."})
                 continue 
 
-            # 3. APPROBATION HUMAINE (Human-in-the-Loop)
-            try:
-                response = input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip()
-            except EOFError:
-                break
+            # 3. APPROBATION HUMAINE (Human-in-the-Loop) with TASK 4: Semi-Autonomous Mode
+            # Check if tool is intrusive
+            from utils.dynamic_tool_loader import get_tool_loader
+            tool_loader = get_tool_loader()
+            is_intrusive = tool_loader.is_tool_intrusive(tool)
+            
+            # TASK 4: Auto-approve non-intrusive tools
+            if not is_intrusive:
+                print(f"✅ Action auto-approuvée (Reconnaissance non-intrusive)")
+                response = 'o'  # Auto-approve
+            else:
+                # Intrusive tool: ask for approval
+                print(f"⚠️ ATTENTION: Action INTRUSIVE détectée!")
+                try:
+                    response = input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip()
+                except EOFError:
+                    break
             
             if response in ['q', 'quit', 'exit']:
                 print("🛑 Mission arrêtée par l'utilisateur.")
