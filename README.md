@@ -1,6 +1,14 @@
-Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v6.0)
+Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v7.0 - Battle-Ready)
 
 Aegis Agent is an AI-powered autonomous assistant implemented in Python, built specifically to help security researchers, penetration testers, and bug bounty hunters with reconnaissance, vulnerability discovery, exploitation support (POC generation and safe validation), and reporting. It is a tool to accelerate and organize security testing workflows — it does not replace human judgment or authorization.
+
+**🚀 NEW in v7.0 - Battle-Ready Platform**: Major Architectural Improvements
+- 🔐 **Authenticated Session Management** - Scan authenticated areas of applications
+- 💾 **Mission Database** - Persistent storage prevents duplicate work and enables strategic memory
+- 🛠️ **Dynamic Arsenal** - Automatic discovery of available Kali tools, no more hardcoded tool lists
+- ⚡ **Semi-Autonomous Mode** - Reconnaissance auto-approved, exploitation requires approval
+
+See [V5_FEATURES.md](V5_FEATURES.md) for comprehensive documentation on these game-changing features.
 
 **NEW in v6.0**: Multi-LLM Architecture using Together AI
 - 🧠 **Llama 70B** for strategic planning and triage
@@ -23,18 +31,22 @@ Core capabilities
 - Reconnaissance
   - Passive and active asset discovery when configured with approved tools and data sources (subdomain enumeration, port/service discovery, directory and endpoint discovery).
   - OSINT aggregation and context for targets within scope.
+  - **NEW**: Automatic tool discovery and semi-autonomous reconnaissance mode.
 - Vulnerability discovery and exploitation support
   - Automates common checks and suggests reproducible proof-of-concept steps (HTTP requests, exploit templates, minimal scripts).
   - Orchestrates external scanners and tools you configure (nmap, ffuf, nikto, ZAP/Burp etc.) and consolidates results for triage.
   - Helps validate and reproduce findings with operator approval before any intrusive actions.
+  - **NEW**: Can scan authenticated areas using session management.
 - Rules-of-engagement and scope awareness
   - Designed to respect bug bounty program (BBP) rules and out-of-scope assets when configured with scope lists and policy definitions.
   - Will flag or block actions that target out-of-scope hosts if the configuration is provided.
 - Workflow & reporting
   - Plan multi-step engagements (recon → enumeration → validation → report) and maintain short-term context across steps.
   - Produce human-readable reports and exportable artifacts (Markdown, JSON) with reproduction steps, impact, and mitigation suggestions.
+  - **NEW**: Mission database tracks all findings and scanned targets to prevent duplicate work.
 - Extensibility
   - Plugin/action architecture for adding custom checks, adapters to new tools, and reporting templates.
+  - **NEW**: JSON-based tool manifest makes adding new tools trivial.
 
 Safety, ethics, and legal constraints (must-read)
 - Authorization required: Use Aegis Agent only against systems you explicitly own or have written authorization to test (targets enrolled in a bug bounty program with explicit scope, or with a signed engagement). Unauthorized testing is illegal and unethical.
