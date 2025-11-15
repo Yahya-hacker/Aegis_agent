@@ -195,6 +195,15 @@ class AegisConversation:
                     metadata={"tool": tool, "args": args}
                 )
                 
+                # Check if we should avoid this action based on learning
+                learning_engine = getattr(self.ai_core, 'learning_engine', None)
+                if learning_engine:
+                    target_for_check = args.get('domain') or args.get('target') or args.get('url', 'unknown')
+                    should_avoid, avoid_reason = learning_engine.should_avoid_action(tool, target_for_check)
+                    if should_avoid:
+                        print(f"⚠️ Warning: {avoid_reason}")
+                        print(f"   Proceeding anyway as you approved it.")
+                
                 result = await scanner.execute_action(action)
                 
                 # 5. OBSERVER: Ajouter le résultat à la mémoire
@@ -202,6 +211,12 @@ class AegisConversation:
                 
                 if result.get("status") == "success":
                     data = result.get("data", "Aucune donnée retournée.")
+                    
+                    # Record successful action for learning
+                    if learning_engine:
+                        target_for_record = args.get('domain') or args.get('target') or args.get('url', 'unknown')
+                        result_summary = f"{len(data)} items" if isinstance(data, list) else "data received"
+                        learning_engine.record_successful_action(tool, target_for_record, result_summary)
                     
                     # Rendre l'observation lisible pour l'IA
                     observation = f"Action {tool} réussie."
@@ -231,6 +246,11 @@ class AegisConversation:
                 else:
                     # Dire à l'IA qu'il y a eu une erreur
                     error_msg = result.get('error', 'Erreur inconnue')
+                    
+                    # Record failed attempt for learning
+                    if learning_engine:
+                        target_for_record = args.get('domain') or args.get('target') or args.get('url', 'unknown')
+                        learning_engine.record_failed_attempt(tool, target_for_record, error_msg)
                     
                     self.reasoning_display.show_thought(
                         f"Action {tool} failed: {error_msg}",

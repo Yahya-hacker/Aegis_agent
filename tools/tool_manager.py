@@ -12,11 +12,17 @@ from typing import Dict, List, Any
 logger = logging.getLogger(__name__)
 
 class RealToolManager:
-    """Manages REAL security tool execution via subprocess"""
+    """Manages REAL security tool execution via subprocess with rate limiting"""
     
     def __init__(self):
         self.tool_paths = self._discover_tool_paths()
         logger.info(f"Outils CLI découverts : {list(self.tool_paths.keys())}")
+        
+        # Rate limiting configuration
+        self.last_request_time = {}  # Track last request time per tool
+        self.min_delay_between_requests = 2.0  # Minimum seconds between requests
+        self.max_concurrent_requests = 3  # Maximum concurrent tool executions
+        self.active_processes = 0  # Track active processes
     
     def _load_session_data(self) -> Dict:
         """TASK 1: Load session data from file if it exists"""
@@ -58,20 +64,49 @@ class RealToolManager:
         return paths
     
     async def _execute(self, tool_name: str, args: List[str], timeout: int = 600) -> Dict[str, Any]:
-        """Wrapper d'exécution asynchrone générique."""
+        """Wrapper d'exécution asynchrone générique avec rate limiting"""
         if tool_name not in self.tool_paths:
             return {"status": "error", "error": f"Outil {tool_name} non trouvé"}
         
-        cmd = [self.tool_paths[tool_name]] + args
-        logger.info(f"Exécution : {' '.join(cmd)}")
+        # Rate limiting: enforce delay between requests
+        import time
+        current_time = time.time()
+        if tool_name in self.last_request_time:
+            time_since_last = current_time - self.last_request_time[tool_name]
+            if time_since_last < self.min_delay_between_requests:
+                wait_time = self.min_delay_between_requests - time_since_last
+                logger.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before executing {tool_name}")
+                await asyncio.sleep(wait_time)
+        
+        # Check concurrent request limit
+        while self.active_processes >= self.max_concurrent_requests:
+            logger.warning(f"⚠️ Max concurrent requests ({self.max_concurrent_requests}) reached, waiting...")
+            await asyncio.sleep(1)
+        
+        self.last_request_time[tool_name] = time.time()
+        self.active_processes += 1
         
         try:
+            cmd = [self.tool_paths[tool_name]] + args
+            logger.info(f"Exécution : {' '.join(cmd)}")
+            
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # Kill the process if it times out
+                try:
+                    process.kill()
+                    await process.wait()
+                except:
+                    pass
+                logger.error(f"Outil {tool_name} a dépassé le timeout de {timeout}s")
+                return {"status": "error", "error": f"Timeout after {timeout}s"}
             
             if process.returncode != 0:
                 logger.error(f"Erreur de {tool_name}: {stderr.decode()}")
@@ -79,12 +114,11 @@ class RealToolManager:
 
             return {"status": "success", "stdout": stdout.decode(), "stderr": stderr.decode()}
             
-        except asyncio.TimeoutError:
-            logger.error(f"Outil {tool_name} a dépassé le timeout de {timeout}s")
-            return {"status": "error", "error": "Timeout"}
         except Exception as e:
-            logger.error(f"Échec d'exécution de {tool_name}: {e}")
+            logger.error(f"Échec d'exécution de {tool_name}: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
+        finally:
+            self.active_processes -= 1
 
     # --- MÉTHODES D'OUTILS SPÉCIFIQUES ---
 
