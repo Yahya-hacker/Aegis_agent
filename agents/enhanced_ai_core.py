@@ -10,6 +10,7 @@ import logging
 from agents.learning_engine import AegisLearningEngine
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
 from utils.reasoning_display import get_reasoning_display
+from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class EnhancedAegisAI:
         self.dynamic_tool_prompt = ""  # TASK 3: Dynamic tool prompt
         self.max_history_size = 10  # Maximum conversation history to keep
         self.context_summary = None  # Summary of older context
+        self.db = get_database()  # TASK 2: Mission database integration
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -260,13 +262,31 @@ Analyze this conversation and determine if we have all information (target and r
         # TASK 1: Prune memory to prevent unlimited growth
         agent_memory = self._prune_memory(agent_memory)
         
+        # TASK 2: Get database statistics for context awareness
+        db_stats = self.db.get_statistics()
+        scanned_targets = self.db.get_scanned_targets()
+        
+        # Build database context string
+        db_context = f"""
+DATABASE STATUS (Avoid Duplicate Work):
+- Total scanned targets: {db_stats.get('total_scanned_targets', 0)}
+- Total findings: {db_stats.get('total_findings', 0)}
+- Verified findings: {db_stats.get('verified_findings', 0)}
+"""
+        if scanned_targets:
+            recent_scans = scanned_targets[:5]  # Last 5 scans
+            db_context += "\nRecent scans (avoid duplicating):\n"
+            for scan in recent_scans:
+                db_context += f"  - {scan['target']} ({scan['scan_type']}) at {scan['scanned_at']}\n"
+        
         # Show reasoning about next action decision
         self.reasoning_display.show_thought(
             "Determining next action based on mission rules and agent memory",
             thought_type="tactical",
             metadata={
                 "memory_items": len(agent_memory),
-                "last_observation": agent_memory[-1] if agent_memory else None
+                "last_observation": agent_memory[-1] if agent_memory else None,
+                "db_stats": db_stats
             }
         )
         
@@ -275,6 +295,8 @@ Your task is to decide the next action based on mission rules, observations, and
 
 MISSION RULES:
 {bbp_rules}
+
+{db_context}
 
 LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 {self.learned_patterns}
@@ -290,6 +312,7 @@ STAGE 1 - DEEP ANALYSIS:
    - What areas remain unexplored?
    - What patterns or anomalies are present in the results?
    - Are there any dead ends or rabbit holes to avoid?
+   - Check the DATABASE STATUS above to avoid duplicate scans!
 
 2. Information Gap Analysis:
    - What critical information is missing?

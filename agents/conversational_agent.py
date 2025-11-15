@@ -333,14 +333,14 @@ class AegisConversation:
 
     def _print_welcome(self):
         print("""
-🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v6.0 - Multi-LLM)
+🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v7.0 - Multi-LLM)
 =============================================================
-🤖 Cerveaux Multi-LLM via Together AI:
-   • Llama 70B:     Planification stratégique et triage
-   • Mixtral 8x7B:  Analyse vulnérabilités et exploitation
-   • Qwen-coder:    Analyse code et génération de payloads
-🛠️  Mode:   Autonome (Human-in-the-Loop)
-🔥 Cap.:   Analyse règles, Raisonnement multi-agent, Auto-apprentissage
+🤖 Cerveaux Multi-LLM via OpenRouter API:
+   • Hermes 3 Llama 70B:     Planification stratégique et triage
+   • Dolphin 3.0 Mistral 24B: Analyse vulnérabilités et exploitation
+   • Qwen 2.5 72B:           Analyse code et génération de payloads
+🛠️  Mode:   Semi-Autonome (Recon auto-approuvée, Exploitation sur approbation)
+🔥 Cap.:   Session authentifiée, Base de données stratégique, Auto-apprentissage
 
 Exemples de commandes:
 • "scan example.com"

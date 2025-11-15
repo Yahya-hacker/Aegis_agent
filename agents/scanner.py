@@ -86,7 +86,15 @@ class AegisScanner:
                     return {"status": "error", "error": "Domaine manquant"}
                 if not self._validate_domain(domain):
                     return {"status": "error", "error": f"Invalid domain format: {domain}"}
-                return await self.real_tools.subdomain_enumeration(domain)
+                
+                # TASK 2: Execute and record in database
+                result = await self.real_tools.subdomain_enumeration(domain)
+                if result.get("status") == "success":
+                    # Record scan in database
+                    data = result.get("data", [])
+                    scan_result = f"Found {len(data)} subdomains" if isinstance(data, list) else "Completed"
+                    self.db.mark_scanned(domain, "subdomain_enumeration", scan_result)
+                return result
 
             elif tool == "port_scanning":
                 target = args.get("target")
@@ -94,18 +102,39 @@ class AegisScanner:
                     return {"status": "error", "error": "Cible manquante"}
                 if not self._validate_target(target):
                     return {"status": "error", "error": f"Invalid target format: {target}"}
-                return await self.real_tools.port_scanning(target)
+                
+                # TASK 2: Execute and record in database
+                result = await self.real_tools.port_scanning(target)
+                if result.get("status") == "success":
+                    data = result.get("data", [])
+                    scan_result = f"Found {len(data)} open ports" if isinstance(data, list) else "Completed"
+                    self.db.mark_scanned(target, "port_scanning", scan_result)
+                return result
 
             elif tool == "nmap_scan":
                 target = args.get("target")
                 ports = args.get("ports", "80,443,8080,8443")
                 if not target: return {"status": "error", "error": "Cible manquante"}
-                return await self.python_tools.nmap_scan(target, ports)
+                
+                # TASK 2: Execute and record in database
+                result = await self.python_tools.nmap_scan(target, ports)
+                if result.get("status") == "success":
+                    data = result.get("data", [])
+                    scan_result = f"Scanned {len(data)} ports" if isinstance(data, list) else "Completed"
+                    self.db.mark_scanned(target, "nmap_scan", scan_result)
+                return result
 
             elif tool == "url_discovery":
                 domain = args.get("domain")
                 if not domain: return {"status": "error", "error": "Domaine manquant"}
-                return await self.real_tools.url_discovery(domain)
+                
+                # TASK 2: Execute and record in database
+                result = await self.real_tools.url_discovery(domain)
+                if result.get("status") == "success":
+                    data = result.get("data", [])
+                    scan_result = f"Found {len(data)} URLs" if isinstance(data, list) else "Completed"
+                    self.db.mark_scanned(domain, "url_discovery", scan_result)
+                return result
 
             elif tool == "tech_detection":
                 target = args.get("target")
@@ -117,7 +146,12 @@ class AegisScanner:
                     target = f"http://{target}"
                 if not self._validate_url(target):
                     return {"status": "error", "error": f"Invalid URL format: {target}"}
-                return await self.python_tools.advanced_technology_detection(target)
+                
+                # TASK 2: Execute and record in database
+                result = await self.python_tools.advanced_technology_detection(target)
+                if result.get("status") == "success":
+                    self.db.mark_scanned(target, "tech_detection", "Technology detection completed")
+                return result
             
             # Outils d'Attaque et d'Analyse Logique (NOUVEAU)
             elif tool == "vulnerability_scan":
@@ -128,12 +162,47 @@ class AegisScanner:
                     target_url = f"http://{target_url}"
                 if not self._validate_url(target_url):
                     return {"status": "error", "error": f"Invalid URL format: {target_url}"}
-                return await self.real_tools.vulnerability_scan(target_url)
+                
+                # TASK 2: Execute, record scan and findings in database
+                result = await self.real_tools.vulnerability_scan(target_url)
+                if result.get("status") == "success":
+                    data = result.get("data", [])
+                    scan_result = f"Found {len(data)} vulnerabilities" if isinstance(data, list) else "Completed"
+                    self.db.mark_scanned(target_url, "vulnerability_scan", scan_result)
+                    
+                    # Record each finding in database
+                    if isinstance(data, list):
+                        for finding in data:
+                            if isinstance(finding, dict):
+                                finding_type = finding.get('template-id', 'unknown')
+                                severity = finding.get('info', {}).get('severity', 'info')
+                                description = finding.get('info', {}).get('name', '')
+                                evidence = finding.get('matched-at', '')
+                                self.db.add_finding(finding_type, target_url, severity, description, evidence)
+                return result
 
             elif tool == "run_sqlmap":
                 target_url = args.get("target")
                 if not target_url: return {"status": "error", "error": "Cible URL manquante"}
-                return await self.real_tools.run_sqlmap(target_url)
+                
+                # TASK 2: Execute and record findings
+                result = await self.real_tools.run_sqlmap(target_url)
+                if result.get("status") == "success":
+                    data = result.get("data", {})
+                    vulnerable = data.get("vulnerable", False)
+                    scan_result = "SQL Injection found" if vulnerable else "No SQL Injection"
+                    self.db.mark_scanned(target_url, "run_sqlmap", scan_result)
+                    
+                    # Record finding if vulnerable
+                    if vulnerable:
+                        self.db.add_finding(
+                            "SQL Injection",
+                            target_url,
+                            "high",
+                            "SQL Injection vulnerability detected by SQLmap",
+                            data.get("output", "")[:500]  # First 500 chars of output
+                        )
+                return result
 
             elif tool == "discover_interactables":
                 target_url = args.get("target")

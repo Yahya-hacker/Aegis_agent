@@ -10,10 +10,10 @@ Aegis Agent is an AI-powered autonomous assistant implemented in Python, built s
 
 See [V5_FEATURES.md](V5_FEATURES.md) for comprehensive documentation on these game-changing features.
 
-**NEW in v6.0**: Multi-LLM Architecture using Together AI
-- 🧠 **Llama 70B** for strategic planning and triage
-- 🎯 **Mixtral 8x7B** for vulnerability analysis and exploitation
-- 💻 **Qwen-coder** for code analysis and payload generation
+**NEW in v6.0**: Multi-LLM Architecture using OpenRouter API
+- 🧠 **Hermes 3 Llama 70B** for strategic planning and triage
+- 🎯 **Dolphin 3.0 R1 Mistral 24B** for vulnerability analysis and exploitation
+- 💻 **Qwen 2.5 72B** for code analysis and payload generation
 
 Each LLM is automatically selected based on the task type, providing specialized expertise where it's needed most. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for detailed information.
 
@@ -73,7 +73,7 @@ Limitations
 
 ### Prerequisites
 - Python 3.8 or higher
-- Together AI API key (get one at https://api.together.xyz/)
+- OpenRouter API key (get one at https://openrouter.ai/)
 
 ### Quick Start
 
@@ -88,18 +88,18 @@ cd Aegis_agent
 pip install -r requirements.txt
 ```
 
-3. **Configure Together AI API**
+3. **Configure OpenRouter API**
 ```bash
 # Copy the example environment file
 cp .env.example .env
 
-# Edit .env and add your Together AI API key
+# Edit .env and add your OpenRouter API key
 nano .env  # or use your preferred editor
 ```
 
 Add your API key:
 ```
-TOGETHER_API_KEY=your_actual_api_key_here
+OPENROUTER_API_KEY=your_actual_api_key_here
 ```
 
 4. **Run Aegis Agent**
@@ -109,15 +109,15 @@ python main.py
 
 ### Multi-LLM Architecture
 
-Aegis v6.0 uses three specialized LLMs:
+Aegis v6.0 uses three specialized LLMs via OpenRouter:
 
-- **Llama 70B** (`meta-llama/Llama-3-70b-chat-hf`)
+- **Hermes 3 Llama 70B** (`nousresearch/hermes-3-llama-3.1-70b`)
   - Strategic planning, mission triage, scope analysis
   
-- **Mixtral 8x7B** (`mistralai/Mixtral-8x7B-Instruct-v0.1`)
+- **Dolphin 3.0 R1 Mistral 24B** (`cognitivecomputations/dolphin3.0-r1-mistral-24b`)
   - Vulnerability analysis, exploitation planning, security assessment
   
-- **Qwen-coder** (`Qwen/Qwen2.5-Coder-32B-Instruct`)
+- **Qwen 2.5 72B** (`qwen/qwen-2.5-72b-instruct`)
   - Code analysis, payload generation, technical implementation
 
 The orchestrator automatically selects the best LLM for each task. For detailed information, see [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md).
@@ -148,9 +148,9 @@ go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 Edit `.env` to customize model selection and parameters:
 ```bash
 # Override default models (optional)
-STRATEGIC_MODEL=meta-llama/Llama-3-70b-chat-hf
-VULNERABILITY_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
-CODER_MODEL=Qwen/Qwen2.5-Coder-32B-Instruct
+STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
+VULNERABILITY_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
+CODER_MODEL=qwen/qwen-2.5-72b-instruct
 
 # Adjust generation parameters
 DEFAULT_TEMPERATURE=0.7
