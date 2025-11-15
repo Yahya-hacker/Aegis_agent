@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 # CRITICAL: Model constants for OpenRouter API - Load from environment or use defaults
 ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llama-3.1-70b")
-CODE_MODEL = os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b-instruct")
+# CODER_MODEL can override CODE_MODEL for specialized coding tasks (e.g., Dolphin-Deepseek)
+CODE_MODEL = os.getenv("CODER_MODEL", os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b-instruct"))
 REASONING_MODEL = os.getenv("REASONING_MODEL", "cognitivecomputations/dolphin3.0-r1-mistral-24b")
 
 class EnhancedAegisAI:

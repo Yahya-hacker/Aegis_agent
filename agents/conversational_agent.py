@@ -146,6 +146,51 @@ class AegisConversation:
             
             print(f"🤖 PROPOSITION IA : {action}")
             
+            # PHASE 4 TASK 8: Check for tool installation confirmation requests
+            if isinstance(action, dict) and action.get("confirmation_required"):
+                confirmation_type = action.get("action", "unknown")
+                
+                if confirmation_type == "install_tool":
+                    # Tool installation request
+                    print("\n" + "="*70)
+                    print(action.get("message", ""))
+                    print("="*70)
+                    
+                    try:
+                        user_response = input("\n❓ Do you approve this tool installation? (y/n): ").lower().strip()
+                    except EOFError:
+                        user_response = 'n'
+                    
+                    if user_response in ['y', 'yes', 'o', 'oui']:
+                        print("✅ Installation approved. Executing...")
+                        
+                        # Execute the installation
+                        from tools.tool_installer import get_tool_installer
+                        installer = get_tool_installer()
+                        
+                        install_result = await installer._execute_install(
+                            repo_url=action.get("repo_url"),
+                            package_name=action.get("package_name")
+                        )
+                        
+                        # Add result to agent memory
+                        if install_result.get("status") == "success":
+                            observation = f"Tool installation successful: {install_result.get('message')}"
+                            print(f"✅ {observation}")
+                        else:
+                            observation = f"Tool installation failed: {install_result.get('error', 'Unknown error')}"
+                            print(f"❌ {observation}")
+                        
+                        self.agent_memory.append({"type": "observation", "content": observation})
+                        continue
+                    else:
+                        print("❌ Installation rejected by user.")
+                        self.agent_memory.append({
+                            "type": "observation",
+                            "content": "User rejected the tool installation request. I should try a different approach."
+                        })
+                        continue
+            
             # 2. GÉRER LES ACTIONS SYSTÈME
             tool = action.get("tool")
             args = action.get("args", {})
