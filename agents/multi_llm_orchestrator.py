@@ -8,9 +8,11 @@ Manages three specialized LLMs via OpenRouter API:
 """
 
 import asyncio
+import base64
 import json
 import os
 import aiohttp
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
 from utils.reasoning_display import get_reasoning_display
@@ -74,6 +76,18 @@ class MultiLLMOrchestrator:
                     "exploit_coding",
                     "technical_implementation",
                     "tool_orchestration"
+                ]
+            ),
+            'visual': LLMConfig(
+                model_name="google/gemini-pro-vision",
+                role="Visual Analyst & UI Reconnaissance",
+                specialization=[
+                    "image_analysis",
+                    "ui_reconnaissance",
+                    "visual_vulnerability_detection",
+                    "screenshot_analysis",
+                    "layout_understanding",
+                    "multimodal_analysis"
                 ]
             )
         }
@@ -395,3 +409,144 @@ class MultiLLMOrchestrator:
             'vulnerability': results[1],
             'coder': results[2]
         }
+    
+    async def execute_multimodal_task(
+        self,
+        text_prompt: str,
+        image_path: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a multimodal task using the visual LLM with an image
+        
+        This method processes an image along with a text prompt to extract
+        visual information, analyze UI elements, or detect visual vulnerabilities.
+        
+        Args:
+            text_prompt: Text description of what to analyze in the image
+            image_path: Path to the image file to analyze
+            
+        Returns:
+            Response dictionary with visual analysis
+        """
+        if not self.is_initialized:
+            raise RuntimeError("Orchestrator not initialized. Call initialize() first.")
+        
+        logger.info(f"👁️ Executing multimodal task with visual LLM...")
+        logger.info(f"   Prompt: {text_prompt[:100]}...")
+        logger.info(f"   Image: {image_path}")
+        
+        try:
+            # Read and encode the image
+            with open(image_path, 'rb') as image_file:
+                image_data = image_file.read()
+                image_base64 = base64.b64encode(image_data).decode('utf-8')
+            
+            # Determine image type from extension
+            image_ext = Path(image_path).suffix.lower()
+            mime_type_map = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+            }
+            mime_type = mime_type_map.get(image_ext, 'image/png')
+            
+            config = self.llms['visual']
+            
+            # Show reasoning about the multimodal call
+            self.reasoning_display.show_thought(
+                f"Preparing multimodal analysis with {config.role}",
+                thought_type="llm_call",
+                metadata={
+                    "model": config.model_name,
+                    "image_path": image_path,
+                    "image_size": len(image_data),
+                    "prompt_preview": text_prompt[:100]
+                }
+            )
+            
+            # Build the multimodal message
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/Yahya-hacker/Aegis_agent",
+                "X-Title": "Aegis AI Pentesting Agent"
+            }
+            
+            # Multimodal message format for vision models
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": text_prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            payload = {
+                "model": config.model_name,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 2048
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    config.api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=self.request_timeout)
+                ) as response:
+                    response_text = await response.text()
+                    
+                    if response.status != 200:
+                        logger.error(f"Visual API Error: {response.status} - {response_text}")
+                        raise RuntimeError(f"API returned status {response.status}: {response_text}")
+                    
+                    result = json.loads(response_text)
+                    
+                    if 'choices' not in result or not result['choices']:
+                        raise RuntimeError("API response missing 'choices'")
+                    
+                    content = result['choices'][0]['message']['content']
+                    
+                    logger.info(f"✅ Visual analysis complete")
+                    
+                    # Display the multimodal interaction
+                    self.reasoning_display.show_llm_interaction(
+                        llm_name=config.role,
+                        prompt=f"{text_prompt}\n[Image: {image_path}]",
+                        response=content,
+                        metadata={
+                            "model": config.model_name,
+                            "usage": result.get('usage', {}),
+                            "image_size": len(image_data)
+                        }
+                    )
+                    
+                    return {
+                        'content': content,
+                        'model': config.model_name,
+                        'role': config.role,
+                        'llm_type': 'visual',
+                        'image_path': image_path,
+                        'usage': result.get('usage', {})
+                    }
+                    
+        except FileNotFoundError:
+            error_msg = f"Image file not found: {image_path}"
+            logger.error(error_msg)
+            return {'error': error_msg}
+        except Exception as e:
+            logger.error(f"Error in multimodal task: {e}", exc_info=True)
+            return {'error': str(e)}

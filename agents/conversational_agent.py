@@ -286,6 +286,39 @@ class AegisConversation:
             print("\n📊 Analyzing and prioritizing vulnerabilities...")
             analyzed_findings = analyzer.prioritize_findings(self.global_findings)
             
+            # PHASE 3 TASK 5: AI-Enhanced Triage
+            # Apply AI triage to each finding for context-aware prioritization
+            print("\n🧠 Applying AI-enhanced triage...")
+            ai_triaged_findings = []
+            mission_context = f"""
+Target: {target}
+Mission Rules: {bbp_rules}
+Total Findings: {len(analyzed_findings)}
+Agent completed {step_count} autonomous steps
+            """
+            
+            for idx, finding in enumerate(analyzed_findings, 1):
+                print(f"  Triaging finding {idx}/{len(analyzed_findings)}: {finding.get('type', 'unknown')}", end="")
+                try:
+                    # Apply AI triage using the Reasoning LLM
+                    triaged_finding = await self.ai_core.contextual_triage(finding, mission_context)
+                    ai_triaged_findings.append(triaged_finding)
+                    
+                    # Show AI assessment if available
+                    if triaged_finding.get('ai_triaged'):
+                        ai_priority = triaged_finding['ai_triage'].get('priority', 'unknown')
+                        print(f" → AI Priority: {ai_priority}")
+                    else:
+                        print(f" → AI triage failed, using original assessment")
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to triage finding {idx}: {e}")
+                    ai_triaged_findings.append(finding)
+                    print(f" → Error, using original assessment")
+            
+            # Use AI-triaged findings for subsequent steps
+            analyzed_findings = ai_triaged_findings
+            
             # Show statistics
             stats = analyzer.get_statistics(self.global_findings)
             print(f"\n📈 Vulnerability Statistics:")

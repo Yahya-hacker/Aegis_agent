@@ -40,6 +40,10 @@ class EnhancedAegisAI:
         self.max_history_size = 10  # Maximum conversation history to keep
         self.context_summary = None  # Summary of older context
         self.db = get_database()  # TASK 2: Mission database integration
+        
+        # PHASE 2: Business logic mapper for application-specific testing
+        from utils.business_logic_mapper import get_business_logic_mapper
+        self.logic_mapper = get_business_logic_mapper()
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -302,6 +306,20 @@ LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 {self.learned_patterns}
 
 {self.dynamic_tool_prompt}
+
+{self.logic_mapper.get_testable_functions()}
+
+PHASE 4 - MULTIMODAL CAPABILITIES:
+You now have access to visual reconnaissance tools for analyzing web interfaces:
+- visual_recon.capture_screenshot(url, full_page=True/False): Capture authenticated screenshots
+- visual_recon.get_dom_snapshot(url, selectors=[]): Extract DOM elements and analyze page structure
+- logic_tester.test_logic_flow(flow_name, steps, expected_behavior): Test business logic for vulnerabilities
+
+Use these tools when:
+- You need to understand the visual layout or UI of a target
+- You want to analyze client-side elements that might not be visible in HTTP responses
+- You're testing multi-step business workflows for logic flaws
+- You need to verify visual elements or CAPTCHA-type protections
 
 ENHANCED MULTI-STAGE REASONING FRAMEWORK:
 
@@ -709,3 +727,207 @@ Provide multiple payload variants if applicable."""
         except Exception as e:
             logger.error(f"Error in collaborative assessment: {e}", exc_info=True)
             return {"error": str(e)}
+    
+    # --- AI-ENHANCED TRIAGE ---
+    async def contextual_triage(
+        self,
+        finding: Dict,
+        mission_context: str
+    ) -> Dict[str, Any]:
+        """
+        AI-enhanced triage using the Reasoning LLM to re-assess vulnerability priority
+        
+        This method takes a vulnerability finding and mission context, then uses the
+        Reasoning specialist to provide an AI-enhanced assessment of true priority,
+        exploitability, and business impact.
+        
+        Args:
+            finding: Vulnerability finding dictionary with type, description, severity, etc.
+            mission_context: Mission context including target, goals, and constraints
+            
+        Returns:
+            Enhanced finding with AI-triaged priority and assessment
+        """
+        if not self.is_initialized:
+            return {"error": "AI not initialized"}
+        
+        logger.info(f"🧠 AI Triage: Analyzing {finding.get('type', 'unknown')} vulnerability")
+        
+        # Build context for the reasoning LLM
+        finding_summary = json.dumps(finding, indent=2)
+        
+        triage_prompt = f"""You are an expert security analyst performing vulnerability triage.
+
+MISSION CONTEXT:
+{mission_context}
+
+VULNERABILITY FINDING:
+{finding_summary}
+
+Your task is to re-assess this vulnerability's TRUE PRIORITY considering:
+1. The specific mission context and target
+2. Real-world exploitability (not just theoretical severity)
+3. Business impact in this specific scenario
+4. Likelihood of successful exploitation
+5. Effort required vs potential gain
+
+Provide your assessment as JSON with this EXACT structure:
+{{
+  "priority": "P0-Critical|P1-High|P2-Medium|P3-Low|P4-Info",
+  "risk_score": 0.0-10.0,
+  "exploitability": "trivial|easy|moderate|difficult|very_difficult",
+  "business_impact": "critical|high|medium|low|minimal",
+  "confidence": 0.0-1.0,
+  "reasoning": "Brief explanation of your assessment",
+  "recommended_actions": ["action1", "action2"],
+  "should_verify": true|false,
+  "verification_priority": 1-10
+}}
+
+Respond with ONLY the JSON, no additional text."""
+        
+        try:
+            # Call the reasoning specialist for intelligent triage
+            response = await self.call_reasoning_specialist(
+                prompt=triage_prompt,
+                context="Vulnerability triage and prioritization",
+                temperature=0.6,  # Lower temperature for more focused analysis
+                max_tokens=1024
+            )
+            
+            content = response.get('content', '')
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                triage_result = json.loads(json_match.group(0))
+                
+                # Enhance the original finding with AI triage
+                enhanced_finding = {
+                    **finding,
+                    'ai_triage': triage_result,
+                    'ai_triaged': True,
+                    'triage_model': response.get('model_used', 'unknown')
+                }
+                
+                logger.info(f"✅ AI Triage complete: {triage_result.get('priority', 'unknown')} "
+                          f"(confidence: {triage_result.get('confidence', 0.0)})")
+                
+                # Show triage reasoning in display
+                self.reasoning_display.show_thought(
+                    f"AI triage assessed {finding.get('type')} as {triage_result.get('priority')}",
+                    thought_type="decision",
+                    metadata={
+                        "original_severity": finding.get('severity', 'unknown'),
+                        "ai_priority": triage_result.get('priority'),
+                        "risk_score": triage_result.get('risk_score'),
+                        "exploitability": triage_result.get('exploitability'),
+                        "reasoning": triage_result.get('reasoning', '')[:100]
+                    }
+                )
+                
+                return enhanced_finding
+            
+            # If JSON parsing fails, return original finding with error note
+            logger.warning("Failed to parse AI triage JSON response")
+            return {
+                **finding,
+                'ai_triage': {
+                    'error': 'Failed to parse triage response',
+                    'raw_response': content[:200]
+                },
+                'ai_triaged': False
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in contextual triage: {e}", exc_info=True)
+            return {
+                **finding,
+                'ai_triage': {
+                    'error': str(e)
+                },
+                'ai_triaged': False
+            }
+    
+    # --- MULTIMODAL VISUAL ANALYSIS ---
+    async def analyze_visuals(
+        self,
+        image_path: str,
+        text_prompt: str
+    ) -> str:
+        """
+        Analyze visual content (screenshots, UI images) using the Visual LLM
+        
+        This method provides the "Eyes" capability - it processes visual information
+        and returns a neutral text description that separates perception from action.
+        The visual analysis is internal and provides context for decision-making.
+        
+        Args:
+            image_path: Path to the image file to analyze
+            text_prompt: What to analyze or look for in the image
+            
+        Returns:
+            Text description of the visual analysis
+        """
+        if not self.is_initialized:
+            return "Error: AI not initialized"
+        
+        logger.info(f"👁️ Analyzing visual content: {image_path}")
+        
+        # Show reasoning about visual analysis
+        self.reasoning_display.show_thought(
+            "Initiating visual analysis of screenshot/image",
+            thought_type="analysis",
+            metadata={
+                "image_path": image_path,
+                "prompt": text_prompt[:100]
+            }
+        )
+        
+        try:
+            # Call the orchestrator's multimodal task executor
+            response = await self.orchestrator.execute_multimodal_task(
+                text_prompt=text_prompt,
+                image_path=image_path
+            )
+            
+            if 'error' in response:
+                error_msg = f"Visual analysis failed: {response['error']}"
+                logger.error(error_msg)
+                
+                self.reasoning_display.show_thought(
+                    error_msg,
+                    thought_type="error",
+                    metadata={"image_path": image_path}
+                )
+                
+                return error_msg
+            
+            content = response.get('content', '')
+            
+            logger.info(f"✅ Visual analysis complete")
+            
+            # Show the visual analysis result
+            self.reasoning_display.show_thought(
+                "Visual analysis completed successfully",
+                thought_type="observation",
+                metadata={
+                    "image_path": image_path,
+                    "analysis_length": len(content),
+                    "model": response.get('model', 'unknown')
+                }
+            )
+            
+            return content
+            
+        except Exception as e:
+            error_msg = f"Error analyzing visuals: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            self.reasoning_display.show_thought(
+                error_msg,
+                thought_type="error",
+                metadata={"image_path": image_path}
+            )
+            
+            return error_msg
