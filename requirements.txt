@@ -1,5 +1,6 @@
 # Core dependencies for Multi-LLM Architecture (Together AI)
 aiohttp>=3.9.0
+httpx>=0.25.0
 python-dotenv>=1.0.0
 
 # Security testing tools

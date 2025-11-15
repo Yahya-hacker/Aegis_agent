@@ -14,10 +14,10 @@ from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
 
-# CRITICAL: Model constants for OpenRouter API - DO NOT MODIFY
-ORCHESTRATOR_MODEL = "nousresearch/hermes-3-llama-3.1-70b"
-CODE_MODEL = "qwen/qwen-2.5-72b-instruct"
-REASONING_MODEL = "cognitivecomputations/dolphin3.0-r1-mistral-24b"
+# CRITICAL: Model constants for OpenRouter API - Load from environment or use defaults
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llama-3.1-70b")
+CODE_MODEL = os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b-instruct")
+REASONING_MODEL = os.getenv("REASONING_MODEL", "cognitivecomputations/dolphin3.0-r1-mistral-24b")
 
 class EnhancedAegisAI:
     """
