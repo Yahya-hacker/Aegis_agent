@@ -59,6 +59,11 @@ async def main():
     keep_alive = start_keep_alive(interval=60)
     print("\n🔋 Keep-alive mechanism activated (prevents terminal sleep)")
     
+    # Initialize components
+    learning_engine = None
+    ai_core = None
+    conversation = None
+    
     try:
         # 1. Initialiser le moteur d'apprentissage
         learning_engine = AegisLearningEngine()
@@ -81,11 +86,35 @@ async def main():
         logger.error(f"❌ Erreur critique au démarrage : {e}", exc_info=True)
         print(f"❌ Une erreur fatale est survenue: {e}")
         print("💡 Vérifiez le fichier 'aegis_agent.log' pour les détails.")
-        sys.exit(1)
+        return 1  # Return error code
     finally:
-        # Stop keep-alive mechanism when exiting
-        stop_keep_alive()
-        print("🔋 Keep-alive mechanism stopped")
+        # Cleanup: Stop keep-alive mechanism
+        try:
+            stop_keep_alive()
+            print("🔋 Keep-alive mechanism stopped")
+        except Exception as e:
+            logger.error(f"Error stopping keep-alive: {e}")
+        
+        # Cleanup: Close database connections
+        try:
+            from utils.database_manager import get_database
+            db = get_database()
+            db.close()
+            logger.info("Database connection closed")
+        except Exception as e:
+            logger.error(f"Error closing database: {e}")
+        
+        # Cleanup: Save any pending patterns
+        try:
+            if learning_engine:
+                learning_engine.analyze_patterns()
+                logger.info("Learning patterns saved")
+        except Exception as e:
+            logger.error(f"Error saving patterns: {e}")
+        
+        print("\n🛡️  Cleanup complete. Aegis AI shutting down gracefully.")
+    
+    return 0  # Success
 
 if __name__ == "__main__":
     # S'assurer que webdriver-manager a les permissions (si besoin)

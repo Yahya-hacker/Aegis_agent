@@ -276,16 +276,53 @@ class AegisConversation:
         
         # --- AMÉLIORATION : Intégration du Field Tester ---
         if self.global_findings:
-            print(f"\n🔍 L'agent a trouvé {len(self.global_findings)} éléments. Lancement du mode de vérification...")
+            print(f"\n🔍 L'agent a trouvé {len(self.global_findings)} éléments.")
+            
+            # ENHANCEMENT: Use vulnerability analyzer for comprehensive assessment
+            from utils.vulnerability_analyzer import get_vulnerability_analyzer
+            analyzer = get_vulnerability_analyzer()
+            
+            # Analyze and prioritize findings
+            print("\n📊 Analyzing and prioritizing vulnerabilities...")
+            analyzed_findings = analyzer.prioritize_findings(self.global_findings)
+            
+            # Show statistics
+            stats = analyzer.get_statistics(self.global_findings)
+            print(f"\n📈 Vulnerability Statistics:")
+            print(f"   Total findings: {stats['total']}")
+            print(f"   Average risk score: {stats['average_risk_score']}/10")
+            if stats['by_severity']:
+                print(f"   By severity: {stats['by_severity']}")
+            
+            # Generate report
+            report = analyzer.generate_report(self.global_findings)
+            
+            # Save report to file
+            from pathlib import Path
+            report_dir = Path("data/reports")
+            report_dir.mkdir(exist_ok=True, parents=True)
+            
+            import time
+            report_file = report_dir / f"vuln_report_{int(time.time())}.md"
+            with open(report_file, 'w') as f:
+                f.write(report)
+            
+            print(f"\n📄 Vulnerability report saved to: {report_file}")
+            
+            # Launch field tester for manual verification
+            print(f"\n🔍 Lancement du mode de vérification...")
             # Simplifier les 'findings' pour le field_tester
             simplified_findings = []
-            for item in self.global_findings:
-                if isinstance(item, dict):
-                    simplified_findings.append({
-                        "type": item.get("template-id", item.get("type", "Info")),
-                        "target": item.get("host", item.get("location", target)),
-                        "description": item.get("description", json.dumps(item))
-                    })
+            for item in analyzed_findings:
+                # Use analyzed findings with enhanced information
+                simplified_findings.append({
+                    "type": item.get('type', 'Unknown'),
+                    "target": item.get('url', item.get('target', target)),
+                    "description": item.get('description', ''),
+                    "severity": item.get('analysis', {}).get('severity', 'info'),
+                    "priority": item.get('analysis', {}).get('priority', 'P4-Info'),
+                    "risk_score": item.get('analysis', {}).get('risk_score', 0.0)
+                })
             
             verified = await self.field_tester.enter_manual_mode(simplified_findings)
             print(f"✅ {len(verified)} vulnérabilités confirmées.")
