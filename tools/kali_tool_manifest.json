@@ -323,6 +323,81 @@
         }
       },
       "json_prompt_template": "{\"tool\": \"ask_user_for_approval\", \"args\": {\"message\": \"<MESSAGE>\"}}"
+    },
+    {
+      "tool_name": "application_spider.crawl_and_map_application",
+      "binary_name": "python",
+      "description": "Cognitive web application crawler with 3 levels: 'fast' (HTML parsing), 'static_js' (JS analysis), 'deep_visual' (AI-powered screenshot analysis)",
+      "intrusive": false,
+      "category": "reconnaissance",
+      "args_schema": {
+        "base_url": {
+          "type": "string",
+          "required": true,
+          "description": "Base URL of the application to crawl"
+        },
+        "mode": {
+          "type": "string",
+          "required": false,
+          "description": "Crawling mode: 'fast', 'static_js', or 'deep_visual' (default: 'fast')"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"application_spider.crawl_and_map_application\", \"args\": {\"base_url\": \"<URL>\", \"mode\": \"fast\"}}"
+    },
+    {
+      "tool_name": "logic_tester.test_logic_flow",
+      "binary_name": "python",
+      "description": "Test business logic flows for vulnerabilities like sequence bypasses, state manipulation, and business rule violations",
+      "intrusive": true,
+      "category": "exploitation",
+      "args_schema": {
+        "flow_name": {
+          "type": "string",
+          "required": true,
+          "description": "Name of the logic flow being tested"
+        },
+        "steps": {
+          "type": "array",
+          "required": true,
+          "description": "List of HTTP request steps to execute"
+        },
+        "expected_behavior": {
+          "type": "string",
+          "required": true,
+          "description": "Description of expected secure behavior"
+        },
+        "test_type": {
+          "type": "string",
+          "required": false,
+          "description": "Type of test: 'sequence_bypass', 'state_manipulation', 'business_rule_violation' (default: 'sequence_bypass')"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"logic_tester.test_logic_flow\", \"args\": {\"flow_name\": \"<NAME>\", \"steps\": [], \"expected_behavior\": \"<BEHAVIOR>\"}}"
+    },
+    {
+      "tool_name": "tool_installer.request_install_from_github",
+      "binary_name": "python",
+      "description": "Request installation of a tool from GitHub (requires human confirmation)",
+      "intrusive": true,
+      "category": "control",
+      "args_schema": {
+        "repo_url": {
+          "type": "string",
+          "required": true,
+          "description": "GitHub repository URL (e.g., 'https://github.com/user/repo')"
+        },
+        "description": {
+          "type": "string",
+          "required": true,
+          "description": "What this tool does and why it's needed"
+        },
+        "package_name": {
+          "type": "string",
+          "required": false,
+          "description": "Optional package name if different from repo name"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"tool_installer.request_install_from_github\", \"args\": {\"repo_url\": \"<URL>\", \"description\": \"<DESCRIPTION>\"}}"
     }
   ]
 }

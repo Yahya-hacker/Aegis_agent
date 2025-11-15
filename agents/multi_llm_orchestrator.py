@@ -79,7 +79,7 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'visual': LLMConfig(
-                model_name="google/gemini-pro-vision",
+                model_name="qwen/qwen2.5-vl-32b-instruct:free",
                 role="Visual Analyst & UI Reconnaissance",
                 specialization=[
                     "image_analysis",
