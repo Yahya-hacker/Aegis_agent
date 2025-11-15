@@ -1,0 +1,8 @@
+[
+  {
+    "action": "test_tool",
+    "target": "test.com",
+    "reason": "Test error",
+    "timestamp": "2025-11-15T10:29:36.036659"
+  }
+]
