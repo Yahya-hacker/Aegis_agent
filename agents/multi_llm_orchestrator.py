@@ -34,6 +34,9 @@ class MultiLLMOrchestrator:
         self.api_key = None
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
+        self.max_retries = 3
+        self.retry_delay = 2  # seconds
+        self.request_timeout = 60  # seconds
         
         # Define the three specialized LLMs (using OpenRouter-compatible model IDs)
         self.llms = {
@@ -160,7 +163,7 @@ class MultiLLMOrchestrator:
         max_tokens: int = 2048
     ) -> Dict[str, Any]:
         """
-        Call a specific LLM via Together AI API
+        Call a specific LLM via OpenRouter API with retry logic and error handling
         
         Args:
             llm_type: Type of LLM to use ('strategic', 'vulnerability', or 'coder')
@@ -179,88 +182,130 @@ class MultiLLMOrchestrator:
         
         config = self.llms[llm_type]
         
-        try:
-            logger.info(f"🔄 Calling {config.role} ({config.model_name})...")
-            
-            # Show reasoning about the LLM call
-            user_message = next((m['content'] for m in messages if m['role'] == 'user'), "")
-            system_message = next((m['content'] for m in messages if m['role'] == 'system'), "")
-            
-            self.reasoning_display.show_thought(
-                f"Preparing to call {config.role} for task execution",
-                thought_type="llm_call",
-                metadata={
+        # Retry logic with exponential backoff
+        for attempt in range(self.max_retries):
+            try:
+                logger.info(f"🔄 Calling {config.role} ({config.model_name}) - Attempt {attempt + 1}/{self.max_retries}...")
+                
+                # Show reasoning about the LLM call
+                user_message = next((m['content'] for m in messages if m['role'] == 'user'), "")
+                
+                self.reasoning_display.show_thought(
+                    f"Preparing to call {config.role} for task execution",
+                    thought_type="llm_call",
+                    metadata={
+                        "model": config.model_name,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "attempt": attempt + 1,
+                        "message_preview": user_message[:100] + "..." if len(user_message) > 100 else user_message
+                    }
+                )
+                
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/Yahya-hacker/Aegis_agent",
+                    "X-Title": "Aegis AI Pentesting Agent"
+                }
+                
+                payload = {
                     "model": config.model_name,
+                    "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
-                    "message_preview": user_message[:100] + "..." if len(user_message) > 100 else user_message
+                    "top_p": 0.9,
+                    "top_k": 50,
+                    "repetition_penalty": 1.1,
+                    "stop": ["<|im_end|>", "</s>"]
                 }
-            )
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": config.model_name,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "top_p": 0.9,
-                "top_k": 50,
-                "repetition_penalty": 1.1,
-                "stop": ["<|im_end|>", "</s>"]
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    config.api_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"API Error: {response.status} - {error_text}")
-                        raise RuntimeError(f"API returned status {response.status}: {error_text}")
-                    
-                    result = await response.json()
-                    
-                    if 'choices' not in result or not result['choices']:
-                        raise RuntimeError("API response missing 'choices'")
-                    
-                    content = result['choices'][0]['message']['content']
-                    
-                    logger.info(f"✅ Response received from {config.role}")
-                    
-                    # Display the LLM interaction with full reasoning
-                    self.reasoning_display.show_llm_interaction(
-                        llm_name=config.role,
-                        prompt=user_message,
-                        response=content,
-                        metadata={
-                            "model": config.model_name,
-                            "usage": result.get('usage', {}),
-                            "temperature": temperature,
-                            "max_tokens": max_tokens
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        config.api_url,
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=self.request_timeout)
+                    ) as response:
+                        response_text = await response.text()
+                        
+                        if response.status != 200:
+                            logger.error(f"API Error: {response.status} - {response_text}")
+                            
+                            # Check if it's a retryable error
+                            if response.status in [429, 500, 502, 503, 504]:
+                                if attempt < self.max_retries - 1:
+                                    wait_time = self.retry_delay * (2 ** attempt)  # Exponential backoff
+                                    logger.warning(f"Retryable error, waiting {wait_time}s before retry...")
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                            
+                            raise RuntimeError(f"API returned status {response.status}: {response_text}")
+                        
+                        try:
+                            result = await response.json() if not response_text else json.loads(response_text)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse API response as JSON: {e}")
+                            logger.error(f"Response text: {response_text[:500]}")
+                            raise RuntimeError(f"Invalid JSON response from API: {str(e)}")
+                        
+                        if 'choices' not in result or not result['choices']:
+                            logger.error(f"API response missing 'choices': {result}")
+                            raise RuntimeError("API response missing 'choices'")
+                        
+                        content = result['choices'][0]['message']['content']
+                        
+                        if not content or len(content.strip()) == 0:
+                            logger.warning("API returned empty content")
+                            if attempt < self.max_retries - 1:
+                                logger.warning("Retrying due to empty response...")
+                                await asyncio.sleep(self.retry_delay)
+                                continue
+                            raise RuntimeError("API returned empty content after all retries")
+                        
+                        logger.info(f"✅ Response received from {config.role}")
+                        
+                        # Display the LLM interaction with full reasoning
+                        self.reasoning_display.show_llm_interaction(
+                            llm_name=config.role,
+                            prompt=user_message,
+                            response=content,
+                            metadata={
+                                "model": config.model_name,
+                                "usage": result.get('usage', {}),
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                                "attempt": attempt + 1
+                            }
+                        )
+                        
+                        return {
+                            'content': content,
+                            'model': config.model_name,
+                            'role': config.role,
+                            'llm_type': llm_type,
+                            'usage': result.get('usage', {})
                         }
-                    )
-                    
-                    return {
-                        'content': content,
-                        'model': config.model_name,
-                        'role': config.role,
-                        'llm_type': llm_type,
-                        'usage': result.get('usage', {})
-                    }
-                    
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout calling {config.role}")
-            raise RuntimeError(f"Request to {config.role} timed out")
-        except Exception as e:
-            logger.error(f"Error calling {config.role}: {e}", exc_info=True)
-            raise
+                        
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout calling {config.role} (attempt {attempt + 1}/{self.max_retries})")
+                if attempt < self.max_retries - 1:
+                    wait_time = self.retry_delay * (2 ** attempt)
+                    logger.warning(f"Retrying after timeout in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise RuntimeError(f"Request to {config.role} timed out after {self.max_retries} attempts")
+            except Exception as e:
+                logger.error(f"Error calling {config.role} (attempt {attempt + 1}/{self.max_retries}): {e}", exc_info=True)
+                if attempt < self.max_retries - 1:
+                    wait_time = self.retry_delay * (2 ** attempt)
+                    logger.warning(f"Retrying after error in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
+        
+        # If we get here, all retries failed
+        raise RuntimeError(f"Failed to call {config.role} after {self.max_retries} attempts")
     
     async def execute_task(
         self,

@@ -13,13 +13,14 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class MissionDatabase:
-    """Manages SQLite database for mission tracking"""
+    """Manages SQLite database for mission tracking with proper resource management"""
     
     def __init__(self, db_path: str = "data/mission.db"):
         """Initialize database connection"""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(exist_ok=True, parents=True)
         self.conn = None
+        self._lock = None  # Thread lock for connection safety
         self._initialize_database()
     
     def _initialize_database(self):
@@ -27,6 +28,10 @@ class MissionDatabase:
         try:
             self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # Enable column access by name
+            
+            # Enable WAL mode for better concurrency
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
             
             cursor = self.conn.cursor()
             
@@ -87,10 +92,33 @@ class MissionDatabase:
             raise
     
     def close(self):
-        """Close database connection"""
+        """Close database connection safely"""
         if self.conn:
-            self.conn.close()
-            logger.info("Database connection closed")
+            try:
+                self.conn.commit()  # Commit any pending transactions
+                self.conn.close()
+                logger.info("Database connection closed successfully")
+            except sqlite3.Error as e:
+                logger.error(f"Error closing database connection: {e}")
+            finally:
+                self.conn = None
+    
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with automatic cleanup"""
+        self.close()
+        return False
+    
+    def __del__(self):
+        """Destructor to ensure connection is closed"""
+        if self.conn:
+            try:
+                self.conn.close()
+            except:
+                pass
     
     # --- SUBDOMAIN OPERATIONS ---
     

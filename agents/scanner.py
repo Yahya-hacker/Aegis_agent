@@ -18,24 +18,82 @@ class AegisScanner:
         self.real_tools = RealToolManager()
         self.python_tools = PythonToolManager()
         self.db = get_database()  # Mission database
+    
+    def _validate_domain(self, domain: str) -> bool:
+        """Validate domain name format"""
+        import re
+        # Simple domain validation
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
+        return bool(re.match(domain_pattern, domain)) and len(domain) <= 253
+    
+    def _validate_target(self, target: str) -> bool:
+        """Validate target (domain or IP)"""
+        import re
+        # Check if it's a valid domain
+        if self._validate_domain(target):
+            return True
+        # Check if it's a valid IP
+        ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+        if re.match(ip_pattern, target):
+            parts = target.split('.')
+            return all(0 <= int(part) <= 255 for part in parts)
+        # Check if it's a URL
+        if target.startswith(('http://', 'https://')):
+            return True
+        return False
+    
+    def _validate_url(self, url: str) -> bool:
+        """Validate URL format"""
+        from urllib.parse import urlparse
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except:
+            return False
 
     async def execute_action(self, action: Dict) -> Dict:
-        """Orchestrateur qui exécute l'action demandée par l'IA."""
+        """
+        Orchestrateur qui exécute l'action demandée par l'IA avec validation et error handling
+        
+        Args:
+            action: Dictionary containing tool name and arguments
+            
+        Returns:
+            Dictionary with status and results
+        """
+        # Input validation
+        if not isinstance(action, dict):
+            return {"status": "error", "error": "Invalid action format: must be a dictionary"}
+        
         tool = action.get("tool")
         args = action.get("args", {})
         
-        logger.info(f"Tentative d'exécution de l'action : {tool} avec args {args}")
+        # Validate tool name
+        if not tool or not isinstance(tool, str):
+            return {"status": "error", "error": "Missing or invalid tool name"}
+        
+        # Validate args
+        if not isinstance(args, dict):
+            return {"status": "error", "error": "Invalid args format: must be a dictionary"}
+        
+        logger.info(f"Executing action: {tool} with args {args}")
         
         try:
             # Outils de Reconnaissance
             if tool == "subdomain_enumeration":
                 domain = args.get("domain")
-                if not domain: return {"status": "error", "error": "Domaine manquant"}
+                if not domain: 
+                    return {"status": "error", "error": "Domaine manquant"}
+                if not self._validate_domain(domain):
+                    return {"status": "error", "error": f"Invalid domain format: {domain}"}
                 return await self.real_tools.subdomain_enumeration(domain)
 
             elif tool == "port_scanning":
                 target = args.get("target")
-                if not target: return {"status": "error", "error": "Cible manquante"}
+                if not target: 
+                    return {"status": "error", "error": "Cible manquante"}
+                if not self._validate_target(target):
+                    return {"status": "error", "error": f"Invalid target format: {target}"}
                 return await self.real_tools.port_scanning(target)
 
             elif tool == "nmap_scan":
@@ -51,15 +109,25 @@ class AegisScanner:
 
             elif tool == "tech_detection":
                 target = args.get("target")
-                if not target: return {"status": "error", "error": "Cible manquante"}
-                if '://' not in target: target = f"http://{target}"
+                if not target: 
+                    return {"status": "error", "error": "Cible manquante"}
+                if not self._validate_target(target):
+                    return {"status": "error", "error": f"Invalid target format: {target}"}
+                if '://' not in target: 
+                    target = f"http://{target}"
+                if not self._validate_url(target):
+                    return {"status": "error", "error": f"Invalid URL format: {target}"}
                 return await self.python_tools.advanced_technology_detection(target)
             
             # Outils d'Attaque et d'Analyse Logique (NOUVEAU)
             elif tool == "vulnerability_scan":
                 target_url = args.get("target")
-                if not target_url: return {"status": "error", "error": "Cible URL manquante"}
-                if '://' not in target_url: target_url = f"http://{target_url}"
+                if not target_url: 
+                    return {"status": "error", "error": "Cible URL manquante"}
+                if '://' not in target_url: 
+                    target_url = f"http://{target_url}"
+                if not self._validate_url(target_url):
+                    return {"status": "error", "error": f"Invalid URL format: {target_url}"}
                 return await self.real_tools.vulnerability_scan(target_url)
 
             elif tool == "run_sqlmap":

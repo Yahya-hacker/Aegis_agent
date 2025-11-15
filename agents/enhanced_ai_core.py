@@ -36,6 +36,8 @@ class EnhancedAegisAI:
         self.reasoning_display = get_reasoning_display(verbose=True)
         self.conversation_history = []  # Added for memory management
         self.dynamic_tool_prompt = ""  # TASK 3: Dynamic tool prompt
+        self.max_history_size = 10  # Maximum conversation history to keep
+        self.context_summary = None  # Summary of older context
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -73,8 +75,8 @@ class EnhancedAegisAI:
     
     def _prune_memory(self, history: List[Dict]) -> List[Dict]:
         """
-        TASK 1: Memory management to prevent "Digital Alzheimer's"
-        Keeps the last 5 detailed interactions and summarizes older ones
+        Enhanced memory management to prevent "Digital Alzheimer's"
+        Keeps recent detailed interactions and maintains contextual summary
         
         Args:
             history: Full conversation history
@@ -82,15 +84,36 @@ class EnhancedAegisAI:
         Returns:
             Pruned history with summary of old interactions
         """
-        if len(history) <= 5:
+        if len(history) <= self.max_history_size:
             return history
         
-        # Keep the last 5 interactions
-        recent = history[-5:]
+        # Keep the last max_history_size interactions
+        recent = history[-self.max_history_size:]
         
-        # Summarize older interactions
-        older = history[:-5]
-        summary_content = f"[Previous context: {len(older)} earlier interactions covering mission initialization and early reconnaissance]"
+        # Summarize older interactions if we haven't done so recently
+        older = history[:-self.max_history_size]
+        
+        # Extract key information from older interactions
+        key_findings = []
+        key_decisions = []
+        for item in older:
+            content = item.get('content', '')
+            if 'vulnerability' in content.lower() or 'finding' in content.lower():
+                key_findings.append(content[:100])  # First 100 chars
+            if 'decision' in content.lower() or 'action' in content.lower():
+                key_decisions.append(content[:100])
+        
+        # Build comprehensive summary
+        summary_parts = [
+            f"[Context from {len(older)} previous interactions:",
+            f"Key findings: {len(key_findings)}",
+            f"Key decisions: {len(key_decisions)}"
+        ]
+        
+        if key_findings:
+            summary_parts.append(f"Notable findings: {', '.join(key_findings[:3])}")
+        
+        summary_content = " ".join(summary_parts) + "]"
         
         # Create a summary entry
         summary_entry = {
@@ -258,46 +281,90 @@ LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 
 {self.dynamic_tool_prompt}
 
-ENHANCED REASONING FRAMEWORK:
-1. ANALYSIS: Carefully analyze the agent memory to understand:
-   - What has been done already
-   - What vulnerabilities or findings have been discovered
-   - What areas remain unexplored
-   - Any patterns or anomalies in the results
+ENHANCED MULTI-STAGE REASONING FRAMEWORK:
 
-2. STRATEGIC THINKING: Consider multiple approaches:
-   - What is the most efficient next step?
-   - What will provide the most valuable information?
-   - Are there any dependencies or prerequisites?
-   - What are the risks vs rewards?
+STAGE 1 - DEEP ANALYSIS:
+1. Current State Assessment:
+   - What has been accomplished so far?
+   - What vulnerabilities or findings have been discovered?
+   - What areas remain unexplored?
+   - What patterns or anomalies are present in the results?
+   - Are there any dead ends or rabbit holes to avoid?
 
-3. COMPREHENSIVE COVERAGE: Ensure thorough testing by:
-   - Testing different attack surfaces
-   - Following up on interesting findings
-   - Validating potential vulnerabilities
-   - Exploring both breadth and depth
+2. Information Gap Analysis:
+   - What critical information is missing?
+   - What assumptions are we making?
+   - What dependencies exist between discoveries?
+   - What could we be overlooking?
 
-4. DECISION MAKING: Choose the action that:
+STAGE 2 - STRATEGIC PLANNING:
+1. Multi-Path Exploration:
+   - Generate 3-5 possible next actions
+   - Evaluate each action's potential value
+   - Consider both breadth (new attack surfaces) and depth (following leads)
+   - Assess resource cost vs expected gain
+
+2. Prioritization Framework:
+   - Severity: Which actions target high-impact vulnerabilities?
+   - Likelihood: Which actions have the highest success probability?
+   - Coverage: Which areas need more comprehensive testing?
+   - Efficiency: Which actions provide maximum insight with minimal effort?
+
+STAGE 3 - RISK ASSESSMENT:
+1. Scope Compliance:
+   - Does this action stay within the authorized scope?
+   - Are there any out-of-scope dependencies?
+   - What are the potential unintended consequences?
+
+2. Technical Risk:
+   - Could this action cause service disruption?
+   - What is the intrusive level of this action?
+   - Are there safer alternatives?
+
+STAGE 4 - DECISION MAKING:
+1. Select the optimal action that:
    - Maximizes detection chances
    - Follows a logical progression
    - Respects mission rules and scope
    - Provides actionable intelligence
+   - Balances thoroughness with efficiency
 
-IMPORTANT INSTRUCTIONS:
-- Show ALL your reasoning and thought process
-- Explain WHY you chose this specific action
-- Consider multiple options before deciding
+2. Adaptive Learning:
+   - Learn from previous failed attempts
+   - Adjust strategy based on target behavior
+   - Recognize when to pivot vs persist
+
+STAGE 5 - REFLECTION:
+1. Self-Assessment:
+   - Is this the best possible action right now?
+   - What could go wrong?
+   - What fallback options exist?
+   - How will this contribute to the overall mission?
+
+CRITICAL INSTRUCTIONS:
+- Show ALL your reasoning through each stage
+- Explain WHY you chose this specific action over alternatives
+- Consider edge cases and potential obstacles
 - Follow the rules STRICTLY (no out-of-scope testing)
 - If mission is complete, use finish_mission
 - If uncertain or need guidance, use ask_user_for_approval
-- Be thorough and methodical in your approach
+- Be thorough, methodical, and intelligent in your approach
+- Learn from past observations and avoid repeating failed attempts
 
-Respond with JSON ONLY including detailed reasoning:
+Respond with JSON ONLY including comprehensive multi-stage reasoning:
 ```json
 {{
   "tool": "tool_name",
   "args": {{"param": "value"}},
-  "reasoning": "Detailed explanation of your thought process: What you observed, why this action is optimal, what you expect to discover, and how it fits into the overall strategy"
+  "reasoning": {{
+    "analysis": "Deep analysis of current state, findings, and patterns",
+    "options_considered": ["option1", "option2", "option3"],
+    "selected_option": "tool_name",
+    "justification": "Why this option is optimal: expected outcomes, strategic fit, risk assessment",
+    "expected_outcome": "What we expect to discover or achieve",
+    "fallback_plan": "What to do if this action fails or doesn't yield results",
+    "mission_progress": "How this action advances the overall mission objectives"
+  }}
 }}
 ```"""
 
