@@ -49,6 +49,9 @@ aegis_agent.log
 # Data and sessions
 data/sessions/
 data/*.jsonl
+data/*.db
+data/screenshots/
+data/reports/
 *.jsonl
 
 # Nuclei templates (downloaded)
