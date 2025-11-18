@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
 from agents.learning_engine import AegisLearningEngine
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
