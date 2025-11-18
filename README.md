@@ -7,6 +7,8 @@ Aegis Agent is an AI-powered autonomous assistant implemented in Python, built s
 - 💾 **Mission Database** - Persistent storage prevents duplicate work and enables strategic memory
 - 🛠️ **Dynamic Arsenal** - Automatic discovery of available Kali tools, no more hardcoded tool lists
 - ⚡ **Semi-Autonomous Mode** - Reconnaissance auto-approved, exploitation requires approval
+- 👁️ **Visual Grounding (Set-of-Mark)** - AI can "see" and interact with web UIs by identifying clickable elements
+- 🧠 **Blackboard Memory** - Persistent mission knowledge base tracks facts, goals, and discarded attack vectors
 
 See [V5_FEATURES.md](V5_FEATURES.md) for comprehensive documentation on these game-changing features.
 
@@ -156,6 +158,52 @@ CODER_MODEL=qwen/qwen-2.5-72b-instruct
 DEFAULT_TEMPERATURE=0.7
 DEFAULT_MAX_TOKENS=2048
 ```
+
+## Advanced Features
+
+### Visual Grounding with Set-of-Mark (SoM)
+
+Aegis Agent can now "see" and interact with web interfaces using Set-of-Mark visual grounding:
+
+**How it works:**
+1. The agent captures a screenshot with numbered red badges overlaid on all clickable elements (links, buttons, inputs)
+2. Each element is assigned a unique ID and the system stores a mapping of {ID: selector}
+3. The AI analyzes the screenshot and identifies which element to interact with
+4. The agent clicks the specific element using its ID, and the system automatically uses the stored selector
+
+**Available tools:**
+- `capture_screenshot_som(url)` - Capture screenshot with numbered badges on clickable elements
+- `click_element_by_id(url, element_id)` - Click a specific element using its SoM ID
+- `visual_screenshot(url)` - Regular screenshot without SoM badges
+
+**Use cases:**
+- Navigate complex multi-step workflows
+- Test authentication flows and form submissions
+- Identify and interact with hidden or dynamically generated UI elements
+- Validate UI-based security controls
+
+### Blackboard Memory System
+
+The Blackboard Memory system provides persistent mission knowledge across the entire session:
+
+**Components:**
+- **Verified Facts**: Ground truths discovered and confirmed (e.g., "Port 443 is open", "WordPress 5.8 detected")
+- **Pending Goals**: Objectives to achieve, prioritized (e.g., "Test admin panel for weak credentials")
+- **Discarded Vectors**: Attack paths already tried and failed (e.g., "SQL injection in search - WAF blocked")
+
+**How it works:**
+1. After every tool execution, the AI automatically extracts facts, goals, and discarded vectors
+2. The blackboard is updated with new knowledge
+3. The blackboard summary is included in the AI's context for every decision
+4. All data persists to disk and survives across sessions
+
+**Benefits:**
+- Prevents duplicate work and wasted effort
+- Maintains strategic memory of what has been tried
+- Enables the AI to learn and adapt during long missions
+- Provides clear mission status at any point
+
+**File location:** Blackboard data is stored in `data/blackboard_<mission_id>.json`
 
 ## Documentation
 
