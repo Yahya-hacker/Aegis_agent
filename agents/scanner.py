@@ -6,6 +6,7 @@ from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
 from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
+from tools.visual_recon import get_visual_recon_tool
 from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,9 @@ class AegisScanner:
         self.ai_core = ai_core
         self.real_tools = RealToolManager()
         self.python_tools = PythonToolManager()
+        self.visual_recon = get_visual_recon_tool()
         self.db = get_database()  # Mission database
+        self.som_mappings = {}  # Store SoM mappings {url: element_mapping}
     
     def _validate_domain(self, domain: str) -> bool:
         """Validate domain name format"""
@@ -461,6 +464,82 @@ If you cannot suggest a fix, respond with:
             elif tool == "db_get_statistics":
                 stats = self.db.get_statistics()
                 return {"status": "success", "data": stats}
+            
+            # Visual Reconnaissance Tools (SoM - Set-of-Mark)
+            elif tool == "capture_screenshot_som":
+                target_url = args.get("url")
+                full_page = args.get("full_page", False)
+                
+                if not target_url:
+                    return {"status": "error", "error": "URL manquante"}
+                
+                if '://' not in target_url:
+                    target_url = f"http://{target_url}"
+                
+                if not self._validate_url(target_url):
+                    return {"status": "error", "error": f"Invalid URL format: {target_url}"}
+                
+                # Capture screenshot with SoM
+                result = await self.visual_recon.capture_with_som(target_url, full_page=full_page)
+                
+                if result.get("status") == "success":
+                    # Store the element mapping for later use
+                    self.som_mappings[target_url] = result.get("element_mapping", {})
+                    logger.info(f"📍 Stored SoM mapping for {target_url} with {len(self.som_mappings[target_url])} elements")
+                
+                return result
+            
+            elif tool == "click_element_by_id":
+                target_url = args.get("url")
+                element_id = args.get("element_id")
+                
+                if not target_url:
+                    return {"status": "error", "error": "URL manquante"}
+                
+                if element_id is None:
+                    return {"status": "error", "error": "element_id manquant"}
+                
+                if '://' not in target_url:
+                    target_url = f"http://{target_url}"
+                
+                if not self._validate_url(target_url):
+                    return {"status": "error", "error": f"Invalid URL format: {target_url}"}
+                
+                # Get the element mapping for this URL
+                element_mapping = self.som_mappings.get(target_url)
+                
+                if not element_mapping:
+                    return {
+                        "status": "error",
+                        "error": f"No SoM mapping found for {target_url}. Run capture_screenshot_som first."
+                    }
+                
+                # Convert element_id to int if it's a string
+                try:
+                    element_id = int(element_id)
+                except (ValueError, TypeError):
+                    return {"status": "error", "error": f"Invalid element_id: {element_id}. Must be an integer."}
+                
+                # Click the element
+                result = await self.visual_recon.click_element(target_url, element_id, element_mapping)
+                return result
+            
+            elif tool == "visual_screenshot":
+                target_url = args.get("url")
+                full_page = args.get("full_page", False)
+                
+                if not target_url:
+                    return {"status": "error", "error": "URL manquante"}
+                
+                if '://' not in target_url:
+                    target_url = f"http://{target_url}"
+                
+                if not self._validate_url(target_url):
+                    return {"status": "error", "error": f"Invalid URL format: {target_url}"}
+                
+                # Capture regular screenshot (without SoM)
+                result = await self.visual_recon.capture_screenshot(target_url, full_page=full_page)
+                return result
 
             else:
                 logger.warning(f"Outil inconnu demandé par l'IA : {tool}")

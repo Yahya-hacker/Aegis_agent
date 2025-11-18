@@ -7,6 +7,7 @@ import re
 import os
 from typing import Dict, List, Any, Optional
 import logging
+from pathlib import Path
 from agents.learning_engine import AegisLearningEngine
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
 from utils.reasoning_display import get_reasoning_display
@@ -19,6 +20,134 @@ ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llam
 # CODER_MODEL can override CODE_MODEL for specialized coding tasks (e.g., Dolphin-Deepseek)
 CODE_MODEL = os.getenv("CODER_MODEL", os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b-instruct"))
 REASONING_MODEL = os.getenv("REASONING_MODEL", "cognitivecomputations/dolphin3.0-r1-mistral-24b")
+
+
+class MissionBlackboard:
+    """
+    Persistent mission blackboard memory system.
+    Stores verified facts, pending goals, and discarded attack vectors across the session.
+    
+    This implements a "blackboard architecture" where:
+    - verified_facts: Ground truths discovered and confirmed
+    - pending_goals: Objectives to achieve, prioritized
+    - discarded_vectors: Attack paths already tried and failed
+    """
+    
+    def __init__(self, mission_id: Optional[str] = None):
+        """
+        Initialize the blackboard
+        
+        Args:
+            mission_id: Optional mission identifier for persistence
+        """
+        self.mission_id = mission_id or "default"
+        self.verified_facts: List[str] = []
+        self.pending_goals: List[str] = []
+        self.discarded_vectors: List[str] = []
+        self.blackboard_file = Path(f"data/blackboard_{self.mission_id}.json")
+        
+        # Load existing blackboard if it exists
+        self._load()
+    
+    def _load(self) -> None:
+        """Load blackboard from disk if it exists"""
+        if self.blackboard_file.exists():
+            try:
+                with open(self.blackboard_file, 'r') as f:
+                    data = json.load(f)
+                    self.verified_facts = data.get('verified_facts', [])
+                    self.pending_goals = data.get('pending_goals', [])
+                    self.discarded_vectors = data.get('discarded_vectors', [])
+                    logger.info(f"📋 Loaded blackboard: {len(self.verified_facts)} facts, "
+                              f"{len(self.pending_goals)} goals, {len(self.discarded_vectors)} discarded vectors")
+            except Exception as e:
+                logger.warning(f"Failed to load blackboard: {e}")
+    
+    def _save(self) -> None:
+        """Save blackboard to disk"""
+        try:
+            # Ensure data directory exists
+            self.blackboard_file.parent.mkdir(exist_ok=True, parents=True)
+            
+            data = {
+                'verified_facts': self.verified_facts,
+                'pending_goals': self.pending_goals,
+                'discarded_vectors': self.discarded_vectors,
+                'mission_id': self.mission_id
+            }
+            
+            with open(self.blackboard_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            logger.debug(f"💾 Saved blackboard to {self.blackboard_file}")
+        except Exception as e:
+            logger.error(f"Failed to save blackboard: {e}")
+    
+    def add_fact(self, fact: str) -> None:
+        """Add a verified fact to the blackboard"""
+        if fact and fact not in self.verified_facts:
+            self.verified_facts.append(fact)
+            self._save()
+            logger.info(f"✅ Added fact: {fact[:80]}...")
+    
+    def add_goal(self, goal: str) -> None:
+        """Add a pending goal to the blackboard"""
+        if goal and goal not in self.pending_goals:
+            self.pending_goals.append(goal)
+            self._save()
+            logger.info(f"🎯 Added goal: {goal[:80]}...")
+    
+    def complete_goal(self, goal: str) -> None:
+        """Mark a goal as completed and remove it"""
+        if goal in self.pending_goals:
+            self.pending_goals.remove(goal)
+            self._save()
+            logger.info(f"✓ Completed goal: {goal[:80]}...")
+    
+    def discard_vector(self, vector: str) -> None:
+        """Mark an attack vector as discarded (tried and failed)"""
+        if vector and vector not in self.discarded_vectors:
+            self.discarded_vectors.append(vector)
+            self._save()
+            logger.info(f"🚫 Discarded vector: {vector[:80]}...")
+    
+    def get_summary(self) -> str:
+        """Get a formatted summary of the blackboard state"""
+        summary_parts = ["=== MISSION BLACKBOARD ==="]
+        
+        if self.verified_facts:
+            summary_parts.append(f"\nVERIFIED FACTS ({len(self.verified_facts)}):")
+            for i, fact in enumerate(self.verified_facts[-10:], 1):  # Last 10 facts
+                summary_parts.append(f"  {i}. {fact}")
+        else:
+            summary_parts.append("\nVERIFIED FACTS: None yet")
+        
+        if self.pending_goals:
+            summary_parts.append(f"\nPENDING GOALS ({len(self.pending_goals)}):")
+            for i, goal in enumerate(self.pending_goals[:5], 1):  # Top 5 goals
+                summary_parts.append(f"  {i}. {goal}")
+        else:
+            summary_parts.append("\nPENDING GOALS: None")
+        
+        if self.discarded_vectors:
+            summary_parts.append(f"\nDISCARDED VECTORS ({len(self.discarded_vectors)}):")
+            for i, vector in enumerate(self.discarded_vectors[-5:], 1):  # Last 5 discarded
+                summary_parts.append(f"  {i}. {vector}")
+        else:
+            summary_parts.append("\nDISCARDED VECTORS: None")
+        
+        summary_parts.append("=" * 30)
+        
+        return "\n".join(summary_parts)
+    
+    def clear(self) -> None:
+        """Clear all blackboard data"""
+        self.verified_facts = []
+        self.pending_goals = []
+        self.discarded_vectors = []
+        self._save()
+        logger.info("🗑️ Cleared blackboard")
+
 
 class EnhancedAegisAI:
     """
@@ -41,6 +170,7 @@ class EnhancedAegisAI:
         self.max_history_size = 10  # Maximum conversation history to keep
         self.context_summary = None  # Summary of older context
         self.db = get_database()  # TASK 2: Mission database integration
+        self.blackboard = MissionBlackboard()  # Mission blackboard memory
         
         # PHASE 2: Business logic mapper for application-specific testing
         from utils.business_logic_mapper import get_business_logic_mapper
@@ -284,6 +414,9 @@ DATABASE STATUS (Avoid Duplicate Work):
             for scan in recent_scans:
                 db_context += f"  - {scan['target']} ({scan['scan_type']}) at {scan['scanned_at']}\n"
         
+        # BLACKBOARD MEMORY: Get current blackboard summary
+        blackboard_summary = self.blackboard.get_summary()
+        
         # Show reasoning about next action decision
         self.reasoning_display.show_thought(
             "Determining next action based on mission rules and agent memory",
@@ -291,7 +424,9 @@ DATABASE STATUS (Avoid Duplicate Work):
             metadata={
                 "memory_items": len(agent_memory),
                 "last_observation": agent_memory[-1] if agent_memory else None,
-                "db_stats": db_stats
+                "db_stats": db_stats,
+                "blackboard_facts": len(self.blackboard.verified_facts),
+                "blackboard_goals": len(self.blackboard.pending_goals)
             }
         )
         
@@ -303,6 +438,8 @@ MISSION RULES:
 
 {db_context}
 
+{blackboard_summary}
+
 LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 {self.learned_patterns}
 
@@ -310,17 +447,33 @@ LEARNED PATTERNS FROM PREVIOUS MISSIONS:
 
 {self.logic_mapper.get_testable_functions()}
 
-PHASE 4 - MULTIMODAL CAPABILITIES:
+PHASE 4 - MULTIMODAL CAPABILITIES & VISUAL GROUNDING:
 You now have access to visual reconnaissance tools for analyzing web interfaces:
-- visual_recon.capture_screenshot(url, full_page=True/False): Capture authenticated screenshots
+- capture_screenshot_som(url, full_page=True/False): Capture screenshot with Set-of-Mark (SoM) visual grounding
+  * Returns a screenshot with numbered red badges on all clickable elements
+  * Provides element_mapping with {ID: selector} for each interactive element
+  * Use this when you need to understand the UI layout and identify clickable elements
+- click_element_by_id(url, element_id): Click a specific element using its SoM ID
+  * Must be called AFTER capture_screenshot_som
+  * Use the element ID from the SoM mapping
+  * This allows precise interaction with UI elements identified in screenshots
+- visual_screenshot(url, full_page=True/False): Capture regular authenticated screenshot (no SoM badges)
 - visual_recon.get_dom_snapshot(url, selectors=[]): Extract DOM elements and analyze page structure
 - logic_tester.test_logic_flow(flow_name, steps, expected_behavior): Test business logic for vulnerabilities
 
-Use these tools when:
+VISUAL GROUNDING WORKFLOW (Set-of-Mark):
+1. First, call capture_screenshot_som(url) to get a tagged screenshot
+2. The screenshot will show numbered red badges on all clickable elements
+3. Analyze the screenshot to identify which element to interact with
+4. Call click_element_by_id(url, element_id) with the ID of the desired element
+5. The system will automatically use the stored selector to perform the click
+
+Use visual grounding tools when:
 - You need to understand the visual layout or UI of a target
-- You want to analyze client-side elements that might not be visible in HTTP responses
-- You're testing multi-step business workflows for logic flaws
+- You want to identify and interact with specific UI elements (buttons, links, forms)
+- You're testing multi-step workflows that require clicking through the interface
 - You need to verify visual elements or CAPTCHA-type protections
+- You're analyzing client-side elements that might not be visible in HTTP responses
 
 ENHANCED MULTI-STAGE REASONING FRAMEWORK:
 
@@ -1045,3 +1198,112 @@ Be skeptical and thorough. Only mark is_hallucination=false if you have high con
             )
             
             return error_msg
+    
+    # --- BLACKBOARD MEMORY: FACT EXTRACTION ---
+    async def extract_facts_from_output(
+        self,
+        tool_name: str,
+        tool_output: Dict[str, Any],
+        mission_context: str = ""
+    ) -> None:
+        """
+        Extract facts, goals, and discarded vectors from tool output
+        and update the mission blackboard.
+        
+        This method is called after EVERY tool execution to continuously
+        update the blackboard with new knowledge.
+        
+        Args:
+            tool_name: Name of the tool that was executed
+            tool_output: Output from the tool execution
+            mission_context: Current mission context
+        """
+        if not self.is_initialized:
+            logger.warning("AI not initialized for fact extraction")
+            return
+        
+        logger.info(f"🧠 Extracting facts from {tool_name} output...")
+        
+        # Format tool output for analysis
+        output_summary = json.dumps(tool_output, indent=2)[:2000]  # First 2000 chars
+        
+        extraction_prompt = f"""You are analyzing the output of a security testing tool to extract key information.
+
+TOOL EXECUTED: {tool_name}
+MISSION CONTEXT: {mission_context}
+
+TOOL OUTPUT:
+{output_summary}
+
+Your task is to extract and categorize information into three categories:
+
+1. **VERIFIED FACTS**: Confirmed, concrete discoveries (e.g., "Port 443 is open", "WordPress 5.8 detected", "Admin panel found at /wp-admin")
+2. **PENDING GOALS**: New objectives or targets to investigate (e.g., "Test admin panel for weak credentials", "Enumerate WordPress plugins")
+3. **DISCARDED VECTORS**: Attack paths that failed or are not viable (e.g., "SQL injection in search parameter - WAF blocked", "Port 22 filtered")
+
+IMPORTANT RULES:
+- Only extract CONCRETE information from the actual output
+- Do NOT speculate or invent information
+- Do NOT include generic advice or best practices
+- Each item should be specific and actionable
+- If the output shows an error or failure, categorize it as a discarded vector
+- If the output is successful, extract facts and goals from the results
+
+Respond with JSON ONLY:
+{{
+  "verified_facts": ["fact1", "fact2", ...],
+  "pending_goals": ["goal1", "goal2", ...],
+  "discarded_vectors": ["vector1", "vector2", ...]
+}}
+
+If there's nothing to extract in a category, use an empty list []."""
+
+        try:
+            # Call the reasoning specialist for fact extraction
+            response = await self.call_reasoning_specialist(
+                prompt=extraction_prompt,
+                context="Fact extraction from security tool output",
+                temperature=0.5,  # Lower temperature for focused extraction
+                max_tokens=1024
+            )
+            
+            content = response.get('content', '')
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                extraction = json.loads(json_match.group(0))
+                
+                verified_facts = extraction.get('verified_facts', [])
+                pending_goals = extraction.get('pending_goals', [])
+                discarded_vectors = extraction.get('discarded_vectors', [])
+                
+                # Update blackboard
+                for fact in verified_facts:
+                    self.blackboard.add_fact(fact)
+                
+                for goal in pending_goals:
+                    self.blackboard.add_goal(goal)
+                
+                for vector in discarded_vectors:
+                    self.blackboard.discard_vector(vector)
+                
+                logger.info(f"✅ Extracted: {len(verified_facts)} facts, "
+                          f"{len(pending_goals)} goals, {len(discarded_vectors)} discarded vectors")
+                
+                # Show extraction result
+                self.reasoning_display.show_thought(
+                    f"Blackboard updated from {tool_name} output",
+                    thought_type="learning",
+                    metadata={
+                        "tool": tool_name,
+                        "facts_added": len(verified_facts),
+                        "goals_added": len(pending_goals),
+                        "vectors_discarded": len(discarded_vectors)
+                    }
+                )
+            else:
+                logger.warning("Could not parse fact extraction JSON")
+                
+        except Exception as e:
+            logger.error(f"Error extracting facts: {e}", exc_info=True)

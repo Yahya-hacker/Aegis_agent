@@ -216,6 +216,199 @@ class VisualReconTool:
                 "error": str(e)
             }
     
+    async def capture_with_som(
+        self,
+        url: str,
+        output_path: Optional[str] = None,
+        full_page: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Capture screenshot with Set-of-Mark (SoM) visual grounding.
+        Overlays numbered red badges on all clickable elements.
+        
+        Args:
+            url: Target URL to screenshot
+            output_path: Optional path to save screenshot
+            full_page: Whether to capture full page or just viewport
+            
+        Returns:
+            Dictionary with screenshot data and element mapping {ID: selector}
+        """
+        logger.info(f"📸 Capturing SoM screenshot: {url}")
+        
+        try:
+            await self._initialize_browser()
+            
+            # Create new page
+            page = await self.context.new_page()
+            page.set_default_timeout(self.timeout)
+            
+            # Navigate to URL
+            await page.goto(url, wait_until='networkidle')
+            
+            # Inject JavaScript to add SoM badges and collect element data
+            som_script = """
+            () => {
+                // Find all clickable elements
+                const clickableSelectors = 'a, button, input[type="submit"], input[type="button"], [onclick], [role="button"]';
+                const elements = Array.from(document.querySelectorAll(clickableSelectors));
+                
+                // Filter visible elements only
+                const visibleElements = elements.filter(el => {
+                    const style = window.getComputedStyle(el);
+                    return style.display !== 'none' && 
+                           style.visibility !== 'hidden' && 
+                           style.opacity !== '0' &&
+                           el.offsetWidth > 0 && 
+                           el.offsetHeight > 0;
+                });
+                
+                // Create mapping and add badges
+                const mapping = {};
+                
+                visibleElements.forEach((el, index) => {
+                    const id = index + 1;
+                    
+                    // Generate XPath for the element
+                    const getXPath = (element) => {
+                        if (element.id) {
+                            return `//*[@id="${element.id}"]`;
+                        }
+                        if (element === document.body) {
+                            return '/html/body';
+                        }
+                        let ix = 0;
+                        const siblings = element.parentNode?.childNodes || [];
+                        for (let i = 0; i < siblings.length; i++) {
+                            const sibling = siblings[i];
+                            if (sibling === element) {
+                                const parentPath = element.parentNode ? getXPath(element.parentNode) : '';
+                                return `${parentPath}/${element.tagName.toLowerCase()}[${ix + 1}]`;
+                            }
+                            if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+                                ix++;
+                            }
+                        }
+                        return '';
+                    };
+                    
+                    // Generate CSS selector as fallback
+                    const getCssSelector = (element) => {
+                        if (element.id) {
+                            return `#${element.id}`;
+                        }
+                        let path = [];
+                        let current = element;
+                        while (current && current !== document.body) {
+                            let selector = current.tagName.toLowerCase();
+                            if (current.className) {
+                                const classes = current.className.trim().split(/\\s+/).join('.');
+                                if (classes) selector += '.' + classes;
+                            }
+                            path.unshift(selector);
+                            current = current.parentElement;
+                        }
+                        return path.join(' > ');
+                    };
+                    
+                    const xpath = getXPath(el);
+                    const cssSelector = getCssSelector(el);
+                    const text = el.innerText?.trim().substring(0, 50) || el.value || '';
+                    
+                    // Store mapping
+                    mapping[id] = {
+                        xpath: xpath,
+                        css_selector: cssSelector,
+                        tag: el.tagName.toLowerCase(),
+                        text: text,
+                        type: el.type || '',
+                        id_attr: el.id || '',
+                        classes: el.className || ''
+                    };
+                    
+                    // Create and position badge
+                    const badge = document.createElement('div');
+                    badge.innerText = id.toString();
+                    badge.style.cssText = `
+                        position: absolute;
+                        background-color: #ff0000;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 12px;
+                        padding: 2px 6px;
+                        border-radius: 10px;
+                        z-index: 10000;
+                        pointer-events: none;
+                        font-family: Arial, sans-serif;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                    `;
+                    
+                    // Position badge at top-left of element
+                    const rect = el.getBoundingClientRect();
+                    badge.style.left = (rect.left + window.scrollX) + 'px';
+                    badge.style.top = (rect.top + window.scrollY) + 'px';
+                    
+                    // Add data attribute to track
+                    badge.setAttribute('data-som-id', id);
+                    
+                    document.body.appendChild(badge);
+                });
+                
+                return mapping;
+            }
+            """
+            
+            # Execute script and get element mapping
+            element_mapping = await page.evaluate(som_script)
+            
+            logger.info(f"✅ SoM: Tagged {len(element_mapping)} clickable elements")
+            
+            # Wait a moment for badges to render
+            await asyncio.sleep(0.5)
+            
+            # Determine output path
+            if not output_path:
+                screenshot_dir = Path("data/screenshots")
+                screenshot_dir.mkdir(exist_ok=True, parents=True)
+                import time
+                safe_url = url.replace('://', '_').replace('/', '_')[:50]
+                output_path = str(screenshot_dir / f"som_{safe_url}_{int(time.time())}.png")
+            
+            # Capture screenshot with badges
+            screenshot_bytes = await page.screenshot(
+                path=output_path,
+                full_page=full_page
+            )
+            
+            # Get page metadata
+            title = await page.title()
+            viewport = page.viewport_size
+            
+            await page.close()
+            
+            logger.info(f"✅ SoM screenshot saved: {output_path}")
+            
+            return {
+                "status": "success",
+                "url": url,
+                "screenshot_path": output_path,
+                "screenshot_size": len(screenshot_bytes),
+                "page_title": title,
+                "viewport": viewport,
+                "full_page": full_page,
+                "screenshot_base64": base64.b64encode(screenshot_bytes).decode('utf-8'),
+                "element_mapping": element_mapping,
+                "num_elements": len(element_mapping)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error capturing SoM screenshot: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "url": url,
+                "error": str(e)
+            }
+    
     async def get_dom_snapshot(
         self,
         url: str,
@@ -315,6 +508,117 @@ class VisualReconTool:
             return {
                 "status": "error",
                 "url": url,
+                "error": str(e)
+            }
+    
+    async def click_element(
+        self,
+        url: str,
+        element_id: int,
+        element_mapping: Dict[int, Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Click an element using SoM element ID and mapping
+        
+        Args:
+            url: Target URL
+            element_id: SoM element ID from the mapping
+            element_mapping: Element mapping from capture_with_som
+            
+        Returns:
+            Dictionary with click result and new page state
+        """
+        logger.info(f"🖱️ Clicking element #{element_id} on {url}")
+        
+        try:
+            if element_id not in element_mapping:
+                return {
+                    "status": "error",
+                    "error": f"Element ID {element_id} not found in mapping"
+                }
+            
+            await self._initialize_browser()
+            
+            # Create new page
+            page = await self.context.new_page()
+            page.set_default_timeout(self.timeout)
+            
+            # Navigate to URL
+            await page.goto(url, wait_until='networkidle')
+            
+            # Get element info from mapping
+            element_info = element_mapping[element_id]
+            css_selector = element_info.get('css_selector')
+            xpath = element_info.get('xpath')
+            
+            logger.info(f"  Element: {element_info.get('tag')} - '{element_info.get('text', '')[:30]}'")
+            
+            # Try CSS selector first, fallback to XPath
+            clicked = False
+            click_method = None
+            
+            # Try CSS selector
+            if css_selector:
+                try:
+                    await page.click(css_selector, timeout=5000)
+                    clicked = True
+                    click_method = "css_selector"
+                    logger.info(f"  ✓ Clicked using CSS selector")
+                except Exception as e:
+                    logger.warning(f"  CSS selector click failed: {e}")
+            
+            # Fallback to XPath if CSS failed
+            if not clicked and xpath:
+                try:
+                    element = await page.query_selector(f'xpath={xpath}')
+                    if element:
+                        await element.click()
+                        clicked = True
+                        click_method = "xpath"
+                        logger.info(f"  ✓ Clicked using XPath")
+                    else:
+                        logger.warning(f"  XPath element not found")
+                except Exception as e:
+                    logger.warning(f"  XPath click failed: {e}")
+            
+            if not clicked:
+                await page.close()
+                return {
+                    "status": "error",
+                    "error": f"Failed to click element {element_id}",
+                    "element_info": element_info
+                }
+            
+            # Wait for navigation or network idle after click
+            try:
+                await page.wait_for_load_state('networkidle', timeout=5000)
+            except:
+                pass  # Timeout is okay, element might not trigger navigation
+            
+            # Get new page state
+            new_url = page.url
+            title = await page.title()
+            
+            await page.close()
+            
+            logger.info(f"✅ Click successful, new URL: {new_url}")
+            
+            return {
+                "status": "success",
+                "element_id": element_id,
+                "element_info": element_info,
+                "click_method": click_method,
+                "old_url": url,
+                "new_url": new_url,
+                "page_title": title,
+                "url_changed": new_url != url
+            }
+            
+        except Exception as e:
+            logger.error(f"Error clicking element: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "element_id": element_id,
                 "error": str(e)
             }
     
