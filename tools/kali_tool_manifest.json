@@ -398,6 +398,66 @@
         }
       },
       "json_prompt_template": "{\"tool\": \"tool_installer.request_install_from_github\", \"args\": {\"repo_url\": \"<URL>\", \"description\": \"<DESCRIPTION>\"}}"
+    },
+    {
+      "tool_name": "capture_screenshot_som",
+      "binary_name": "playwright",
+      "description": "Capture screenshot with Set-of-Mark (SoM) visual grounding - overlays numbered badges on all clickable elements and returns element mapping for precise interaction",
+      "intrusive": false,
+      "category": "visual_reconnaissance",
+      "args_schema": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL to capture with SoM tagging"
+        },
+        "full_page": {
+          "type": "boolean",
+          "required": false,
+          "description": "Capture full scrollable page (default: false)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"capture_screenshot_som\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}"
+    },
+    {
+      "tool_name": "click_element_by_id",
+      "binary_name": "playwright",
+      "description": "Click a specific element using its SoM ID from a previous capture_screenshot_som call - enables precise UI interaction",
+      "intrusive": true,
+      "category": "visual_reconnaissance",
+      "args_schema": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL (must match URL from capture_screenshot_som)"
+        },
+        "element_id": {
+          "type": "integer",
+          "required": true,
+          "description": "Element ID from SoM mapping (numbered badge on screenshot)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"click_element_by_id\", \"args\": {\"url\": \"<URL>\", \"element_id\": <ELEMENT_ID>}}"
+    },
+    {
+      "tool_name": "visual_screenshot",
+      "binary_name": "playwright",
+      "description": "Capture regular authenticated screenshot without SoM badges - useful for visual verification and documentation",
+      "intrusive": false,
+      "category": "visual_reconnaissance",
+      "args_schema": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL to screenshot"
+        },
+        "full_page": {
+          "type": "boolean",
+          "required": false,
+          "description": "Capture full scrollable page (default: false)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"visual_screenshot\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}"
     }
   ]
 }
