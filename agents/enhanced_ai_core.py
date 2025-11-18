@@ -393,6 +393,13 @@ CRITICAL INSTRUCTIONS:
 - Be thorough, methodical, and intelligent in your approach
 - Learn from past observations and avoid repeating failed attempts
 
+⚠️ STRICT GROUNDING RULE (ANTI-HALLUCINATION) ⚠️
+You can ONLY attack targets that explicitly exist in the 'DATABASE STATUS' list provided above.
+When proposing an action, you MUST cite the specific 'target_id' or exact string from the database context.
+If you want to attack a new target, you must first run 'subdomain_enumeration' to find it and add it to the DB.
+DO NOT invent URLs, domains, or targets that are not present in the database or mission context.
+ANY action targeting a URL/domain MUST reference an existing entry from the scanned targets list.
+
 Respond with JSON ONLY including comprehensive multi-stage reasoning:
 ```json
 {{
@@ -849,6 +856,112 @@ Respond with ONLY the JSON, no additional text."""
                 },
                 'ai_triaged': False
             }
+    
+    # --- DEEP THINK VERIFICATION (TASK 1) ---
+    async def verify_finding_with_reasoning(
+        self,
+        finding: Dict,
+        target_url: str
+    ) -> Optional[Dict]:
+        """
+        Devil's Advocate verification loop - Reasoning Model critiques findings
+        to drastically reduce hallucinations and false positives.
+        
+        Args:
+            finding: Vulnerability finding dictionary
+            target_url: Target URL where vulnerability was found
+            
+        Returns:
+            Finding if valid, None if hallucination detected
+        """
+        if not self.is_initialized:
+            logger.warning("AI not initialized for verification")
+            return finding
+        
+        logger.info(f"🔍 Deep Think: Verifying {finding.get('type', 'unknown')} finding...")
+        
+        # Construct comprehensive prompt for the Reasoning LLM
+        finding_summary = json.dumps(finding, indent=2)
+        
+        verification_prompt = f"""You are a Senior Security Engineer reviewing a junior researcher's vulnerability report.
+Your role is to act as a "Devil's Advocate" and critically assess whether this is a legitimate finding or a false positive.
+
+TARGET URL: {target_url}
+
+REPORTED FINDING:
+{finding_summary}
+
+CRITICAL ANALYSIS REQUIRED:
+As a senior expert, you must scrutinize this finding for common false positives:
+1. **404 Errors Masquerading as Vulnerabilities**: Is this just a 404/403 page being misinterpreted?
+2. **Generic WAF Blocks**: Is this a WAF/security product blocking the request rather than an actual vulnerability?
+3. **Expected Security Responses**: Is this a normal security control working as intended?
+4. **Misinterpreted Error Messages**: Are error messages being confused with exploitable conditions?
+5. **Context Confusion**: Does the evidence actually prove the vulnerability claim?
+6. **Insufficient Evidence**: Is there concrete proof, or just speculation?
+
+RESPOND WITH JSON ONLY:
+{{
+  "is_hallucination": true|false,
+  "confidence_score": 0-100,
+  "reasoning": "Detailed explanation of why this is or isn't a hallucination/false positive. Include specific technical reasoning."
+}}
+
+Be skeptical and thorough. Only mark is_hallucination=false if you have high confidence this is a real vulnerability."""
+
+        try:
+            # Call the vulnerability/reasoning specialist
+            response = await self.call_reasoning_specialist(
+                prompt=verification_prompt,
+                context="Devil's Advocate verification of security findings",
+                temperature=0.6,  # Lower temperature for more focused analysis
+                max_tokens=1024
+            )
+            
+            content = response.get('content', '')
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                verification = json.loads(json_match.group(0))
+                
+                is_hallucination = verification.get('is_hallucination', False)
+                confidence = verification.get('confidence_score', 0)
+                reasoning = verification.get('reasoning', 'No reasoning provided')
+                
+                logger.info(f"📊 Verification: hallucination={is_hallucination}, confidence={confidence}")
+                logger.info(f"💭 Reasoning: {reasoning[:200]}...")
+                
+                # Show verification reasoning
+                self.reasoning_display.show_thought(
+                    f"Deep Think verification: {'REJECTED' if is_hallucination else 'ACCEPTED'} (confidence: {confidence}%)",
+                    thought_type="verification",
+                    metadata={
+                        "finding_type": finding.get('type'),
+                        "is_hallucination": is_hallucination,
+                        "confidence_score": confidence,
+                        "reasoning": reasoning[:200]
+                    }
+                )
+                
+                # If hallucination detected, log warning and return None
+                if is_hallucination:
+                    logger.warning(f"⚠️ HALLUCINATION DETECTED: {finding.get('type')} at {target_url}")
+                    logger.warning(f"   Reason: {reasoning}")
+                    return None
+                
+                # Valid finding - return it
+                logger.info(f"✅ Finding verified as legitimate")
+                return finding
+            
+            # If JSON parsing fails, be conservative and accept the finding with warning
+            logger.warning("Could not parse verification JSON, accepting finding with warning")
+            return finding
+            
+        except Exception as e:
+            logger.error(f"Error during Deep Think verification: {e}", exc_info=True)
+            # On error, be conservative and return the finding
+            return finding
     
     # --- MULTIMODAL VISUAL ANALYSIS ---
     async def analyze_visuals(

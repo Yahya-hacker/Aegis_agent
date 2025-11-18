@@ -2,7 +2,7 @@
 # --- VERSION MODIFIÉE ---
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
 from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
@@ -50,10 +50,88 @@ class AegisScanner:
             return all([result.scheme, result.netloc])
         except:
             return False
+    
+    async def _self_correct_and_retry(self, tool: str, original_args: Dict, error_message: str) -> Optional[Dict]:
+        """
+        Self-Correction Loop: Use Coder LLM to suggest fixes for failed commands
+        
+        Args:
+            tool: The tool that failed
+            original_args: Original arguments that caused the failure
+            error_message: The error message from the failure
+            
+        Returns:
+            Corrected arguments dict or None if correction fails
+        """
+        logger.info(f"🔧 Self-Correction: Attempting to fix failed {tool} command...")
+        
+        correction_prompt = f"""A security testing tool failed with an error. Analyze the error and suggest a fixed command.
+
+FAILED TOOL: {tool}
+ORIGINAL ARGUMENTS: {original_args}
+ERROR MESSAGE: {error_message}
+
+Your task:
+1. Analyze why the command failed
+2. Suggest corrected or alternative arguments that might work
+3. Consider common issues like syntax errors, timeouts, invalid formats, missing parameters
+
+Respond with JSON ONLY containing the corrected arguments:
+{{
+  "corrected_args": {{"param": "value"}},
+  "reasoning": "Brief explanation of what was wrong and how you fixed it"
+}}
+
+If you cannot suggest a fix, respond with:
+{{
+  "corrected_args": null,
+  "reasoning": "Explanation of why this cannot be fixed"
+}}
+"""
+        
+        try:
+            # Call the Coder LLM for error correction
+            response = await self.ai_core.orchestrator.call_llm(
+                'coder',
+                [
+                    {"role": "system", "content": "You are an expert in debugging security tools and command syntax."},
+                    {"role": "user", "content": correction_prompt}
+                ],
+                temperature=0.6,
+                max_tokens=512
+            )
+            
+            content = response.get('content', '')
+            
+            # Extract JSON from response
+            import json
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                correction = json.loads(json_match.group(0))
+                corrected_args = correction.get('corrected_args')
+                reasoning = correction.get('reasoning', 'No reasoning provided')
+                
+                logger.info(f"💡 Correction reasoning: {reasoning}")
+                
+                if corrected_args is not None:
+                    logger.info(f"✅ Corrected arguments: {corrected_args}")
+                    return corrected_args
+                else:
+                    logger.warning(f"❌ Coder LLM could not suggest a fix")
+                    return None
+            
+            logger.warning("Could not parse correction JSON")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error during self-correction: {e}", exc_info=True)
+            return None
 
     async def execute_action(self, action: Dict) -> Dict:
         """
-        Orchestrateur qui exécute l'action demandée par l'IA avec validation et error handling
+        Orchestrateur qui exécute l'action demandée par l'IA avec validation, error handling,
+        and self-correction capabilities (TASK 3)
         
         Args:
             action: Dictionary containing tool name and arguments
@@ -78,6 +156,77 @@ class AegisScanner:
         
         logger.info(f"Executing action: {tool} with args {args}")
         
+        # TASK 3: Self-correction wrapper - try once, then retry with corrected args if it fails
+        max_attempts = 2
+        current_args = args.copy()
+        last_error = None
+        
+        for attempt in range(max_attempts):
+            try:
+                # Execute the tool with current args
+                result = await self._execute_tool_internal(tool, current_args)
+                
+                # If successful, return immediately
+                if result.get("status") == "success":
+                    return result
+                
+                # If error, prepare for potential retry
+                last_error = result.get("error", "Unknown error")
+                
+                # If this was the first attempt and we got an error, try self-correction
+                if attempt == 0:
+                    logger.warning(f"⚠️ Tool {tool} failed on first attempt: {last_error}")
+                    logger.info(f"🔧 Attempting self-correction...")
+                    
+                    corrected_args = await self._self_correct_and_retry(tool, current_args, last_error)
+                    
+                    if corrected_args is not None:
+                        logger.info(f"🔄 Retrying {tool} with corrected arguments...")
+                        current_args = corrected_args
+                        continue  # Retry with corrected args
+                    else:
+                        # Cannot correct, return the error
+                        logger.warning(f"❌ Self-correction failed, returning original error")
+                        return result
+                else:
+                    # Second attempt failed, return the error
+                    return result
+                    
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"❌ Exception in {tool} (attempt {attempt + 1}/{max_attempts}): {e}", exc_info=True)
+                
+                # Try self-correction on first attempt
+                if attempt == 0:
+                    logger.info(f"🔧 Attempting self-correction after exception...")
+                    corrected_args = await self._self_correct_and_retry(tool, current_args, last_error)
+                    
+                    if corrected_args is not None:
+                        logger.info(f"🔄 Retrying {tool} with corrected arguments...")
+                        current_args = corrected_args
+                        continue
+                    else:
+                        # Cannot correct, return error
+                        return {"status": "error", "error": str(e)}
+                else:
+                    # Second attempt exception, return error
+                    return {"status": "error", "error": str(e)}
+        
+        # Should not reach here, but just in case
+        return {"status": "error", "error": last_error or "Unknown error after retries"}
+    
+    async def _execute_tool_internal(self, tool: str, args: Dict) -> Dict:
+        """
+        Internal method that executes the actual tool logic
+        Separated to allow retry logic in execute_action
+        
+        Args:
+            tool: Tool name
+            args: Tool arguments
+            
+        Returns:
+            Result dictionary
+        """
         try:
             # Outils de Reconnaissance
             if tool == "subdomain_enumeration":
@@ -170,15 +319,29 @@ class AegisScanner:
                     scan_result = f"Found {len(data)} vulnerabilities" if isinstance(data, list) else "Completed"
                     self.db.mark_scanned(target_url, "vulnerability_scan", scan_result)
                     
-                    # Record each finding in database
+                    # TASK 3: Verify each finding before adding to database
                     if isinstance(data, list):
+                        verified_count = 0
+                        rejected_count = 0
                         for finding in data:
                             if isinstance(finding, dict):
-                                finding_type = finding.get('template-id', 'unknown')
-                                severity = finding.get('info', {}).get('severity', 'info')
-                                description = finding.get('info', {}).get('name', '')
-                                evidence = finding.get('matched-at', '')
-                                self.db.add_finding(finding_type, target_url, severity, description, evidence)
+                                # Deep Think verification
+                                verified_finding = await self.ai_core.verify_finding_with_reasoning(finding, target_url)
+                                
+                                if verified_finding is not None:
+                                    # Finding passed verification - add to database
+                                    finding_type = verified_finding.get('template-id', 'unknown')
+                                    severity = verified_finding.get('info', {}).get('severity', 'info')
+                                    description = verified_finding.get('info', {}).get('name', '')
+                                    evidence = verified_finding.get('matched-at', '')
+                                    self.db.add_finding(finding_type, target_url, severity, description, evidence)
+                                    verified_count += 1
+                                else:
+                                    # Finding rejected as hallucination
+                                    rejected_count += 1
+                                    logger.info(f"🚫 Rejected hallucinated finding: {finding.get('template-id', 'unknown')}")
+                        
+                        logger.info(f"✅ Verification complete: {verified_count} accepted, {rejected_count} rejected")
                 return result
 
             elif tool == "run_sqlmap":
@@ -193,15 +356,32 @@ class AegisScanner:
                     scan_result = "SQL Injection found" if vulnerable else "No SQL Injection"
                     self.db.mark_scanned(target_url, "run_sqlmap", scan_result)
                     
-                    # Record finding if vulnerable
+                    # TASK 3: Verify finding before recording if vulnerable
                     if vulnerable:
-                        self.db.add_finding(
-                            "SQL Injection",
-                            target_url,
-                            "high",
-                            "SQL Injection vulnerability detected by SQLmap",
-                            data.get("output", "")[:500]  # First 500 chars of output
-                        )
+                        # Construct finding dict for verification
+                        finding = {
+                            "type": "SQL Injection",
+                            "severity": "high",
+                            "description": "SQL Injection vulnerability detected by SQLmap",
+                            "evidence": data.get("output", "")[:500],
+                            "tool": "sqlmap"
+                        }
+                        
+                        # Deep Think verification
+                        verified_finding = await self.ai_core.verify_finding_with_reasoning(finding, target_url)
+                        
+                        if verified_finding is not None:
+                            # Finding passed verification
+                            self.db.add_finding(
+                                "SQL Injection",
+                                target_url,
+                                "high",
+                                "SQL Injection vulnerability detected by SQLmap",
+                                data.get("output", "")[:500]
+                            )
+                            logger.info("✅ SQL Injection finding verified and recorded")
+                        else:
+                            logger.info("🚫 SQL Injection finding rejected as hallucination")
                 return result
 
             elif tool == "discover_interactables":
