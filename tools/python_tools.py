@@ -842,3 +842,143 @@ class PythonToolManager:
                 logger.warning(f"Failed to load session data: {e}")
         
         return None
+    
+    def execute_extracted_js(self, js_code: str, arguments: list = None, function_name: str = "targetFunction") -> Optional[str]:
+        """
+        The "Mirror" JS Sandbox - Execute JavaScript extracted from target's source code.
+        
+        Takes a cryptographic function found in the target's .js bundle,
+        wraps it in a runner, and executes it locally in Node.js to generate valid tokens.
+        
+        Args:
+            js_code: JavaScript code containing the function to execute
+            arguments: List of arguments to pass to the function
+            function_name: Name of the function to call (default: "targetFunction")
+        
+        Returns:
+            Output from the JavaScript execution, or None if failed
+        
+        Example:
+            >>> js_code = '''
+            ... function generateToken(user, timestamp) {
+            ...     return btoa(user + ':' + timestamp + ':secret');
+            ... }
+            ... '''
+            >>> result = tool.execute_extracted_js(js_code, ['admin', '1234567890'], 'generateToken')
+        """
+        import subprocess
+        import json
+        
+        if arguments is None:
+            arguments = []
+        
+        logger.info(f"[Mirror] Executing extracted JS function '{function_name}' with {len(arguments)} arguments")
+        
+        # Escape arguments for JSON
+        args_json = json.dumps(arguments)
+        
+        # Create wrapper script that calls the function
+        wrapper = f"""
+{js_code}
+
+// Aegis wrapper to call the function
+try {{
+    const result = {function_name}(...{args_json});
+    console.log(JSON.stringify({{ success: true, result: result }}));
+}} catch (error) {{
+    console.log(JSON.stringify({{ success: false, error: error.message }}));
+}}
+"""
+        
+        try:
+            # Secure execution with timeout
+            result = subprocess.run(
+                ["node", "-e", wrapper],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                # Parse the output
+                output = result.stdout.strip()
+                try:
+                    parsed = json.loads(output)
+                    if parsed.get("success"):
+                        logger.info(f"[Mirror] JS execution successful: {parsed.get('result')}")
+                        return str(parsed.get("result"))
+                    else:
+                        logger.warning(f"[Mirror] JS execution error: {parsed.get('error')}")
+                        return None
+                except json.JSONDecodeError:
+                    # If not JSON, return raw output
+                    logger.info(f"[Mirror] JS execution output: {output}")
+                    return output
+            else:
+                logger.error(f"[Mirror] JS execution failed: {result.stderr}")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            logger.error("[Mirror] JS execution timed out (5s limit)")
+            return None
+        except FileNotFoundError:
+            logger.error("[Mirror] Node.js not found. Please install Node.js to use this feature.")
+            return None
+        except Exception as e:
+            logger.error(f"[Mirror] JS execution error: {e}")
+            return None
+    
+    async def extract_and_execute_js_function(
+        self, 
+        target_url: str, 
+        function_pattern: str,
+        arguments: list = None
+    ) -> Optional[str]:
+        """
+        Advanced Mirror feature: Extract a JS function from a webpage and execute it.
+        
+        Args:
+            target_url: URL to fetch JavaScript from
+            function_pattern: Regex pattern to extract the function (e.g., r'function generateToken.*?}')
+            arguments: Arguments to pass to the extracted function
+        
+        Returns:
+            Result of function execution
+        """
+        import re
+        
+        logger.info(f"[Mirror] Fetching and extracting JS from {target_url}")
+        
+        try:
+            # Fetch the page
+            headers = AegisHelpers.get_stealth_headers()
+            
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(target_url, ssl=False, timeout=10) as response:
+                    content = await response.text()
+            
+            # Extract the function using regex
+            match = re.search(function_pattern, content, re.DOTALL)
+            
+            if match:
+                js_code = match.group(0)
+                logger.info(f"[Mirror] Extracted function: {js_code[:100]}...")
+                
+                # Try to determine function name
+                func_name_match = re.search(r'function\s+(\w+)', js_code)
+                if func_name_match:
+                    function_name = func_name_match.group(1)
+                else:
+                    # Anonymous function, wrap it
+                    function_name = "extractedFunction"
+                    js_code = f"const {function_name} = {js_code};"
+                
+                # Execute the extracted function
+                return self.execute_extracted_js(js_code, arguments, function_name)
+            else:
+                logger.warning(f"[Mirror] Could not find function matching pattern: {function_pattern}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Mirror] Error extracting/executing JS: {e}")
+            return None
