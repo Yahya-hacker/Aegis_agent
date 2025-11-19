@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d11" for="edge" attr.name="timestamp" attr.type="string" />
+  <key id="d10" for="edge" attr.name="status_code" attr.type="string" />
+  <key id="d9" for="edge" attr.name="weight" attr.type="string" />
+  <key id="d8" for="edge" attr.name="action" attr.type="string" />
+  <key id="d7" for="node" attr.name="visited" attr.type="string" />
+  <key id="d6" for="node" attr.name="node_type" attr.type="string" />
+  <key id="d5" for="node" attr.name="timestamp" attr.type="string" />
+  <key id="d4" for="node" attr.name="dom_hash" attr.type="string" />
+  <key id="d3" for="node" attr.name="artifacts" attr.type="string" />
+  <key id="d2" for="node" attr.name="url" attr.type="string" />
+  <key id="d1" for="graph" attr.name="node_counter" attr.type="string" />
+  <key id="d0" for="graph" attr.name="current_node" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="root">
+      <data key="d2">START</data>
+      <data key="d3">{}</data>
+      <data key="d4" />
+      <data key="d5">0</data>
+      <data key="d6">entry</data>
+    </node>
+    <node id="node_1_3093">
+      <data key="d2">https://example.com/login</data>
+      <data key="d3">{"forms": ["login_form"]}</data>
+      <data key="d4">abc123</data>
+      <data key="d5">1763582479.1791775</data>
+      <data key="d7">1</data>
+      <data key="d6">state</data>
+    </node>
+    <node id="node_2_2509">
+      <data key="d2">https://example.com/dashboard</data>
+      <data key="d3">{"authenticated": true}</data>
+      <data key="d4" />
+      <data key="d5">1763582479.179966</data>
+      <data key="d7">1</data>
+      <data key="d6">state</data>
+    </node>
+    <node id="node_3_6247">
+      <data key="d2">https://example.com/admin</data>
+      <data key="d3">{"error": "Access Denied"}</data>
+      <data key="d4" />
+      <data key="d5">1763582479.180643</data>
+      <data key="d7">1</data>
+      <data key="d6">state</data>
+    </node>
+    <edge source="root" target="node_1_3093">
+      <data key="d8">Navigate to login page</data>
+      <data key="d9">1.0</data>
+      <data key="d10">200</data>
+      <data key="d11">1763582479.1791883</data>
+    </edge>
+    <edge source="node_1_3093" target="node_2_2509">
+      <data key="d8">Submit credentials</data>
+      <data key="d9">0.8</data>
+      <data key="d10">302</data>
+      <data key="d11">1763582479.1799734</data>
+    </edge>
+    <edge source="node_2_2509" target="node_3_6247">
+      <data key="d8">Click admin panel</data>
+      <data key="d9">0.5</data>
+      <data key="d10">403</data>
+      <data key="d11">1763582479.18065</data>
+    </edge>
+    <data key="d0">node_3_6247</data>
+    <data key="d1">3</data>
+  </graph>
+</graphml>

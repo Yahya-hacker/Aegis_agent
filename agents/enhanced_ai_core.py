@@ -365,8 +365,9 @@ class CortexMemory:
         self.graph.add_node(
             "root", 
             url="START", 
-            state={},
-            timestamp=0,
+            artifacts="{}",
+            dom_hash="",
+            timestamp="0",
             node_type="entry"
         )
         
@@ -388,7 +389,23 @@ class CortexMemory:
                 # Restore current node from graph attributes
                 graph_data = dict(self.graph.graph)
                 self.current_node = graph_data.get('current_node', 'root')
-                self.node_counter = graph_data.get('node_counter', 0)
+                node_counter_str = graph_data.get('node_counter', '0')
+                self.node_counter = int(node_counter_str) if isinstance(node_counter_str, str) else node_counter_str
+                
+                # Convert JSON strings back to dicts
+                for node in self.graph.nodes():
+                    node_data = self.graph.nodes[node]
+                    if 'artifacts' in node_data and isinstance(node_data['artifacts'], str):
+                        try:
+                            self.graph.nodes[node]['artifacts'] = json.loads(node_data['artifacts'])
+                        except:
+                            pass
+                    if 'state' in node_data and isinstance(node_data['state'], str):
+                        try:
+                            self.graph.nodes[node]['state'] = json.loads(node_data['state'])
+                        except:
+                            pass
+                
                 logger.info(f"[Cortex] Loaded graph: {self.graph.number_of_nodes()} nodes, "
                           f"{self.graph.number_of_edges()} edges")
             except Exception as e:
@@ -402,7 +419,7 @@ class CortexMemory:
             
             # Store current state as graph attributes
             self.graph.graph['current_node'] = self.current_node
-            self.graph.graph['node_counter'] = self.node_counter
+            self.graph.graph['node_counter'] = str(self.node_counter)
             
             nx.write_graphml(self.graph, str(self.cortex_file))
             logger.debug(f"[Cortex] Saved graph to {self.cortex_file}")
@@ -441,10 +458,10 @@ class CortexMemory:
         self.graph.add_node(
             new_node_id,
             url=new_url,
-            artifacts=artifacts or {},
-            dom_hash=dom_hash,
-            timestamp=time.time(),
-            visited=1,
+            artifacts=json.dumps(artifacts or {}),
+            dom_hash=dom_hash or "",
+            timestamp=str(time.time()),
+            visited="1",
             node_type="state"
         )
         
@@ -456,9 +473,9 @@ class CortexMemory:
             self.current_node,
             new_node_id,
             action=action,
-            weight=success_score,
-            status_code=status_code,
-            timestamp=time.time()
+            weight=str(success_score),
+            status_code=str(status_code),
+            timestamp=str(time.time())
         )
         
         # Update current node and path
@@ -650,8 +667,9 @@ class CortexMemory:
         self.graph.add_node(
             "root", 
             url="START", 
-            state={},
-            timestamp=0,
+            artifacts="{}",
+            dom_hash="",
+            timestamp="0",
             node_type="entry"
         )
         
