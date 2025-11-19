@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d6" for="node" attr.name="node_type" attr.type="string" />
+  <key id="d5" for="node" attr.name="timestamp" attr.type="string" />
+  <key id="d4" for="node" attr.name="dom_hash" attr.type="string" />
+  <key id="d3" for="node" attr.name="artifacts" attr.type="string" />
+  <key id="d2" for="node" attr.name="url" attr.type="string" />
+  <key id="d1" for="graph" attr.name="node_counter" attr.type="string" />
+  <key id="d0" for="graph" attr.name="current_node" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="root">
+      <data key="d2">START</data>
+      <data key="d3">{}</data>
+      <data key="d4" />
+      <data key="d5">0</data>
+      <data key="d6">entry</data>
+    </node>
+    <data key="d0">root</data>
+    <data key="d1">0</data>
+  </graph>
+</graphml>
