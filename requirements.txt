@@ -18,6 +18,10 @@ pillow>=10.0.0
 networkx>=3.0
 json-repair>=0.25.0
 
+# Vector database and embeddings for HTTP replay memory
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
 # Optional: Local model support (not required for Together AI)
 # Uncomment if you want to run models locally instead of using Together AI
 # torch>=2.1.0

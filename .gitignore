@@ -54,6 +54,7 @@ data/screenshots/
 data/reports/
 data/blackboard_*.json
 data/graph_*.graphml
+data/http_memory/
 *.jsonl
 
 # Nuclei templates (downloaded)
