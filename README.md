@@ -1,91 +1,60 @@
-Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v7.5 - "Architect" Zero-Day Researcher)
+# Aegis Agent v7.5 — "Architect" Zero-Day Research Platform
 
-Aegis Agent is an AI-powered autonomous assistant implemented in Python, built specifically to help security researchers, penetration testers, and bug bounty hunters with reconnaissance, vulnerability discovery, exploitation support (POC generation and safe validation), and reporting. It is a tool to accelerate and organize security testing workflows — it does not replace human judgment or authorization.
+**Aegis Agent** is an AI-powered autonomous penetration testing assistant that transforms from a traditional tool orchestrator into an intelligent zero-day researcher. Built with a multi-LLM architecture and advanced exploitation capabilities, it helps security researchers, penetration testers, and bug bounty hunters discover vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
 
-**🎯 NEW in v7.5 - "Architect" Zero-Day Researcher**: Transform from Tool Orchestrator to Zero-Day Hunter
-- 🧬 **Genesis Protocol Fuzzer** - Grammar-based fuzzing discovers zero-days through intelligent mutation
-- 🧠 **Cortex Graph Memory** - State-aware navigation with algorithmic backtracking
-- 🔍 **Deep Dive CDP Interceptor** - JavaScript sink detection finds invisible DOM XSS
+> ⚠️ **Important**: This tool is for authorized security testing only. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal and unethical.
+
+## 🎯 What Makes v7.5 "Architect" Unique
+
+Aegis v7.5 goes beyond traditional security scanners by **generating** vulnerabilities instead of just matching signatures:
+
+- 🧬 **Genesis Protocol Fuzzer** - Grammar-based mutation engine finds zero-days through intelligent protocol breaking
+- 🧠 **Cortex Graph Memory** - State-aware navigation with algorithmic backtracking prevents context loss
+- 🔍 **Deep Dive CDP Interceptor** - JavaScript sink detection discovers invisible DOM-based XSS
 - ⏱️ **Chronos Concurrency Engine** - Race condition detection using synchronization barriers
 - 🪞 **Mirror JS Sandbox** - Execute target's JavaScript to bypass client-side validation
 - 📡 **Echo OOB Correlator** - Detect blind vulnerabilities through out-of-band callbacks
 
-See [V7_5_FEATURES.md](V7_5_FEATURES.md) for comprehensive documentation, examples, and deployment guide.
+## 🏗️ Multi-LLM Architecture
 
-**🚀 NEW in v7.0 - Battle-Ready Platform**: Major Architectural Improvements
-- 🔐 **Authenticated Session Management** - Scan authenticated areas of applications
-- 💾 **Mission Database** - Persistent storage prevents duplicate work and enables strategic memory
-- 🛠️ **Dynamic Arsenal** - Automatic discovery of available Kali tools, no more hardcoded tool lists
-- ⚡ **Semi-Autonomous Mode** - Reconnaissance auto-approved, exploitation requires approval
-- 👁️ **Visual Grounding (Set-of-Mark)** - AI can "see" and interact with web UIs by identifying clickable elements
-- 🧠 **Blackboard Memory** - Persistent mission knowledge base tracks facts, goals, and discarded attack vectors
+Aegis uses three specialized AI models via OpenRouter API, each optimized for specific security tasks:
 
-See [V5_FEATURES.md](V5_FEATURES.md) for comprehensive documentation on these game-changing features.
+- **Hermes 3 Llama 70B** - Strategic planning, mission triage, and scope analysis
+- **Dolphin 3.0 R1 Mistral 24B** - Vulnerability analysis and exploitation planning  
+- **Qwen 2.5 72B** - Code analysis and payload generation
 
-**NEW in v6.0**: Multi-LLM Architecture using OpenRouter API
-- 🧠 **Hermes 3 Llama 70B** for strategic planning and triage
-- 🎯 **Dolphin 3.0 R1 Mistral 24B** for vulnerability analysis and exploitation
-- 💻 **Qwen 2.5 72B** for code analysis and payload generation
+The orchestrator automatically selects the optimal model for each task. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for details.
 
-Each LLM is automatically selected based on the task type, providing specialized expertise where it's needed most. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for detailed information.
+## 🚀 Core Capabilities
 
-**ENHANCED**: Transparent Reasoning & Reliability Features
-- 💭 **Reasoning Display** - See all agent thoughts and decision-making processes in real-time
-- 🔋 **Keep-Alive Mechanism** - Prevents terminal from sleeping during long operations
-- 🎯 **Enhanced Decision Framework** - Improved sophistication for better detection chances
-- 📊 **Comprehensive Logging** - Export reasoning history for analysis and debugging
+### Zero-Day Discovery
+- **Grammar-based fuzzing** generates thousands of protocol mutations to find logic flaws
+- **7 mutation strategies**: bit flips, integer overflow, format strings, boundary violations, unicode/encoding edge cases, null byte injection, command injection
+- **Anomaly detection** automatically identifies unusual responses indicating vulnerabilities
 
-See [REASONING_FEATURES.md](REASONING_FEATURES.md) for detailed information about these features.
+### Advanced Exploitation
+- **DOM-based XSS detection** via Chrome DevTools Protocol hooking
+- **Race condition testing** with synchronized concurrent requests
+- **Client-side bypass** by executing target's own JavaScript
+- **Blind vulnerability detection** using out-of-band callbacks (DNS, HTTP, SMTP)
 
-Important statement: this doesn't mean to do what you want — always get explicit authorization before testing any target.
+### Intelligent Navigation
+- **Knowledge graph memory** tracks every state, URL, and action
+- **Algorithmic backtracking** recovers from dead ends with untested/successful/nearest strategies
+- **Session persistence** survives crashes and enables long-term missions
 
-Core capabilities
-- Reconnaissance
-  - Passive and active asset discovery when configured with approved tools and data sources (subdomain enumeration, port/service discovery, directory and endpoint discovery).
-  - OSINT aggregation and context for targets within scope.
-  - **NEW**: Automatic tool discovery and semi-autonomous reconnaissance mode.
-- Vulnerability discovery and exploitation support
-  - Automates common checks and suggests reproducible proof-of-concept steps (HTTP requests, exploit templates, minimal scripts).
-  - Orchestrates external scanners and tools you configure (nmap, ffuf, nikto, ZAP/Burp etc.) and consolidates results for triage.
-  - Helps validate and reproduce findings with operator approval before any intrusive actions.
-  - **NEW**: Can scan authenticated areas using session management.
-- Rules-of-engagement and scope awareness
-  - Designed to respect bug bounty program (BBP) rules and out-of-scope assets when configured with scope lists and policy definitions.
-  - Will flag or block actions that target out-of-scope hosts if the configuration is provided.
-- Workflow & reporting
-  - Plan multi-step engagements (recon → enumeration → validation → report) and maintain short-term context across steps.
-  - Produce human-readable reports and exportable artifacts (Markdown, JSON) with reproduction steps, impact, and mitigation suggestions.
-  - **NEW**: Mission database tracks all findings and scanned targets to prevent duplicate work.
-- Extensibility
-  - Plugin/action architecture for adding custom checks, adapters to new tools, and reporting templates.
-  - **NEW**: JSON-based tool manifest makes adding new tools trivial.
+### Traditional Security Testing
+- Automated reconnaissance (subdomain enumeration, port scanning, endpoint discovery)
+- Vulnerability scanning with session management for authenticated areas
+- Dynamic tool discovery and semi-autonomous operation
+- Visual grounding (Set-of-Mark) for web UI interaction
 
-Safety, ethics, and legal constraints (must-read)
-- Authorization required: Use Aegis Agent only against systems you explicitly own or have written authorization to test (targets enrolled in a bug bounty program with explicit scope, or with a signed engagement). Unauthorized testing is illegal and unethical.
-- Operator-in-the-loop: The agent can prepare and suggest commands and PoCs, but any intrusive, destructive, or high-risk action must be explicitly approved by the operator. The agent will not act as a free-running exploit bot.
-- Scope enforcement: Configure allowed/blocked targets and program rules before any active scanning. The agent is designed to understand BBP rules when provided but cannot infer authorization by itself.
-- Rate limits & safe defaults: Configure request rates, concurrency, and time windows. Review defaults before large runs.
-- Data handling: Protect logs, API keys, and stored findings. Do not exfiltrate sensitive data or perform destructive tests unless explicitly permitted.
-- Validation: Automated results can include false positives — always validate manually before disclosure.
-
-Usage guidance (recommended safe workflow)
-1. Configure scope: Add allowed targets, out-of-scope lists, and program rules in the configuration.
-2. Start with passive recon: Let the agent collect OSINT and passive indicators without touching target infrastructure.
-3. Review suggested active checks: Inspect and explicitly approve any active scans or intrusive tests.
-4. Run validated scans: Execute approved scans with conservative rate limits.
-5. Triage and validate: Mark findings as confirmed/false-positive and refine PoCs.
-6. Draft report: Use the agent’s generated report templates to prepare responsible disclosure to the program.
-
-Limitations
-- Not a substitute for an experienced human pentester — the agent assists and speeds up routine work but cannot fully reason about complex business-logic flaws or nuanced exploit chains.
-- Dependent on configured tools and data sources; it cannot invent zero-day exploits on its own.
-- Proper configuration is essential to avoid accidental out-of-scope testing.
-
-## Setup & Installation
+## 📋 Setup & Installation
 
 ### Prerequisites
 - Python 3.8 or higher
 - OpenRouter API key (get one at https://openrouter.ai/)
+- Node.js (for Mirror JS Sandbox)
 
 ### Quick Start
 
@@ -102,14 +71,11 @@ pip install -r requirements.txt
 
 3. **Configure OpenRouter API**
 ```bash
-# Copy the example environment file
 cp .env.example .env
-
-# Edit .env and add your OpenRouter API key
-nano .env  # or use your preferred editor
+nano .env  # Add your OpenRouter API key
 ```
 
-Add your API key:
+Add your API key to `.env`:
 ```
 OPENROUTER_API_KEY=your_actual_api_key_here
 ```
@@ -119,24 +85,10 @@ OPENROUTER_API_KEY=your_actual_api_key_here
 python main.py
 ```
 
-### Multi-LLM Architecture
+### Optional Security Tools
 
-Aegis v6.0 uses three specialized LLMs via OpenRouter:
+For full functionality, install these tools:
 
-- **Hermes 3 Llama 70B** (`nousresearch/hermes-3-llama-3.1-70b`)
-  - Strategic planning, mission triage, scope analysis
-  
-- **Dolphin 3.0 R1 Mistral 24B** (`cognitivecomputations/dolphin3.0-r1-mistral-24b`)
-  - Vulnerability analysis, exploitation planning, security assessment
-  
-- **Qwen 2.5 72B** (`qwen/qwen-2.5-72b-instruct`)
-  - Code analysis, payload generation, technical implementation
-
-The orchestrator automatically selects the best LLM for each task. For detailed information, see [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md).
-
-### Optional: Install Security Tools
-
-For full functionality, install these security tools:
 ```bash
 # Subdomain enumeration
 go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -155,68 +107,171 @@ go install github.com/tomnomnom/waybackurls@latest
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 ```
 
-### Configuration
+## 🔧 Configuration
 
 Edit `.env` to customize model selection and parameters:
+
 ```bash
-# Override default models (optional)
+# Model selection (optional overrides)
 STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
 VULNERABILITY_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
 CODER_MODEL=qwen/qwen-2.5-72b-instruct
 
-# Adjust generation parameters
+# Generation parameters
 DEFAULT_TEMPERATURE=0.7
 DEFAULT_MAX_TOKENS=2048
 ```
 
-## Advanced Features
+## 📖 Key Features in Detail
 
-### Visual Grounding with Set-of-Mark (SoM)
+### Genesis Protocol Fuzzer
 
-Aegis Agent can now "see" and interact with web interfaces using Set-of-Mark visual grounding:
+Discovers zero-days by breaking protocol grammar instead of matching CVE signatures:
 
-**How it works:**
-1. The agent captures a screenshot with numbered red badges overlaid on all clickable elements (links, buttons, inputs)
-2. Each element is assigned a unique ID and the system stores a mapping of {ID: selector}
-3. The AI analyzes the screenshot and identifies which element to interact with
-4. The agent clicks the specific element using its ID, and the system automatically uses the stored selector
+```python
+from tools.genesis_fuzzer import get_genesis_fuzzer
 
-**Available tools:**
-- `capture_screenshot_som(url)` - Capture screenshot with numbered badges on clickable elements
-- `click_element_by_id(url, element_id)` - Click a specific element using its SoM ID
-- `visual_screenshot(url)` - Regular screenshot without SoM badges
+fuzzer = get_genesis_fuzzer()
+fuzzer.compile_grammar({
+    "username": {"type": "string", "max_len": 20},
+    "age": {"type": "integer", "min": 0, "max": 120}
+})
 
-**Use cases:**
-- Navigate complex multi-step workflows
-- Test authentication flows and form submissions
-- Identify and interact with hidden or dynamically generated UI elements
-- Validate UI-based security controls
+result = await fuzzer.fuzz_endpoint(
+    url="https://api.example.com/register",
+    method="POST",
+    grammar=grammar,
+    base_payload={"username": "admin", "age": 25}
+)
+```
 
-### Blackboard Memory System
+### Cortex Graph Memory
 
-The Blackboard Memory system provides persistent mission knowledge across the entire session:
+Eliminates "state amnesia" with knowledge graph navigation:
 
-**Components:**
-- **Verified Facts**: Ground truths discovered and confirmed (e.g., "Port 443 is open", "WordPress 5.8 detected")
-- **Pending Goals**: Objectives to achieve, prioritized (e.g., "Test admin panel for weak credentials")
-- **Discarded Vectors**: Attack paths already tried and failed (e.g., "SQL injection in search - WAF blocked")
+```python
+from agents.enhanced_ai_core import CortexMemory
 
-**How it works:**
-1. After every tool execution, the AI automatically extracts facts, goals, and discarded vectors
-2. The blackboard is updated with new knowledge
-3. The blackboard summary is included in the AI's context for every decision
-4. All data persists to disk and survives across sessions
+cortex = CortexMemory(mission_id="pentest_2024")
+cortex.record_action(
+    action="Navigate to login",
+    result={"success_score": 1.0},
+    new_url="https://example.com/login"
+)
 
-**Benefits:**
-- Prevents duplicate work and wasted effort
-- Maintains strategic memory of what has been tried
-- Enables the AI to learn and adapt during long missions
-- Provides clear mission status at any point
+# When stuck, backtrack intelligently
+backtrack_node = cortex.find_backtrack_path(heuristic="successful")
+```
 
-**File location:** Blackboard data is stored in `data/blackboard_<mission_id>.json`
+### Deep Dive CDP Interceptor
 
-## Documentation
+Finds DOM XSS invisible to traditional scanners:
 
-- [Multi-LLM Architecture Guide](MULTI_LLM_GUIDE.md) - Detailed guide on the three-LLM system
-- [Requirements](requirements.txt) - Python dependencies
+```python
+from tools.cdp_hooks import get_cdp_hooks
 
+cdp = get_cdp_hooks()
+await cdp.initialize(headless=True)
+
+result = await cdp.test_dom_xss(
+    url="https://example.com/search?q=test",
+    test_payloads=["<img src=x onerror=alert('XSS')>"]
+)
+```
+
+### Chronos Concurrency Engine
+
+Detects race conditions and TOCTOU bugs:
+
+```python
+from tools.race_engine import get_chronos_engine
+
+engine = get_chronos_engine()
+result = await engine.execute_race(
+    url="https://example.com/api/redeem-coupon",
+    method="POST",
+    data={"coupon_code": "SAVE50"},
+    threads=50
+)
+```
+
+## 📚 Documentation
+
+- [V7_5_FEATURES.md](V7_5_FEATURES.md) - Comprehensive guide to all v7.5 capabilities
+- [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) - Multi-LLM architecture details
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture overview
+- [QUICK_START_V7_5.md](QUICK_START_V7_5.md) - Quick start guide for v7.5
+
+## 🧪 Testing
+
+Run the test suite to verify functionality:
+
+```bash
+# Test v7.5 features
+python test_v7_5_features.py
+
+# Test multi-LLM integration
+python test_multi_llm.py
+
+# Integration tests
+python test_integration_all_features.py
+
+# Run demonstration
+python demo_v7_5_integration.py
+```
+
+## 🛡️ Safety & Ethics
+
+### Authorization Required
+Use Aegis Agent **only** against systems you:
+- Explicitly own, OR
+- Have written authorization to test (signed contract, bug bounty program enrollment)
+
+Unauthorized testing is illegal and unethical.
+
+### Operator-in-the-Loop
+- The agent prepares and suggests commands and PoCs
+- Any intrusive, destructive, or high-risk action requires explicit approval
+- The agent will not act as a free-running exploit bot
+
+### Scope Enforcement
+- Configure allowed/blocked targets before any active scanning
+- Review all actions that target production systems
+- The agent understands BBP rules when configured but cannot infer authorization
+
+### Safe Defaults
+- Conservative request rates and concurrency limits
+- Validation required before disclosure
+- Automated results may include false positives — always validate manually
+
+## 📝 Recommended Workflow
+
+1. **Configure scope** - Add allowed targets and out-of-scope lists
+2. **Start with passive recon** - Collect OSINT without touching target infrastructure
+3. **Review suggested checks** - Inspect and approve any active scans
+4. **Run validated scans** - Execute approved tests with conservative rate limits
+5. **Triage and validate** - Mark findings as confirmed/false-positive
+6. **Draft report** - Use generated templates for responsible disclosure
+
+## ⚠️ Limitations
+
+- Not a substitute for experienced human pentesters
+- Assists and speeds up routine work but cannot fully reason about complex business-logic flaws
+- Dependent on configured tools and data sources
+- Proper configuration essential to avoid out-of-scope testing
+
+## 🤝 Contributing
+
+Contributions are welcome! Please ensure all contributions:
+- Follow ethical security research principles
+- Include appropriate safety checks
+- Are tested with the existing test suite
+- Document new features clearly
+
+## 📄 License
+
+This project is provided for educational and authorized security testing purposes only. See LICENSE file for details.
+
+---
+
+**Built with ❤️ for the security research community**
