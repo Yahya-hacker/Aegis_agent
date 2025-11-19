@@ -522,6 +522,38 @@ If you cannot suggest a fix, respond with:
                 
                 # Click the element
                 result = await self.visual_recon.click_element(target_url, element_id, element_mapping)
+                
+                # If click was successful and URL didn't change (SPA navigation),
+                # automatically re-capture to update the SoM mapping
+                if result.get("status") == "success" and not result.get("url_changed", True):
+                    logger.info("🔄 SPA navigation detected (URL unchanged), re-capturing screenshot with SoM...")
+                    
+                    # Use the new_url from the result (should be same as target_url for SPA)
+                    current_url = result.get("new_url", target_url)
+                    
+                    # Re-capture screenshot with SoM to get fresh element mapping
+                    recapture_result = await self.visual_recon.capture_with_som(current_url, full_page=False)
+                    
+                    if recapture_result.get("status") == "success":
+                        # Update the SoM mapping with fresh data
+                        fresh_mapping = recapture_result.get("element_mapping", {})
+                        self.som_mappings[current_url] = fresh_mapping
+                        
+                        # Add re-capture info to the result
+                        result["spa_recapture"] = {
+                            "status": "success",
+                            "new_element_count": len(fresh_mapping),
+                            "screenshot_path": recapture_result.get("screenshot_path")
+                        }
+                        logger.info(f"✅ SoM re-captured: {len(fresh_mapping)} elements indexed")
+                    else:
+                        # Re-capture failed, log but don't fail the click operation
+                        logger.warning(f"⚠️ Failed to re-capture SoM after SPA navigation: {recapture_result.get('error')}")
+                        result["spa_recapture"] = {
+                            "status": "error",
+                            "error": recapture_result.get("error")
+                        }
+                
                 return result
             
             elif tool == "visual_screenshot":
