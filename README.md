@@ -1,6 +1,16 @@
-Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v7.0 - Battle-Ready)
+Aegis Agent — Multi-LLM Pentesting & Ethical Hacking AI Agent (v7.5 - "Architect" Zero-Day Researcher)
 
 Aegis Agent is an AI-powered autonomous assistant implemented in Python, built specifically to help security researchers, penetration testers, and bug bounty hunters with reconnaissance, vulnerability discovery, exploitation support (POC generation and safe validation), and reporting. It is a tool to accelerate and organize security testing workflows — it does not replace human judgment or authorization.
+
+**🎯 NEW in v7.5 - "Architect" Zero-Day Researcher**: Transform from Tool Orchestrator to Zero-Day Hunter
+- 🧬 **Genesis Protocol Fuzzer** - Grammar-based fuzzing discovers zero-days through intelligent mutation
+- 🧠 **Cortex Graph Memory** - State-aware navigation with algorithmic backtracking
+- 🔍 **Deep Dive CDP Interceptor** - JavaScript sink detection finds invisible DOM XSS
+- ⏱️ **Chronos Concurrency Engine** - Race condition detection using synchronization barriers
+- 🪞 **Mirror JS Sandbox** - Execute target's JavaScript to bypass client-side validation
+- 📡 **Echo OOB Correlator** - Detect blind vulnerabilities through out-of-band callbacks
+
+See [V7_5_FEATURES.md](V7_5_FEATURES.md) for comprehensive documentation, examples, and deployment guide.
 
 **🚀 NEW in v7.0 - Battle-Ready Platform**: Major Architectural Improvements
 - 🔐 **Authenticated Session Management** - Scan authenticated areas of applications
