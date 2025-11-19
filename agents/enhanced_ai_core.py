@@ -475,6 +475,33 @@ Use visual grounding tools when:
 - You need to verify visual elements or CAPTCHA-type protections
 - You're analyzing client-side elements that might not be visible in HTTP responses
 
+MULTI-SESSION PRIVILEGE ESCALATION TESTING:
+You can now test for privilege escalation vulnerabilities using multi-session management:
+- manage_multi_session(action="login", session_name="Session_Admin", credentials={{...}}): Login as admin user
+- manage_multi_session(action="login", session_name="Session_User", credentials={{...}}): Login as low-privilege user
+- manage_multi_session(action="list"): List all active sessions
+- replay_request_with_session(request={{method, url, headers, data}}, session_name="Session_User"): Replay admin request with user cookies
+
+PRIVILEGE ESCALATION WORKFLOW:
+1. Login as admin user with manage_multi_session to create Session_Admin
+2. Login as low-privilege user with manage_multi_session to create Session_User
+3. When you find a privileged action (e.g., POST /api/add_device), capture the request details
+4. Use replay_request_with_session to replay the same request with Session_User cookies
+5. If the request succeeds (status 2xx), it's a confirmed privilege escalation vulnerability
+
+IMPACT QUANTIFIER (RAG SYSTEM):
+You now have access to a RAG system for assessing real-world business impact:
+- ingest_documentation(url="https://docs.example.com/api", type="api"): Ingest documentation into RAG system
+- assess_impact(finding={{type, endpoint, description}}, context="..."): Query RAG and assess real-world impact
+- rag_statistics(): Get statistics about ingested documentation
+
+IMPACT ASSESSMENT WORKFLOW:
+1. When target scope includes documentation URLs (e.g., docs.cfengine.com), ingest them first
+2. When you discover a hidden API endpoint (e.g., POST /api/create_report), use assess_impact
+3. The RAG system will query the documentation to understand what the endpoint does
+4. Strategic LLM will reason: "This endpoint consumes 500MB disk. If looped, causes DoS. High impact."
+5. Use the impact assessment to prioritize findings and write better reports
+
 ENHANCED MULTI-STAGE REASONING FRAMEWORK:
 
 STAGE 1 - DEEP ANALYSIS:

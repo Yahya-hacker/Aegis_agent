@@ -8,6 +8,7 @@ from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
 from tools.visual_recon import get_visual_recon_tool
 from utils.database_manager import get_database
+from utils.impact_quantifier import get_impact_quantifier
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class AegisScanner:
         self.visual_recon = get_visual_recon_tool()
         self.db = get_database()  # Mission database
         self.som_mappings = {}  # Store SoM mappings {url: element_mapping}
+        self.impact_quantifier = get_impact_quantifier(ai_core)  # RAG-based impact assessment
     
     def _validate_domain(self, domain: str) -> bool:
         """Validate domain name format"""
@@ -596,6 +598,29 @@ If you cannot suggest a fix, respond with:
                 # Capture regular screenshot (without SoM)
                 result = await self.visual_recon.capture_screenshot(target_url, full_page=full_page)
                 return result
+            
+            # Impact Quantifier / RAG Tools
+            elif tool == "ingest_documentation":
+                doc_url = args.get("url")
+                doc_type = args.get("type", "api")
+                
+                if not doc_url:
+                    return {"status": "error", "error": "Documentation URL manquante"}
+                
+                return await self.impact_quantifier.ingest_documentation(doc_url, doc_type)
+            
+            elif tool == "assess_impact":
+                finding = args.get("finding")
+                context = args.get("context", "")
+                
+                if not finding:
+                    return {"status": "error", "error": "Finding data manquant"}
+                
+                return await self.impact_quantifier.assess_impact(finding, context)
+            
+            elif tool == "rag_statistics":
+                stats = self.impact_quantifier.get_statistics()
+                return {"status": "success", "data": stats}
 
             else:
                 logger.warning(f"Outil inconnu demandé par l'IA : {tool}")
