@@ -52,6 +52,8 @@ data/*.jsonl
 data/*.db
 data/screenshots/
 data/reports/
+data/blackboard_*.json
+data/graph_*.graphml
 *.jsonl
 
 # Nuclei templates (downloaded)
@@ -65,5 +67,6 @@ reports/
 # Temporary files
 tmp/
 temp/
+temp_scripts/
 *.tmp
 test_refactoring.py
