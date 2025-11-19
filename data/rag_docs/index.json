@@ -1,0 +1,18 @@
+[
+  {
+    "id": 0,
+    "source": "https://docs.example.com/api",
+    "content": "POST /api/create_report - Creates a new report. This operation consumes approximately 500MB of disk space.",
+    "metadata": {
+      "doc_type": "api"
+    }
+  },
+  {
+    "id": 1,
+    "source": "https://docs.example.com/api",
+    "content": "POST /api/create_report - Creates a new report. This operation consumes approximately 500MB of disk space.",
+    "metadata": {
+      "doc_type": "api"
+    }
+  }
+]
