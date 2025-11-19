@@ -30,6 +30,9 @@ class AegisConversation:
         """Démarre l'interface de conversation."""
         self._print_welcome()
         
+        # Conversation history for triage_mission
+        conversation_history = []
+        
         while True:
             try:
                 user_input = await self._get_user_input()
@@ -40,8 +43,56 @@ class AegisConversation:
                 elif user_input.lower() in ['help', '?']:
                     self._print_help()
                 else:
-                    # Lancer la boucle d'agent
-                    await self.run_autonomous_loop(user_input)
+                    # Add user input to conversation history
+                    conversation_history.append({
+                        "role": "user",
+                        "content": user_input
+                    })
+                    
+                    # Use triage_mission to determine if we're ready to start
+                    triage_result = await self.ai_core.triage_mission(conversation_history)
+                    
+                    if triage_result.get("response_type") == "question":
+                        # AI needs more information - print question and continue loop
+                        ai_question = triage_result.get("text", "Please provide more information.")
+                        print(f"\n🤖 Aegis AI: {ai_question}")
+                        
+                        # Add AI response to conversation history
+                        conversation_history.append({
+                            "role": "assistant",
+                            "content": ai_question
+                        })
+                        
+                    elif triage_result.get("response_type") == "start_mission":
+                        # AI has all information - extract and start mission
+                        target = triage_result.get("target", "")
+                        rules = triage_result.get("rules", "")
+                        
+                        if not target:
+                            print("❌ Erreur: Cible non extraite par le triage.")
+                            continue
+                        
+                        print(f"\n✅ Mission prête à démarrer!")
+                        print(f"   Cible: {target}")
+                        print(f"   Règles: {rules[:100]}...")
+                        
+                        # Start the autonomous loop with extracted information
+                        await self.run_autonomous_loop_with_triage(target, rules)
+                        
+                        # Clear conversation history after mission completes
+                        conversation_history = []
+                        
+                    elif triage_result.get("response_type") == "error":
+                        error_msg = triage_result.get("text", "Erreur inconnue")
+                        print(f"❌ Erreur de triage: {error_msg}")
+                        
+                        # Add error to conversation history
+                        conversation_history.append({
+                            "role": "assistant",
+                            "content": f"Error: {error_msg}"
+                        })
+                    else:
+                        print(f"⚠️ Type de réponse inattendu: {triage_result.get('response_type')}")
                     
             except KeyboardInterrupt:
                 await self._handle_exit()
@@ -64,48 +115,23 @@ class AegisConversation:
             return next(m for m in matches[0] if m)
         return ""
 
-    # --- NOUVELLE FONCTION POUR LES RÈGLES ---
-    async def _get_bbp_rules(self) -> str:
-        """Demande à l'utilisateur de coller les règles du BBP."""
-        print("\n📜 Veuillez coller les règles du BBP (scope, out-of-scope, etc.).")
-        print("   Appuyez sur Entrée deux fois (ligne vide) lorsque vous avez terminé.")
-        
-        rules = []
-        while True:
-            try:
-                line = await self._get_user_input()
-                if line == "":
-                    break
-                rules.append(line)
-            except (EOFError, KeyboardInterrupt):
-                break
-        return "\n".join(rules)
-
-    async def run_autonomous_loop(self, user_input: str):
+    async def run_autonomous_loop_with_triage(self, target: str, rules: str):
         """
-        C'EST LA BOUCLE D'AGENT PRINCIPALE.
+        C'EST LA BOUCLE D'AGENT PRINCIPALE (refactored to use triage_mission).
         Penser -> Proposer -> Approuver -> Agir -> Observer
-        """
-        print("🤖 Aegis AI analyse la mission...")
-        target = self._extract_target(user_input)
         
-        if not target:
-            print("❌ Cible non détectée. Essayez : 'scan example.com [règles]'")
-            return
-            
+        Args:
+            target: Target extracted by triage_mission
+            rules: Rules/scope extracted by triage_mission
+        """
+        print(f"\n🤖 Aegis AI démarre la mission autonome pour {target}...")
+        
         # --- DÉBUT DE LA BOUCLE D'AGENT ---
         
-        # !! AMÉLIORATION : Règles BBP dynamiques !!
-        user_rules = await self._get_bbp_rules()
-        if not user_rules:
-            print("⚠️ Aucune règle fournie, l'agent fonctionnera en mode restreint.")
-            user_rules = "Pas de règles fournies. Être très prudent."
-
         bbp_rules = f"""
         - CIBLE PRINCIPALE : {target}
-        - INSTRUCTIONS UTILISATEUR : {user_input}
         - RÈGLES BBP OFFICIELLES :
-        {user_rules}
+        {rules}
         """
         
         print(f"📜 Règles chargées pour {target}.")
