@@ -8,6 +8,8 @@ import os
 from typing import Dict, List, Any, Optional
 import logging
 from pathlib import Path
+import networkx as nx
+from json_repair import repair_json
 from agents.learning_engine import AegisLearningEngine
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
 from utils.reasoning_display import get_reasoning_display
@@ -22,15 +24,74 @@ CODE_MODEL = os.getenv("CODER_MODEL", os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b
 REASONING_MODEL = os.getenv("REASONING_MODEL", "cognitivecomputations/dolphin3.0-r1-mistral-24b")
 
 
+def parse_json_robust(content: str) -> Optional[Dict]:
+    """
+    Robustly parse JSON from LLM response with fallback strategies.
+    
+    This function implements multiple parsing strategies:
+    1. Try to extract JSON from markdown code blocks (```json ... ```)
+    2. Try to extract raw JSON object from content
+    3. Try to repair malformed JSON using json_repair
+    4. Try direct JSON parsing
+    
+    Args:
+        content: String content that may contain JSON
+    
+    Returns:
+        Parsed JSON as dictionary, or None if parsing fails
+    """
+    if not content:
+        return None
+    
+    # Strategy 1: Extract from markdown code block
+    json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1))
+        except json.JSONDecodeError:
+            # Try to repair it
+            try:
+                repaired = repair_json(json_match.group(1))
+                return json.loads(repaired)
+            except:
+                pass
+    
+    # Strategy 2: Extract raw JSON object
+    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(0))
+        except json.JSONDecodeError:
+            # Try to repair it
+            try:
+                repaired = repair_json(json_match.group(0))
+                return json.loads(repaired)
+            except:
+                pass
+    
+    # Strategy 3: Try direct parsing
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        try:
+            repaired = repair_json(content)
+            return json.loads(repaired)
+        except:
+            pass
+    
+    return None
+
+
 class MissionBlackboard:
     """
-    Persistent mission blackboard memory system.
+    Persistent mission blackboard memory system with Knowledge Graph support.
     Stores verified facts, pending goals, and discarded attack vectors across the session.
     
     This implements a "blackboard architecture" where:
     - verified_facts: Ground truths discovered and confirmed
     - pending_goals: Objectives to achieve, prioritized
     - discarded_vectors: Attack paths already tried and failed
+    - knowledge_graph: NetworkX DiGraph storing relationships between entities
     """
     
     def __init__(self, mission_id: Optional[str] = None):
@@ -44,10 +105,13 @@ class MissionBlackboard:
         self.verified_facts: List[str] = []
         self.pending_goals: List[str] = []
         self.discarded_vectors: List[str] = []
+        self.knowledge_graph = nx.DiGraph()  # Knowledge graph for relationships
         self.blackboard_file = Path(f"data/blackboard_{self.mission_id}.json")
+        self.graph_file = Path(f"data/graph_{self.mission_id}.graphml")
         
         # Load existing blackboard if it exists
         self._load()
+        self._load_graph()
     
     def _load(self) -> None:
         """Load blackboard from disk if it exists"""
@@ -82,6 +146,128 @@ class MissionBlackboard:
             logger.debug(f"💾 Saved blackboard to {self.blackboard_file}")
         except Exception as e:
             logger.error(f"Failed to save blackboard: {e}")
+    
+    def _load_graph(self) -> None:
+        """Load knowledge graph from disk if it exists"""
+        if self.graph_file.exists():
+            try:
+                self.knowledge_graph = nx.read_graphml(str(self.graph_file))
+                logger.info(f"📊 Loaded knowledge graph: {self.knowledge_graph.number_of_nodes()} nodes, "
+                          f"{self.knowledge_graph.number_of_edges()} edges")
+            except Exception as e:
+                logger.warning(f"Failed to load knowledge graph: {e}")
+                self.knowledge_graph = nx.DiGraph()
+    
+    def _save_graph(self) -> None:
+        """Save knowledge graph to disk"""
+        try:
+            # Ensure data directory exists
+            self.graph_file.parent.mkdir(exist_ok=True, parents=True)
+            
+            # Save as GraphML format for persistence
+            nx.write_graphml(self.knowledge_graph, str(self.graph_file))
+            
+            logger.debug(f"💾 Saved knowledge graph to {self.graph_file}")
+        except Exception as e:
+            logger.error(f"Failed to save knowledge graph: {e}")
+    
+    def add_relationship(self, source: str, relation: str, target: str, **metadata) -> None:
+        """
+        Maps a relationship in the knowledge graph.
+        
+        Args:
+            source: Source node (e.g., "192.168.1.5", "admin.example.com")
+            relation: Relationship type (e.g., "HAS_VULN", "EXPOSES", "ALLOWS_ACTION")
+            target: Target node (e.g., "Port 80", "SQLi", "Dump DB")
+            **metadata: Additional metadata for the relationship
+        
+        Example:
+            blackboard.add_relationship("admin.example.com", "HAS_VULN", "SQLi")
+            blackboard.add_relationship("SQLi", "ALLOWS_ACTION", "Dump DB")
+        """
+        if not source or not target:
+            logger.warning("Cannot add relationship with empty source or target")
+            return
+        
+        # Add edge with relationship type and metadata
+        self.knowledge_graph.add_edge(
+            source, 
+            target, 
+            relationship=relation,
+            **metadata
+        )
+        self._save_graph()
+        logger.info(f"🔗 Added relationship: {source} --[{relation}]--> {target}")
+    
+    def get_attack_path(self, target_goal: str, source: str = "Entry_Point") -> List[List[str]]:
+        """
+        Finds attack paths from source to target goal in the knowledge graph.
+        
+        Args:
+            target_goal: Goal node to reach (e.g., "Domain Admin", "Database Access")
+            source: Starting point (default: "Entry_Point")
+        
+        Returns:
+            List of paths, where each path is a list of nodes
+        
+        Example:
+            paths = blackboard.get_attack_path("Domain Admin")
+            # Returns: [["Entry_Point", "Web Server", "SQLi", "Domain Admin"], ...]
+        """
+        try:
+            # Check if source and target exist in the graph
+            if source not in self.knowledge_graph.nodes():
+                logger.warning(f"Source node '{source}' not found in knowledge graph")
+                return []
+            
+            if target_goal not in self.knowledge_graph.nodes():
+                logger.warning(f"Target node '{target_goal}' not found in knowledge graph")
+                return []
+            
+            # Find all simple paths (no cycles)
+            paths = list(nx.all_simple_paths(
+                self.knowledge_graph, 
+                source=source, 
+                target=target_goal,
+                cutoff=10  # Limit path length to avoid infinite loops
+            ))
+            
+            logger.info(f"🎯 Found {len(paths)} attack path(s) from '{source}' to '{target_goal}'")
+            return paths
+            
+        except nx.NetworkXNoPath:
+            logger.info(f"No path found from '{source}' to '{target_goal}'")
+            return []
+        except Exception as e:
+            logger.error(f"Error finding attack path: {e}")
+            return []
+    
+    def get_graph_summary(self) -> str:
+        """
+        Get a summary of the knowledge graph.
+        
+        Returns:
+            Formatted string with graph statistics and key relationships
+        """
+        if self.knowledge_graph.number_of_nodes() == 0:
+            return "Knowledge Graph: Empty"
+        
+        summary_parts = [
+            f"Knowledge Graph: {self.knowledge_graph.number_of_nodes()} nodes, "
+            f"{self.knowledge_graph.number_of_edges()} edges"
+        ]
+        
+        # Show key nodes (nodes with most connections)
+        if self.knowledge_graph.number_of_nodes() > 0:
+            node_degrees = dict(self.knowledge_graph.degree())
+            top_nodes = sorted(node_degrees.items(), key=lambda x: x[1], reverse=True)[:5]
+            
+            if top_nodes:
+                summary_parts.append("\nKey nodes:")
+                for node, degree in top_nodes:
+                    summary_parts.append(f"  - {node} ({degree} connections)")
+        
+        return "\n".join(summary_parts)
     
     def add_fact(self, fact: str) -> None:
         """Add a verified fact to the blackboard"""
@@ -136,6 +322,9 @@ class MissionBlackboard:
         else:
             summary_parts.append("\nDISCARDED VECTORS: None")
         
+        # Add knowledge graph summary
+        summary_parts.append(f"\n{self.get_graph_summary()}")
+        
         summary_parts.append("=" * 30)
         
         return "\n".join(summary_parts)
@@ -145,7 +334,9 @@ class MissionBlackboard:
         self.verified_facts = []
         self.pending_goals = []
         self.discarded_vectors = []
+        self.knowledge_graph.clear()
         self._save()
+        self._save_graph()
         logger.info("🗑️ Cleared blackboard")
 
 
@@ -330,11 +521,10 @@ Analyze this conversation and determine if we have all information (target and r
             
             content = response['content']
             
-            # Extract JSON from response
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group(1))
-                
+            # Extract JSON from response using robust parser
+            result = parse_json_robust(content)
+            
+            if result:
                 # Show reasoning about the triage decision
                 self.reasoning_display.show_thought(
                     f"Triage decision: {result.get('response_type', 'unknown')}",
@@ -344,32 +534,19 @@ Analyze this conversation and determine if we have all information (target and r
                 
                 return result
             
-            # Try to parse as direct JSON
-            try:
-                result = json.loads(content)
-                
-                # Show reasoning about the triage decision
-                self.reasoning_display.show_thought(
-                    f"Triage decision: {result.get('response_type', 'unknown')}",
-                    thought_type="decision",
-                    metadata=result
-                )
-                
-                return result
-            except json.JSONDecodeError:
-                # Fallback: treat as conversational response
-                result = {
-                    "response_type": "question",
-                    "text": content
-                }
-                
-                self.reasoning_display.show_thought(
-                    "Could not parse as JSON, treating as conversational response",
-                    thought_type="warning",
-                    metadata={"raw_response": content[:200]}
-                )
-                
-                return result
+            # Fallback: treat as conversational response
+            result = {
+                "response_type": "question",
+                "text": content
+            }
+            
+            self.reasoning_display.show_thought(
+                "Could not parse as JSON, treating as conversational response",
+                thought_type="warning",
+                metadata={"raw_response": content[:200]}
+            )
+            
+            return result
                 
         except Exception as e:
             logger.error(f"Error in triage_mission: {e}", exc_info=True)
@@ -619,11 +796,10 @@ Based on this context, what should be the next action? Respond with JSON only.""
             
             content = response['content']
             
-            # Extract JSON from response
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
-            if json_match:
-                action = json.loads(json_match.group(1))
-                
+            # Extract JSON from response using robust parser
+            action = parse_json_robust(content)
+            
+            if action:
                 # Display the proposed action with reasoning
                 self.reasoning_display.show_action_proposal(
                     action=action,
@@ -632,30 +808,19 @@ Based on this context, what should be the next action? Respond with JSON only.""
                 
                 return action
             
-            # Try direct JSON parse
-            try:
-                action = json.loads(content)
-                
-                # Display the proposed action with reasoning
-                self.reasoning_display.show_action_proposal(
-                    action=action,
-                    reasoning=action.get('reasoning', 'No explicit reasoning provided')
-                )
-                
-                return action
-            except json.JSONDecodeError:
-                logger.warning(f"Could not parse action as JSON: {content}")
-                
-                self.reasoning_display.show_thought(
-                    f"Failed to parse LLM response as action JSON",
-                    thought_type="error",
-                    metadata={"raw_response": content[:200]}
-                )
-                
-                return {
-                    "tool": "system",
-                    "message": "Failed to parse action. Please reformulate."
-                }
+            # Fallback if parsing failed
+            logger.warning(f"Could not parse action as JSON: {content}")
+            
+            self.reasoning_display.show_thought(
+                f"Failed to parse LLM response as action JSON",
+                thought_type="error",
+                metadata={"raw_response": content[:200]}
+            )
+            
+            return {
+                "tool": "system",
+                "message": "Failed to parse action. Please reformulate."
+            }
                 
         except Exception as e:
             logger.error(f"Error getting next action: {e}", exc_info=True)
@@ -985,11 +1150,10 @@ Respond with ONLY the JSON, no additional text."""
             
             content = response.get('content', '')
             
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                triage_result = json.loads(json_match.group(0))
-                
+            # Extract JSON from response using robust parser
+            triage_result = parse_json_robust(content)
+            
+            if triage_result:
                 # Enhance the original finding with AI triage
                 enhanced_finding = {
                     **finding,
@@ -1100,11 +1264,10 @@ Be skeptical and thorough. Only mark is_hallucination=false if you have high con
             
             content = response.get('content', '')
             
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                verification = json.loads(json_match.group(0))
-                
+            # Extract JSON from response using robust parser
+            verification = parse_json_robust(content)
+            
+            if verification:
                 is_hallucination = verification.get('is_hallucination', False)
                 confidence = verification.get('confidence_score', 0)
                 reasoning = verification.get('reasoning', 'No reasoning provided')
@@ -1262,25 +1425,39 @@ MISSION CONTEXT: {mission_context}
 TOOL OUTPUT:
 {output_summary}
 
-Your task is to extract and categorize information into three categories:
+Your task is to extract and categorize information into FOUR categories:
 
 1. **VERIFIED FACTS**: Confirmed, concrete discoveries (e.g., "Port 443 is open", "WordPress 5.8 detected", "Admin panel found at /wp-admin")
 2. **PENDING GOALS**: New objectives or targets to investigate (e.g., "Test admin panel for weak credentials", "Enumerate WordPress plugins")
 3. **DISCARDED VECTORS**: Attack paths that failed or are not viable (e.g., "SQL injection in search parameter - WAF blocked", "Port 22 filtered")
+4. **RELATIONSHIPS**: Knowledge graph relationships in the format [source, relation, target] (e.g., ["admin.example.com", "HAS_VULN", "SQLi"], ["Port 443", "EXPOSES", "Web Server"], ["SQLi", "ALLOWS_ACTION", "Dump DB"])
+
+RELATIONSHIP TYPES:
+- HAS_VULN: Entity has a vulnerability (e.g., "admin.example.com" HAS_VULN "SQLi")
+- EXPOSES: Port/service exposes something (e.g., "Port 443" EXPOSES "HTTPS Service")
+- RUNS: Server runs software (e.g., "example.com" RUNS "WordPress 5.8")
+- ALLOWS_ACTION: Vulnerability allows action (e.g., "SQLi" ALLOWS_ACTION "Read Database")
+- LEADS_TO: One thing leads to another (e.g., "Web Server" LEADS_TO "Admin Panel")
+- PROTECTED_BY: Protected by security control (e.g., "Login" PROTECTED_BY "WAF")
 
 IMPORTANT RULES:
 - Only extract CONCRETE information from the actual output
 - Do NOT speculate or invent information
 - Do NOT include generic advice or best practices
 - Each item should be specific and actionable
+- Relationships should represent actual connections found in the output
 - If the output shows an error or failure, categorize it as a discarded vector
-- If the output is successful, extract facts and goals from the results
+- If the output is successful, extract facts, goals, and relationships from the results
 
 Respond with JSON ONLY:
 {{
   "verified_facts": ["fact1", "fact2", ...],
   "pending_goals": ["goal1", "goal2", ...],
-  "discarded_vectors": ["vector1", "vector2", ...]
+  "discarded_vectors": ["vector1", "vector2", ...],
+  "relationships": [
+    ["source1", "RELATION_TYPE", "target1"],
+    ["source2", "RELATION_TYPE", "target2"]
+  ]
 }}
 
 If there's nothing to extract in a category, use an empty list []."""
@@ -1296,14 +1473,14 @@ If there's nothing to extract in a category, use an empty list []."""
             
             content = response.get('content', '')
             
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                extraction = json.loads(json_match.group(0))
-                
+            # Extract JSON from response - use robust parsing
+            extraction = parse_json_robust(content)
+            
+            if extraction:
                 verified_facts = extraction.get('verified_facts', [])
                 pending_goals = extraction.get('pending_goals', [])
                 discarded_vectors = extraction.get('discarded_vectors', [])
+                relationships = extraction.get('relationships', [])
                 
                 # Update blackboard
                 for fact in verified_facts:
@@ -1315,8 +1492,16 @@ If there's nothing to extract in a category, use an empty list []."""
                 for vector in discarded_vectors:
                     self.blackboard.discard_vector(vector)
                 
+                # Add relationships to knowledge graph
+                for rel in relationships:
+                    if len(rel) >= 3:
+                        source, relation, target = rel[0], rel[1], rel[2]
+                        metadata = {'tool': tool_name, 'context': mission_context[:100]}
+                        self.blackboard.add_relationship(source, relation, target, **metadata)
+                
                 logger.info(f"✅ Extracted: {len(verified_facts)} facts, "
-                          f"{len(pending_goals)} goals, {len(discarded_vectors)} discarded vectors")
+                          f"{len(pending_goals)} goals, {len(discarded_vectors)} discarded vectors, "
+                          f"{len(relationships)} relationships")
                 
                 # Show extraction result
                 self.reasoning_display.show_thought(
@@ -1326,7 +1511,8 @@ If there's nothing to extract in a category, use an empty list []."""
                         "tool": tool_name,
                         "facts_added": len(verified_facts),
                         "goals_added": len(pending_goals),
-                        "vectors_discarded": len(discarded_vectors)
+                        "vectors_discarded": len(discarded_vectors),
+                        "relationships_added": len(relationships)
                     }
                 )
             else:
