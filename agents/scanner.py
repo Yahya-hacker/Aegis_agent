@@ -415,6 +415,30 @@ If you cannot suggest a fix, respond with:
                     return {"status": "error", "error": "Action manquante (login/logout)"}
                 return await self.python_tools.manage_session(action, credentials)
             
+            # Multi-Session Management for Privilege Escalation Testing
+            elif tool == "manage_multi_session":
+                action = args.get("action")
+                session_name = args.get("session_name")
+                credentials = args.get("credentials", {})
+                
+                if not action:
+                    return {"status": "error", "error": "Action manquante (login/logout/list)"}
+                if not session_name and action != "list":
+                    return {"status": "error", "error": "Session name manquant (e.g., 'Session_Admin', 'Session_User')"}
+                
+                return await self.python_tools.manage_multi_session(action, session_name, credentials)
+            
+            elif tool == "replay_request_with_session":
+                original_request = args.get("request")
+                session_name = args.get("session_name")
+                
+                if not original_request:
+                    return {"status": "error", "error": "Original request data manquant"}
+                if not session_name:
+                    return {"status": "error", "error": "Session name manquant"}
+                
+                return await self.python_tools.replay_request_with_session(original_request, session_name)
+            
             # Database Tools (TASK 2)
             elif tool == "db_add_finding":
                 finding_type = args.get("type")

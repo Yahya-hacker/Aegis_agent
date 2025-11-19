@@ -38,6 +38,9 @@ class PythonToolManager:
         
         # TASK 2: OOB detection storage
         self.oob_payloads = {}  # {payload_id: {url: str, created_at: timestamp}}
+        
+        # Multi-session storage for privilege escalation testing
+        self.sessions = {}  # {session_name: session_data}
 
     def _get_selenium_driver(self):
         """Initialise et retourne un driver Selenium."""
@@ -536,6 +539,240 @@ class PythonToolManager:
             return {
                 "status": "error",
                 "error": f"Unknown action: {action}. Use 'login' or 'logout'"
+            }
+    
+    # --- MULTI-SESSION MANAGEMENT FOR PRIVILEGE ESCALATION TESTING ---
+    
+    async def manage_multi_session(self, action: str, session_name: str, credentials: Dict[str, str] = None) -> Dict:
+        """
+        Manage multiple named sessions for privilege escalation testing
+        
+        This allows the agent to maintain separate sessions for:
+        - Session_Admin: High-privilege user session
+        - Session_User: Low-privilege user session
+        
+        Args:
+            action: 'login', 'logout', 'list'
+            session_name: Name of the session (e.g., 'Session_Admin', 'Session_User')
+            credentials: Dictionary with login credentials (same format as manage_session)
+                
+        Returns:
+            Dictionary with status and session data
+        """
+        from pathlib import Path
+        import json
+        
+        if action == "list":
+            # List all active sessions
+            return {
+                "status": "success",
+                "data": {
+                    "sessions": list(self.sessions.keys()),
+                    "count": len(self.sessions)
+                }
+            }
+        
+        if action == "logout":
+            # Clear specific session
+            if session_name in self.sessions:
+                del self.sessions[session_name]
+                logger.info(f"🚪 Session '{session_name}' cleared successfully")
+                
+                # Also clear from file
+                session_file = Path(f"data/session_{session_name}.json")
+                if session_file.exists():
+                    session_file.unlink()
+                
+                return {
+                    "status": "success",
+                    "data": {"message": f"Session '{session_name}' cleared"}
+                }
+            else:
+                return {
+                    "status": "success",
+                    "data": {"message": f"No active session named '{session_name}'"}
+                }
+        
+        elif action == "login":
+            if not credentials:
+                return {
+                    "status": "error",
+                    "error": "Credentials required for login action"
+                }
+            
+            required_fields = ['url', 'username_field', 'password_field', 'username', 'password']
+            missing = [f for f in required_fields if f not in credentials]
+            if missing:
+                return {
+                    "status": "error",
+                    "error": f"Missing required credentials: {', '.join(missing)}"
+                }
+            
+            logger.info(f"🔐 Attempting login for session '{session_name}' to {credentials['url']}...")
+            
+            try:
+                loop = asyncio.get_event_loop()
+                session_data = await loop.run_in_executor(
+                    None, self._perform_login, credentials
+                )
+                
+                # Store session data in memory
+                self.sessions[session_name] = session_data
+                
+                # Also save to file for persistence
+                session_file = Path(f"data/session_{session_name}.json")
+                session_file.parent.mkdir(exist_ok=True, parents=True)
+                with open(session_file, 'w') as f:
+                    json.dump(session_data, f, indent=2)
+                
+                logger.info(f"✅ Login successful for '{session_name}', session saved")
+                
+                return {
+                    "status": "success",
+                    "data": {
+                        "message": f"Login successful for session '{session_name}'",
+                        "session_name": session_name,
+                        "cookies_count": len(session_data.get('cookies', [])),
+                        "session_file": str(session_file)
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Login failed for '{session_name}': {e}")
+                return {
+                    "status": "error",
+                    "error": f"Login failed: {str(e)}"
+                }
+        
+        else:
+            return {
+                "status": "error",
+                "error": f"Unknown action: {action}. Use 'login', 'logout', or 'list'"
+            }
+    
+    async def replay_request_with_session(
+        self,
+        original_request: Dict[str, Any],
+        session_name: str
+    ) -> Dict:
+        """
+        Replay a captured request using a different session's cookies
+        
+        This is used for privilege escalation testing - replay an admin
+        request with a low-privilege user's cookies to check for authorization bypass.
+        
+        Args:
+            original_request: Dictionary with request details:
+                - method: HTTP method (GET, POST, etc.)
+                - url: Target URL
+                - headers: Optional headers dict
+                - data: Optional POST data
+            session_name: Name of session to use (e.g., 'Session_User')
+                
+        Returns:
+            Dictionary with status and response details
+        """
+        if session_name not in self.sessions:
+            # Try to load from file
+            from pathlib import Path
+            import json
+            
+            session_file = Path(f"data/session_{session_name}.json")
+            if session_file.exists():
+                try:
+                    with open(session_file, 'r') as f:
+                        self.sessions[session_name] = json.load(f)
+                except Exception as e:
+                    return {
+                        "status": "error",
+                        "error": f"Session '{session_name}' not found and could not load from file: {e}"
+                    }
+            else:
+                return {
+                    "status": "error",
+                    "error": f"Session '{session_name}' not found. Login first using manage_multi_session."
+                }
+        
+        session_data = self.sessions[session_name]
+        
+        # Extract request details
+        method = original_request.get('method', 'GET').upper()
+        url = original_request.get('url')
+        headers = original_request.get('headers', {})
+        data = original_request.get('data', {})
+        
+        if not url:
+            return {
+                "status": "error",
+                "error": "URL is required in original_request"
+            }
+        
+        logger.info(f"🔄 Replaying {method} request to {url} with session '{session_name}'")
+        
+        # Inject session cookies and headers
+        cookies = {}
+        if 'cookies' in session_data:
+            for cookie in session_data['cookies']:
+                cookies[cookie['name']] = cookie['value']
+        
+        # Merge session headers
+        if 'headers' in session_data:
+            headers.update(session_data['headers'])
+        
+        try:
+            # Apply jitter for stealth
+            await AegisHelpers.apply_jitter()
+            
+            async with aiohttp.ClientSession(headers=headers) as session:
+                kwargs = {
+                    'ssl': False,
+                    'timeout': aiohttp.ClientTimeout(total=10),
+                    'cookies': cookies
+                }
+                
+                # Execute request
+                if method == 'GET':
+                    async with session.get(url, **kwargs) as response:
+                        status_code = response.status
+                        response_text = await response.text()
+                        response_headers = dict(response.headers)
+                elif method == 'POST':
+                    kwargs['data'] = data
+                    async with session.post(url, **kwargs) as response:
+                        status_code = response.status
+                        response_text = await response.text()
+                        response_headers = dict(response.headers)
+                else:
+                    return {
+                        "status": "error",
+                        "error": f"Unsupported HTTP method: {method}"
+                    }
+                
+                logger.info(f"✅ Request replayed: Status {status_code}")
+                
+                # Analyze response to detect privilege escalation
+                is_success = 200 <= status_code < 300
+                
+                return {
+                    "status": "success",
+                    "data": {
+                        "session_name": session_name,
+                        "method": method,
+                        "url": url,
+                        "status_code": status_code,
+                        "response_preview": response_text[:500],
+                        "response_headers": response_headers,
+                        "is_successful": is_success,
+                        "privilege_escalation_detected": is_success,  # If low-priv session succeeded, it's likely priv esc
+                        "note": "If this succeeded with low-privilege session, it indicates privilege escalation vulnerability"
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error replaying request: {e}")
+            return {
+                "status": "error",
+                "error": f"Failed to replay request: {str(e)}"
             }
     
     def _perform_login(self, credentials: Dict[str, str]) -> Dict:
