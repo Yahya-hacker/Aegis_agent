@@ -1,5 +1,5 @@
 # agents/enhanced_ai_core.py
-# --- VERSION 7.0 - OpenRouter Multi-LLM Enhanced ---
+# --- VERSION 7.5 - OpenRouter Multi-LLM Enhanced with Environment-based Configuration ---
 
 import asyncio
 import json
@@ -17,16 +17,119 @@ from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
 
-# CRITICAL: Model constants for OpenRouter API - Load from environment or use defaults
-ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llama-3.1-70b")
-# CODER_MODEL can override CODE_MODEL for specialized coding tasks (e.g., Dolphin-Deepseek)
-CODE_MODEL = os.getenv("CODER_MODEL", os.getenv("CODE_MODEL", "qwen/qwen-2.5-72b-instruct"))
-REASONING_MODEL = os.getenv("REASONING_MODEL", "cognitivecomputations/dolphin3.0-r1-mistral-24b")
+# NO HARDCODED MODELS - All models are loaded from environment variables in MultiLLMOrchestrator
+# This ensures easy model switching via .env file without touching code
 
 
-def parse_json_robust(content: str) -> Optional[Dict]:
+async def parse_json_robust(content: str, orchestrator: Optional[MultiLLMOrchestrator] = None, context: str = "") -> Optional[Dict]:
     """
-    Robustly parse JSON from LLM response with fallback strategies.
+    Robustly parse JSON from LLM response with fallback strategies and auto-healing.
+    
+    This function implements multiple parsing strategies:
+    1. Try to extract JSON from markdown code blocks (```json ... ```)
+    2. Try to extract raw JSON object from content
+    3. Try to repair malformed JSON using json_repair
+    4. Try direct JSON parsing
+    5. If all fail AND orchestrator is provided, use LLM "healing prompt" to auto-correct
+    
+    Args:
+        content: String content that may contain JSON
+        orchestrator: Optional MultiLLMOrchestrator for healing prompt fallback
+        context: Optional context about what the JSON should represent (for healing)
+    
+    Returns:
+        Parsed JSON as dictionary, or None if parsing fails
+    """
+    if not content:
+        return None
+    
+    # Strategy 1: Extract from markdown code block
+    json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1))
+        except json.JSONDecodeError:
+            # Try to repair it
+            try:
+                repaired = repair_json(json_match.group(1))
+                return json.loads(repaired)
+            except:
+                pass
+    
+    # Strategy 2: Extract raw JSON object
+    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(0))
+        except json.JSONDecodeError:
+            # Try to repair it
+            try:
+                repaired = repair_json(json_match.group(0))
+                return json.loads(repaired)
+            except:
+                pass
+    
+    # Strategy 3: Try direct parsing
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        try:
+            repaired = repair_json(content)
+            return json.loads(repaired)
+        except:
+            pass
+    
+    # Strategy 4: AUTO-HEALING with LLM (if orchestrator provided)
+    # This is the enhanced "healing prompt" feature requested
+    if orchestrator and orchestrator.is_initialized:
+        logger.warning("⚕️ JSON parsing failed - attempting auto-healing with LLM...")
+        
+        try:
+            healing_prompt = f"""You are a JSON healing assistant. The following text was supposed to be valid JSON but has formatting errors.
+
+CONTEXT: {context if context else 'General JSON response'}
+
+MALFORMED CONTENT:
+{content[:1000]}
+
+Your task:
+1. Identify what the JSON structure should be based on the content
+2. Fix any syntax errors (missing quotes, brackets, commas, etc.)
+3. Return ONLY the corrected valid JSON, nothing else
+
+Respond with the corrected JSON only:"""
+
+            response = await orchestrator.execute_task(
+                task_type='code_analysis',  # Use code model for technical JSON fixing
+                system_prompt="You are a JSON syntax expert. Fix malformed JSON and return only valid JSON.",
+                user_message=healing_prompt,
+                temperature=0.3,  # Low temperature for deterministic fixing
+                max_tokens=2048
+            )
+            
+            healed_content = response.get('content', '')
+            
+            # Try to parse the healed response
+            healed_json = re.search(r'\{.*\}', healed_content, re.DOTALL)
+            if healed_json:
+                try:
+                    result = json.loads(healed_json.group(0))
+                    logger.info("✅ JSON auto-healing successful!")
+                    return result
+                except json.JSONDecodeError:
+                    logger.error("❌ JSON auto-healing failed - healed content still invalid")
+            
+        except Exception as e:
+            logger.error(f"❌ JSON auto-healing error: {e}")
+    
+    logger.warning("⚠️ All JSON parsing strategies failed")
+    return None
+
+
+def parse_json_robust_sync(content: str) -> Optional[Dict]:
+    """
+    Synchronous version of parse_json_robust for backward compatibility.
+    Does not support auto-healing (requires async orchestrator).
     
     This function implements multiple parsing strategies:
     1. Try to extract JSON from markdown code blocks (```json ... ```)
@@ -679,12 +782,16 @@ class CortexMemory:
 
 class EnhancedAegisAI:
     """
-    Enhanced AI Core v7.0 - Powered by Three Specialized LLMs via OpenRouter
+    Enhanced AI Core v7.5 - Powered by Four Specialized LLMs via OpenRouter
     
-    This class orchestrates three LLMs from OpenRouter API:
-    1. Hermes 3 Llama 70B - Strategic planning, triage, and decision-making
-    2. Dolphin 3.0 R1 Mistral 24B - Reasoning and vulnerability analysis  
-    3. Qwen 2.5 72B - Code analysis and payload generation
+    This class orchestrates four LLMs from OpenRouter API, all configurable via environment:
+    1. Strategic Model (default: Hermes 3 Llama 70B) - Strategic planning, triage, and decision-making
+    2. Reasoning Model (default: Dolphin 3.0 R1 Mistral 24B) - Reasoning and vulnerability analysis  
+    3. Code Model (default: Qwen 2.5 72B) - Code analysis and payload generation
+    4. Visual Model (default: Qwen 2.5 VL 32B) - Visual analysis and UI reconnaissance
+    
+    All models can be easily changed via .env file without modifying Python code.
+    Temperature and max_tokens are also configurable via environment variables.
     """
     
     def __init__(self, learning_engine: AegisLearningEngine = None):
@@ -851,15 +958,17 @@ Analyze this conversation and determine if we have all information (target and r
             response = await self.orchestrator.execute_task(
                 task_type='triage',
                 system_prompt=system_prompt,
-                user_message=user_message,
-                temperature=0.7,
-                max_tokens=1024
+                user_message=user_message
             )
             
             content = response['content']
             
-            # Extract JSON from response using robust parser
-            result = parse_json_robust(content)
+            # Extract JSON from response using robust parser with auto-healing
+            result = await parse_json_robust(
+                content, 
+                orchestrator=self.orchestrator,
+                context="Mission triage response with response_type, target, and rules"
+            )
             
             if result:
                 # Show reasoning about the triage decision
@@ -1126,15 +1235,17 @@ Based on this context, what should be the next action? Respond with JSON only.""
             response = await self.orchestrator.execute_task(
                 task_type='next_action',
                 system_prompt=system_prompt,
-                user_message=user_message,
-                temperature=0.8,
-                max_tokens=1024
+                user_message=user_message
             )
             
             content = response['content']
             
-            # Extract JSON from response using robust parser
-            action = parse_json_robust(content)
+            # Extract JSON from response using robust parser with auto-healing
+            action = await parse_json_robust(
+                content,
+                orchestrator=self.orchestrator,
+                context="Next action decision with tool, args, and reasoning"
+            )
             
             if action:
                 # Display the proposed action with reasoning
@@ -1197,9 +1308,7 @@ Provide a comprehensive security analysis."""
             response = await self.orchestrator.execute_task(
                 task_type='code_analysis',
                 system_prompt=system_prompt,
-                user_message=user_message,
-                temperature=0.6,
-                max_tokens=2048
+                user_message=user_message
             )
             
             return {
@@ -1246,9 +1355,7 @@ Provide multiple payload variants if applicable."""
             response = await self.orchestrator.execute_task(
                 task_type='payload_generation',
                 system_prompt=system_prompt,
-                user_message=user_message,
-                temperature=0.7,
-                max_tokens=2048
+                user_message=user_message
             )
             
             return {
@@ -1266,20 +1373,18 @@ Provide multiple payload variants if applicable."""
         self,
         prompt: str,
         context: str = "",
-        temperature: float = 0.6,
-        max_tokens: int = 2048,
-        model_override: str = None
+        temperature: float = None,
+        max_tokens: int = None
     ) -> Dict[str, Any]:
         """
-        Call the code specialist model explicitly
-        Uses CODE_MODEL constant to ensure correct model
+        Call the code specialist model explicitly.
+        Model is determined by CODE_MODEL environment variable.
         
         Args:
             prompt: The code analysis or generation prompt
             context: Additional context
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            model_override: Override model (should be CODE_MODEL)
+            temperature: Sampling temperature (uses default from env if None)
+            max_tokens: Maximum tokens to generate (uses default from env if None)
             
         Returns:
             Response dictionary
@@ -1287,18 +1392,11 @@ Provide multiple payload variants if applicable."""
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        # Use explicit model constant
-        model_to_use = model_override if model_override else CODE_MODEL
-        
-        # Ensure the model override matches our approved model
-        if model_override and model_override != CODE_MODEL:
-            logger.warning(f"⚠️ Model override '{model_override}' does not match CODE_MODEL '{CODE_MODEL}'")
-        
         system_prompt = f"""You are an expert code analyst and payload engineer for penetration testing.
 {context}"""
         
         try:
-            # Call the coder LLM directly with explicit model
+            # Call the coder LLM directly
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -1325,20 +1423,18 @@ Provide multiple payload variants if applicable."""
         self,
         prompt: str,
         context: str = "",
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-        model_override: str = None
+        temperature: float = None,
+        max_tokens: int = None
     ) -> Dict[str, Any]:
         """
-        Call the reasoning specialist model explicitly
-        Uses REASONING_MODEL constant to ensure correct model
+        Call the reasoning specialist model explicitly.
+        Model is determined by REASONING_MODEL environment variable.
         
         Args:
             prompt: The reasoning or analysis prompt
             context: Additional context
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            model_override: Override model (should be REASONING_MODEL)
+            temperature: Sampling temperature (uses default from env if None)
+            max_tokens: Maximum tokens to generate (uses default from env if None)
             
         Returns:
             Response dictionary
@@ -1346,18 +1442,11 @@ Provide multiple payload variants if applicable."""
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        # Use explicit model constant
-        model_to_use = model_override if model_override else REASONING_MODEL
-        
-        # Ensure the model override matches our approved model
-        if model_override and model_override != REASONING_MODEL:
-            logger.warning(f"⚠️ Model override '{model_override}' does not match REASONING_MODEL '{REASONING_MODEL}'")
-        
         system_prompt = f"""You are an expert reasoning and vulnerability analysis specialist.
 {context}"""
         
         try:
-            # Call the vulnerability/reasoning LLM directly with explicit model
+            # Call the vulnerability/reasoning LLM directly
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -1481,14 +1570,17 @@ Respond with ONLY the JSON, no additional text."""
             response = await self.call_reasoning_specialist(
                 prompt=triage_prompt,
                 context="Vulnerability triage and prioritization",
-                temperature=0.6,  # Lower temperature for more focused analysis
-                max_tokens=1024
+                temperature=0.6  # Lower temperature for more focused analysis
             )
             
             content = response.get('content', '')
             
-            # Extract JSON from response using robust parser
-            triage_result = parse_json_robust(content)
+            # Extract JSON from response using robust parser with auto-healing
+            triage_result = await parse_json_robust(
+                content,
+                orchestrator=self.orchestrator,
+                context="Vulnerability triage with priority, risk_score, exploitability, etc."
+            )
             
             if triage_result:
                 # Enhance the original finding with AI triage
@@ -1595,14 +1687,17 @@ Be skeptical and thorough. Only mark is_hallucination=false if you have high con
             response = await self.call_reasoning_specialist(
                 prompt=verification_prompt,
                 context="Devil's Advocate verification of security findings",
-                temperature=0.6,  # Lower temperature for more focused analysis
-                max_tokens=1024
+                temperature=0.6  # Lower temperature for more focused analysis
             )
             
             content = response.get('content', '')
             
-            # Extract JSON from response using robust parser
-            verification = parse_json_robust(content)
+            # Extract JSON from response using robust parser with auto-healing
+            verification = await parse_json_robust(
+                content,
+                orchestrator=self.orchestrator,
+                context="Verification result with is_hallucination, confidence_score, and reasoning"
+            )
             
             if verification:
                 is_hallucination = verification.get('is_hallucination', False)
@@ -1804,14 +1899,17 @@ If there's nothing to extract in a category, use an empty list []."""
             response = await self.call_reasoning_specialist(
                 prompt=extraction_prompt,
                 context="Fact extraction from security tool output",
-                temperature=0.5,  # Lower temperature for focused extraction
-                max_tokens=1024
+                temperature=0.5  # Lower temperature for focused extraction
             )
             
             content = response.get('content', '')
             
-            # Extract JSON from response - use robust parsing
-            extraction = parse_json_robust(content)
+            # Extract JSON from response - use robust parsing with auto-healing
+            extraction = await parse_json_robust(
+                content,
+                orchestrator=self.orchestrator,
+                context="Fact extraction with verified_facts, pending_goals, discarded_vectors, and relationships"
+            )
             
             if extraction:
                 verified_facts = extraction.get('verified_facts', [])

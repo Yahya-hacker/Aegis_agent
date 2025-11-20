@@ -29,7 +29,8 @@ class LLMConfig:
 
 class MultiLLMOrchestrator:
     """
-    Orchestrates three specialized LLMs for different pentesting tasks
+    Orchestrates four specialized LLMs for different pentesting tasks.
+    All models are configurable via environment variables - no hardcoded model names!
     """
     
     def __init__(self):
@@ -40,10 +41,37 @@ class MultiLLMOrchestrator:
         self.retry_delay = 2  # seconds
         self.request_timeout = 60  # seconds
         
-        # Define the three specialized LLMs (using OpenRouter-compatible model IDs)
+        # Load default generation parameters from environment
+        self.default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
+        self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "4096"))
+        
+        # Load model names from environment variables with fallback defaults
+        # These defaults match the recommended models, but can be changed easily via .env
+        strategic_model = os.getenv(
+            "STRATEGIC_MODEL",
+            os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llama-3.1-70b")
+        )
+        
+        reasoning_model = os.getenv(
+            "REASONING_MODEL",
+            "cognitivecomputations/dolphin3.0-r1-mistral-24b"
+        )
+        
+        code_model = os.getenv(
+            "CODE_MODEL",
+            os.getenv("CODER_MODEL", "qwen/qwen-2.5-72b-instruct")
+        )
+        
+        visual_model = os.getenv(
+            "VISUAL_MODEL",
+            "qwen/qwen2.5-vl-32b-instruct:free"
+        )
+        
+        # Define the four specialized LLMs with environment-configured models
+        # NO HARDCODED MODEL NAMES - All loaded from environment!
         self.llms = {
             'strategic': LLMConfig(
-                model_name="nousresearch/hermes-3-llama-3.1-70b",
+                model_name=strategic_model,
                 role="Strategic Planner & Triage Agent",
                 specialization=[
                     "mission_planning",
@@ -55,7 +83,7 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'vulnerability': LLMConfig(
-                model_name="cognitivecomputations/dolphin3.0-r1-mistral-24b",
+                model_name=reasoning_model,
                 role="Reasoning & Vulnerability Analyst",
                 specialization=[
                     "vulnerability_analysis",
@@ -67,7 +95,7 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'coder': LLMConfig(
-                model_name="qwen/qwen-2.5-72b-instruct",
+                model_name=code_model,
                 role="Code Analyst & Payload Engineer",
                 specialization=[
                     "code_analysis",
@@ -79,7 +107,7 @@ class MultiLLMOrchestrator:
                 ]
             ),
             'visual': LLMConfig(
-                model_name="qwen/qwen2.5-vl-32b-instruct:free",
+                model_name=visual_model,
                 role="Visual Analyst & UI Reconnaissance",
                 specialization=[
                     "image_analysis",
@@ -91,6 +119,14 @@ class MultiLLMOrchestrator:
                 ]
             )
         }
+        
+        logger.info("🔧 LLM Configuration loaded from environment:")
+        logger.info(f"   Strategic Model: {strategic_model}")
+        logger.info(f"   Reasoning Model: {reasoning_model}")
+        logger.info(f"   Code Model: {code_model}")
+        logger.info(f"   Visual Model: {visual_model}")
+        logger.info(f"   Default Temperature: {self.default_temperature}")
+        logger.info(f"   Default Max Tokens: {self.default_max_tokens}")
     
     async def initialize(self):
         """Initialize the orchestrator and validate API key"""
@@ -173,17 +209,17 @@ class MultiLLMOrchestrator:
         self, 
         llm_type: str, 
         messages: List[Dict[str, str]], 
-        temperature: float = 0.7,
-        max_tokens: int = 2048
+        temperature: float = None,
+        max_tokens: int = None
     ) -> Dict[str, Any]:
         """
         Call a specific LLM via OpenRouter API with retry logic and error handling
         
         Args:
-            llm_type: Type of LLM to use ('strategic', 'vulnerability', or 'coder')
+            llm_type: Type of LLM to use ('strategic', 'vulnerability', 'coder', or 'visual')
             messages: List of message dicts with 'role' and 'content'
-            temperature: Sampling temperature (0.0 to 1.0)
-            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0). If None, uses DEFAULT_TEMPERATURE from env
+            max_tokens: Maximum tokens to generate. If None, uses DEFAULT_MAX_TOKENS from env
             
         Returns:
             Response dictionary with 'content' and metadata
@@ -193,6 +229,12 @@ class MultiLLMOrchestrator:
         
         if llm_type not in self.llms:
             raise ValueError(f"Unknown LLM type: {llm_type}")
+        
+        # Use default parameters from environment if not specified
+        if temperature is None:
+            temperature = self.default_temperature
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
         
         config = self.llms[llm_type]
         
@@ -326,8 +368,8 @@ class MultiLLMOrchestrator:
         task_type: str,
         system_prompt: str,
         user_message: str,
-        temperature: float = 0.7,
-        max_tokens: int = 2048
+        temperature: float = None,
+        max_tokens: int = None
     ) -> Dict[str, Any]:
         """
         Execute a task by automatically selecting and calling the appropriate LLM
@@ -336,8 +378,8 @@ class MultiLLMOrchestrator:
             task_type: Type of task (determines which LLM to use)
             system_prompt: System/instruction prompt
             user_message: User message/query
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature. If None, uses DEFAULT_TEMPERATURE from env
+            max_tokens: Maximum tokens to generate. If None, uses DEFAULT_MAX_TOKENS from env
             
         Returns:
             Response dictionary with content and metadata
@@ -379,8 +421,7 @@ class MultiLLMOrchestrator:
             [
                 {"role": "system", "content": f"You are a strategic pentesting planner. Context: {context}"},
                 {"role": "user", "content": strategic_question}
-            ],
-            temperature=0.7
+            ]
         )
         
         vulnerability_task = self.call_llm(
@@ -388,8 +429,7 @@ class MultiLLMOrchestrator:
             [
                 {"role": "system", "content": f"You are a vulnerability analyst. Context: {context}"},
                 {"role": "user", "content": vulnerability_question}
-            ],
-            temperature=0.8
+            ]
         )
         
         coder_task = self.call_llm(
@@ -397,8 +437,7 @@ class MultiLLMOrchestrator:
             [
                 {"role": "system", "content": f"You are a code analyst and payload engineer. Context: {context}"},
                 {"role": "user", "content": coding_question}
-            ],
-            temperature=0.6
+            ]
         )
         
         # Wait for all responses
@@ -496,8 +535,8 @@ class MultiLLMOrchestrator:
             payload = {
                 "model": config.model_name,
                 "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 2048
+                "temperature": self.default_temperature,
+                "max_tokens": self.default_max_tokens
             }
             
             async with aiohttp.ClientSession() as session:
