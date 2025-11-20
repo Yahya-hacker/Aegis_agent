@@ -2,11 +2,11 @@
 
 ## Overview
 
-Aegis Agent v6.0 now uses **three specialized LLMs** from Together AI, each optimized for specific pentesting tasks:
+Aegis Agent v7.5 now uses **four specialized LLMs** from OpenRouter, each optimized for specific pentesting tasks. All models are **fully configurable via environment variables** - no code changes needed!
 
-### 🧠 The Three Specialists
+### 🧠 The Four Specialists
 
-1. **Llama 70B** (`meta-llama/Llama-3-70b-chat-hf`)
+1. **Strategic Model** (Default: `nousresearch/hermes-3-llama-3.1-70b`)
    - **Role**: Strategic Planner & Triage Agent
    - **Best for**:
      - Mission planning and overall strategy
@@ -15,8 +15,9 @@ Aegis Agent v6.0 now uses **three specialized LLMs** from Together AI, each opti
      - High-level decision making
      - Risk assessment and prioritization
      - Understanding scope and constraints
+   - **Environment Variable**: `STRATEGIC_MODEL`
 
-2. **Mixtral 8x7B** (`mistralai/Mixtral-8x7B-Instruct-v0.1`)
+2. **Reasoning Model** (Default: `cognitivecomputations/dolphin3.0-r1-mistral-24b`)
    - **Role**: Vulnerability Analyst & Exploitation Expert
    - **Best for**:
      - Identifying and analyzing vulnerabilities
@@ -25,8 +26,9 @@ Aegis Agent v6.0 now uses **three specialized LLMs** from Together AI, each opti
      - Determining attack vectors
      - Autonomous agent decision-making
      - Vulnerability triage and severity rating
+   - **Environment Variable**: `REASONING_MODEL`
 
-3. **Qwen-coder** (`Qwen/Qwen2.5-Coder-32B-Instruct`)
+3. **Code Model** (Default: `qwen/qwen-2.5-72b-instruct`)
    - **Role**: Code Analyst & Payload Engineer
    - **Best for**:
      - Deep code analysis for vulnerabilities
@@ -35,14 +37,26 @@ Aegis Agent v6.0 now uses **three specialized LLMs** from Together AI, each opti
      - Technical implementation details
      - Tool orchestration and scripting
      - Understanding and manipulating code
+   - **Environment Variable**: `CODE_MODEL`
+
+4. **Visual Model** (Default: `qwen/qwen2.5-vl-32b-instruct:free`)
+   - **Role**: Visual Analyst & UI Reconnaissance (Multimodal)
+   - **Best for**:
+     - Analyzing screenshots and UI layouts
+     - Identifying clickable elements visually
+     - Visual grounding with Set-of-Mark (SoM)
+     - Detecting visual vulnerabilities
+     - Understanding web interface structure
+     - Multimodal security analysis
+   - **Environment Variable**: `VISUAL_MODEL`
 
 ## Setup
 
-### 1. Get Together AI API Key
+### 1. Get OpenRouter API Key
 
-1. Go to [Together AI](https://api.together.xyz/)
+1. Go to [OpenRouter](https://openrouter.ai/)
 2. Sign up or log in
-3. Navigate to Settings → API Keys
+3. Navigate to Keys section
 4. Create a new API key
 5. Copy your API key
 
@@ -53,13 +67,136 @@ Aegis Agent v6.0 now uses **three specialized LLMs** from Together AI, each opti
 cp .env.example .env
 
 # Edit .env and add your API key
-echo "TOGETHER_API_KEY=your_actual_api_key_here" > .env
+nano .env  # or use your preferred editor
+```
+
+Add your configuration to `.env`:
+
+```bash
+# Required: OpenRouter API Key
+OPENROUTER_API_KEY=your_actual_api_key_here
+
+# Optional: Customize models (defaults shown)
+STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
+REASONING_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
+CODE_MODEL=qwen/qwen-2.5-72b-instruct
+VISUAL_MODEL=qwen/qwen2.5-vl-32b-instruct:free
+
+# Optional: Customize generation parameters
+DEFAULT_TEMPERATURE=0.7
+DEFAULT_MAX_TOKENS=4096
 ```
 
 ### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
+```
+
+## 🔄 Changing Models
+
+**One of the biggest advantages of v7.5 is the ability to easily swap models without editing code!**
+
+### Why Change Models?
+
+- **Performance**: Test different models to find the best fit for your use case
+- **Cost**: Use cheaper models for less critical tasks
+- **Capabilities**: Leverage newer or specialized models as they become available
+- **Experimentation**: Try different model combinations for optimal results
+
+### How to Change Models
+
+1. **Browse OpenRouter Models**: Visit [https://openrouter.ai/models](https://openrouter.ai/models)
+2. **Find Your Model**: Look for models that fit your needs (coding, reasoning, vision, etc.)
+3. **Copy Model ID**: Copy the model identifier (e.g., `anthropic/claude-3-opus`)
+4. **Update .env**: Paste the model ID into your `.env` file
+5. **Restart Aegis**: Restart the application - changes take effect immediately!
+
+### Example: Using Different Models
+
+```bash
+# .env configuration examples:
+
+# Option 1: Use Claude 3 Opus for everything (high quality, higher cost)
+STRATEGIC_MODEL=anthropic/claude-3-opus
+REASONING_MODEL=anthropic/claude-3-opus
+CODE_MODEL=anthropic/claude-3-opus
+
+# Option 2: Mix and match for cost optimization
+STRATEGIC_MODEL=anthropic/claude-3-opus        # Best strategic planning
+REASONING_MODEL=anthropic/claude-3-sonnet      # Good reasoning, lower cost
+CODE_MODEL=qwen/qwen-2.5-72b-instruct         # Excellent coding, very affordable
+
+# Option 3: Use GPT-4 Turbo for code tasks
+CODE_MODEL=openai/gpt-4-turbo
+
+# Option 4: Use Gemini for visual analysis
+VISUAL_MODEL=google/gemini-pro-vision
+```
+
+### Model Recommendations by Task
+
+**Strategic Planning** (STRATEGIC_MODEL):
+- Best: `anthropic/claude-3-opus`, `openai/gpt-4-turbo`
+- Good: `nousresearch/hermes-3-llama-3.1-70b` (default)
+- Budget: `anthropic/claude-3-haiku`
+
+**Vulnerability Analysis** (REASONING_MODEL):
+- Best: `anthropic/claude-3-opus`, `cognitivecomputations/dolphin3.0-r1-mistral-24b` (default)
+- Good: `meta-llama/llama-3.1-70b-instruct`
+- Budget: `meta-llama/llama-3.1-8b-instruct`
+
+**Code Analysis & Payloads** (CODE_MODEL):
+- Best: `qwen/qwen-2.5-72b-instruct` (default), `anthropic/claude-3-opus`
+- Good: `deepseek/deepseek-coder-33b-instruct`
+- Budget: `qwen/qwen-2.5-7b-instruct`
+
+**Visual Analysis** (VISUAL_MODEL):
+- Best: `qwen/qwen2.5-vl-32b-instruct:free` (default), `google/gemini-pro-vision`
+- Good: `anthropic/claude-3-opus` (multimodal)
+- Note: Ensure chosen model supports vision/multimodal input
+
+### Temperature & Token Configuration
+
+Fine-tune LLM behavior globally or let the system use optimal per-task settings:
+
+```bash
+# In .env:
+
+# Default temperature (0.0 = deterministic, 1.0 = creative)
+DEFAULT_TEMPERATURE=0.7
+
+# Default max tokens (response length)
+DEFAULT_MAX_TOKENS=4096
+```
+
+**Temperature Guidelines**:
+- `0.3-0.5`: Focused, consistent, deterministic (good for verification)
+- `0.6-0.7`: Balanced (recommended default)
+- `0.8-0.9`: Creative, exploratory (good for brainstorming)
+
+**Max Tokens Guidelines**:
+- `1024-2048`: Shorter responses, faster, cheaper
+- `4096`: Recommended for complex reasoning
+- `8192+`: Very detailed responses (if model supports it)
+
+### Testing Your Configuration
+
+After changing models, test that everything works:
+
+```bash
+# Start Aegis
+python main.py
+
+# The startup will show your configuration:
+🚀 Démarrage de l'Agent Autonome Aegis AI avec Multi-LLM...
+🔧 LLM Configuration loaded from environment:
+   Strategic Model: anthropic/claude-3-opus
+   Reasoning Model: anthropic/claude-3-sonnet
+   Code Model: qwen/qwen-2.5-72b-instruct
+   Visual Model: qwen/qwen2.5-vl-32b-instruct:free
+   Default Temperature: 0.7
+   Default Max Tokens: 4096
 ```
 
 ## How It Works
@@ -70,34 +207,39 @@ The `MultiLLMOrchestrator` automatically selects the best LLM for each task:
 
 ```python
 # Example task routing:
-task_type = "mission_planning"  # → Routes to Llama 70B
-task_type = "vulnerability_analysis"  # → Routes to Mixtral 8x7B  
-task_type = "payload_generation"  # → Routes to Qwen-coder
+task_type = "mission_planning"        # → Routes to Strategic Model (Hermes 3 Llama 70B)
+task_type = "vulnerability_analysis"  # → Routes to Reasoning Model (Dolphin 3.0)
+task_type = "payload_generation"      # → Routes to Code Model (Qwen 2.5 72B)
+task_type = "visual_analysis"         # → Routes to Visual Model (Qwen 2.5 VL 32B)
 ```
 
 ### Workflow Example
 
 1. **User starts conversation**: "I want to test example.com"
-   - **Llama 70B** (Strategic): Triages the request, asks for BBP rules
+   - **Strategic Model** (Hermes 3): Triages the request, asks for BBP rules
 
 2. **User provides BBP rules**: "In scope: *.example.com, No DDoS"
-   - **Llama 70B** (Strategic): Confirms understanding, plans initial approach
+   - **Strategic Model** (Hermes 3): Confirms understanding, plans initial approach
 
 3. **Agent starts reconnaissance**: Finds subdomains, open ports, technologies
-   - **Mixtral 8x7B** (Vulnerability): Decides next security testing steps
+   - **Reasoning Model** (Dolphin 3.0): Decides next security testing steps
 
-4. **Finds potential SQL injection**: Form with suspicious parameters
-   - **Qwen-coder** (Code): Generates payloads to test the vulnerability
+4. **Visual reconnaissance**: Captures screenshot of web interface
+   - **Visual Model** (Qwen 2.5 VL): Analyzes UI layout, identifies interactive elements
 
-5. **All findings collected**: Multiple vulnerabilities identified
-   - **All Three LLMs** (Collaborative): Provide comprehensive assessment
-     - Llama 70B: Overall risk and strategic recommendations
-     - Mixtral 8x7B: Exploitation paths and vulnerability priorities
-     - Qwen-coder: Technical details and PoC code
+5. **Finds potential SQL injection**: Form with suspicious parameters
+   - **Code Model** (Qwen 2.5): Generates payloads to test the vulnerability
+
+6. **All findings collected**: Multiple vulnerabilities identified
+   - **All Four LLMs** (Collaborative): Provide comprehensive assessment
+     - Strategic Model: Overall risk and strategic recommendations
+     - Reasoning Model: Exploitation paths and vulnerability priorities
+     - Code Model: Technical details and PoC code
+     - Visual Model: UI-based attack surfaces and visual vulnerabilities
 
 ### Collaborative Analysis
 
-For complex scenarios, all three LLMs can work together:
+For complex scenarios, all LLMs can work together:
 
 ```python
 # Example: Comprehensive vulnerability assessment

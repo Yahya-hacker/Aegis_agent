@@ -17,11 +17,20 @@ Aegis v7.5 goes beyond traditional security scanners by **generating** vulnerabi
 
 ## 🏗️ Multi-LLM Architecture
 
-Aegis uses three specialized AI models via OpenRouter API, each optimized for specific security tasks:
+Aegis uses **four specialized AI models** via OpenRouter API, each optimized for specific security tasks:
 
-- **Hermes 3 Llama 70B** - Strategic planning, mission triage, and scope analysis
-- **Dolphin 3.0 R1 Mistral 24B** - Vulnerability analysis and exploitation planning  
-- **Qwen 2.5 72B** - Code analysis and payload generation
+- **Hermes 3 Llama 70B** (Strategic Model) - High-level decision making, mission planning, triage, scope analysis, and risk assessment
+- **Dolphin 3.0 R1 Mistral 24B** (Reasoning Model) - Vulnerability analysis, reasoning about exploits, and security assessment
+- **Qwen 2.5 72B** (Code Model) - Code analysis, payload generation, script writing, and technical implementation
+- **Qwen 2.5 VL 32B** (Visual Model) - Screenshot analysis, UI reconnaissance, and visual vulnerability detection through multimodal analysis
+
+**🎯 Key Innovation: Environment-Based Configuration**
+
+All models are **100% configurable via the `.env` file** - no need to edit Python code! Simply change the model identifiers in your `.env` file to use any model available on OpenRouter. This makes it easy to:
+- Test different models for optimal performance
+- Use specialized models for specific tasks
+- Adapt to new models as they become available
+- Control costs by using different model tiers
 
 The orchestrator automatically selects the optimal model for each task. See [MULTI_LLM_GUIDE.md](MULTI_LLM_GUIDE.md) for details.
 
@@ -109,18 +118,76 @@ go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 
 ## 🔧 Configuration
 
-Edit `.env` to customize model selection and parameters:
+Aegis Agent v7.5 now supports **full environment-based configuration** - you can easily change any LLM model, temperature, or max_tokens without touching the Python code!
+
+### Quick Configuration
+
+Edit `.env` to customize all models and parameters:
 
 ```bash
-# Model selection (optional overrides)
-STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
-VULNERABILITY_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
-CODER_MODEL=qwen/qwen-2.5-72b-instruct
+# OpenRouter API Key (Required)
+OPENROUTER_API_KEY=your_actual_api_key_here
 
-# Generation parameters
-DEFAULT_TEMPERATURE=0.7
-DEFAULT_MAX_TOKENS=2048
+# LLM Model Selection (All four models are configurable!)
+STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
+REASONING_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
+CODE_MODEL=qwen/qwen-2.5-72b-instruct
+VISUAL_MODEL=qwen/qwen2.5-vl-32b-instruct:free
+
+# Generation Parameters (Control LLM behavior)
+DEFAULT_TEMPERATURE=0.7        # 0.0=deterministic, 1.0=creative
+DEFAULT_MAX_TOKENS=4096        # Maximum response length
 ```
+
+### Changing Models
+
+To use different models from OpenRouter:
+
+1. Browse available models at https://openrouter.ai/models
+2. Copy the model identifier (e.g., `anthropic/claude-3-opus`)
+3. Update the corresponding variable in `.env`
+4. Restart Aegis Agent - that's it!
+
+**Example - Using Claude 3 Opus for strategic planning:**
+```bash
+STRATEGIC_MODEL=anthropic/claude-3-opus
+```
+
+**Example - Using GPT-4 for code analysis:**
+```bash
+CODE_MODEL=openai/gpt-4-turbo
+```
+
+### Model Roles
+
+Each model has a specialized role in the Aegis architecture:
+
+- **STRATEGIC_MODEL**: High-level decision making, mission planning, triage, scope analysis, and risk assessment
+- **REASONING_MODEL**: Vulnerability analysis, reasoning about exploits, and security assessment  
+- **CODE_MODEL**: Code analysis, payload generation, script writing, and technical implementation
+- **VISUAL_MODEL**: Screenshot analysis, UI reconnaissance, and visual vulnerability detection
+
+### Temperature & Token Configuration
+
+Fine-tune LLM behavior with these parameters:
+
+- **DEFAULT_TEMPERATURE** (0.0 - 1.0):
+  - Lower (0.3-0.5): More focused, deterministic, consistent
+  - Higher (0.7-0.9): More creative, varied, exploratory
+  
+- **DEFAULT_MAX_TOKENS** (recommended: 2048-4096):
+  - Controls maximum response length
+  - Higher values = more detailed responses (but higher cost)
+  - 4096 recommended for complex reasoning tasks
+
+### Advanced: Per-Task Temperature Override
+
+While the defaults work well, individual methods can override temperature for specific needs:
+- Verification tasks: Lower temperature (0.6) for consistency
+- Exploit generation: Default temperature (0.7) for creativity
+- Creative brainstorming: Higher temperature (0.8-0.9) for variety
+
+These overrides happen automatically in the code and don't require configuration.
 
 ## 📖 Key Features in Detail
 
