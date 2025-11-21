@@ -1,16 +1,18 @@
 # agents/multi_llm_orchestrator.py
 """
-Multi-LLM Orchestrator for Aegis AI - v7.0
-Manages three specialized LLMs via OpenRouter API:
+Multi-LLM Orchestrator for Aegis AI - v7.5
+Manages four specialized LLMs via OpenRouter API with multi-account sharding:
 - Hermes 3 Llama 70B: Strategic planning, triage, and high-level decision making
 - Dolphin 3.0 R1 Mistral 24B: Reasoning and vulnerability analysis
 - Qwen 2.5 72B: Code analysis, payload generation, and technical implementation
+- Qwen 2.5 VL 32B: Visual analysis and UI reconnaissance
 """
 
 import asyncio
 import base64
 import json
 import os
+import time
 import aiohttp
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -18,6 +20,11 @@ import logging
 from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
+
+# Constants for long mission tracking and error detection
+ERROR_MSG_TRUNCATE_LENGTH = 100  # Characters to include in error classification
+HIGH_TOKEN_USAGE_THRESHOLD = 0.75  # Warn when using >75% of max_tokens
+RECURRING_ERROR_THRESHOLD = 3  # Number of occurrences before flagging as recurring
 
 class LLMConfig:
     """Configuration for each specialized LLM"""
@@ -33,6 +40,13 @@ class MultiLLMOrchestrator:
     All models are configurable via environment variables - no hardcoded model names!
     """
     
+    # Class constants for role management
+    ROLE_STRATEGIC = 'strategic'
+    ROLE_VULNERABILITY = 'vulnerability'
+    ROLE_CODER = 'coder'
+    ROLE_VISUAL = 'visual'
+    ALL_ROLES = [ROLE_STRATEGIC, ROLE_VULNERABILITY, ROLE_CODER, ROLE_VISUAL]
+    
     def __init__(self):
         self.api_key = None  # Legacy field for backward compatibility
         self.api_keys = {}  # API key registry mapping roles to keys
@@ -47,12 +61,7 @@ class MultiLLMOrchestrator:
         self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "4096"))
         
         # Sophisticated tracking for long missions and complex chains
-        self.usage_tracker = {
-            'strategic': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'vulnerability': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'coder': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'visual': {'calls': 0, 'tokens': 0, 'cost': 0.0}
-        }
+        self._initialize_usage_tracker()
         self.context_history = []  # Track context size over time
         self.error_patterns = {}  # Track recurring errors for pattern detection
         
@@ -138,6 +147,13 @@ class MultiLLMOrchestrator:
         logger.info(f"   Visual Model: {visual_model}")
         logger.info(f"   Default Temperature: {self.default_temperature}")
         logger.info(f"   Default Max Tokens: {self.default_max_tokens}")
+    
+    def _initialize_usage_tracker(self):
+        """
+        Initialize usage tracking for all roles.
+        Extracted as a private method to avoid code duplication between __init__ and reset.
+        """
+        self.usage_tracker = {role: {'calls': 0, 'tokens': 0, 'cost': 0.0} for role in self.ALL_ROLES}
     
     async def initialize(self):
         """Initialize the orchestrator and validate API keys with sharding support"""
@@ -413,8 +429,7 @@ class MultiLLMOrchestrator:
                             try:
                                 loop_time = asyncio.get_running_loop().time()
                             except RuntimeError:
-                                # Fallback for edge cases where no running loop
-                                import time
+                                # Fallback for edge cases where no running loop exists
                                 loop_time = time.time()
                             
                             self.context_history.append({
@@ -424,7 +439,7 @@ class MultiLLMOrchestrator:
                             })
                             
                             # Warn if single call uses >75% of max tokens
-                            if total_tokens > (max_tokens * 0.75):
+                            if total_tokens > (max_tokens * HIGH_TOKEN_USAGE_THRESHOLD):
                                 logger.warning(
                                     f"⚠️  HIGH TOKEN USAGE: {llm_type} used {total_tokens}/{max_tokens} tokens. "
                                     f"Consider chunking or summarizing for long missions."
@@ -463,16 +478,16 @@ class MultiLLMOrchestrator:
                     continue
                 raise RuntimeError(f"Request to {config.role} timed out after {self.max_retries} attempts")
             except Exception as e:
-                # Create a more robust error classification using error type and a hash
-                # of the full message to avoid grouping different errors together
+                # Create a more robust error classification using error type and message
+                # Truncate to avoid grouping different errors together
                 error_type = type(e).__name__
                 error_msg = str(e)
-                # Use first 100 chars for better classification while keeping logs readable
-                error_key = f"{error_type}:{error_msg[:100]}"
+                # Use constant for truncation length for better maintainability
+                error_key = f"{error_type}:{error_msg[:ERROR_MSG_TRUNCATE_LENGTH]}"
                 self.error_patterns[error_key] = self.error_patterns.get(error_key, 0) + 1
                 
                 # Sophisticated error pattern detection for long missions
-                if self.error_patterns[error_key] >= 3:
+                if self.error_patterns[error_key] >= RECURRING_ERROR_THRESHOLD:
                     logger.error(
                         f"🔴 RECURRING ERROR PATTERN DETECTED: '{error_type}' occurred {self.error_patterns[error_key]} times. "
                         f"This may indicate a systemic issue in long missions or complex exploit chains."
@@ -771,11 +786,6 @@ class MultiLLMOrchestrator:
         Useful for checkpointing in long-running missions.
         """
         logger.info("🔄 Resetting usage tracking for new mission phase...")
-        self.usage_tracker = {
-            'strategic': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'vulnerability': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'coder': {'calls': 0, 'tokens': 0, 'cost': 0.0},
-            'visual': {'calls': 0, 'tokens': 0, 'cost': 0.0}
-        }
+        self._initialize_usage_tracker()
         self.context_history = []
         # Keep error_patterns to track systemic issues across resets
