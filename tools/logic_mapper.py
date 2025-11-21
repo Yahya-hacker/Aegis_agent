@@ -414,7 +414,7 @@ class LogicMapper:
     
     def load(self) -> bool:
         """
-        Load logic graph from disk.
+        Load logic graph from disk with validation.
         
         Returns:
             True if successful, False otherwise
@@ -424,7 +424,26 @@ class LogicMapper:
             return False
         
         try:
-            self.graph = nx.read_graphml(str(self.graph_file))
+            loaded_graph = nx.read_graphml(str(self.graph_file))
+            
+            # Validate graph structure before accepting it
+            if not isinstance(loaded_graph, nx.DiGraph):
+                logger.error("[LogicMapper] Loaded graph is not a directed graph")
+                return False
+            
+            # Validate that graph has at least an entry node
+            if loaded_graph.number_of_nodes() == 0:
+                logger.error("[LogicMapper] Loaded graph is empty")
+                return False
+            
+            # Basic structure validation - check for required attributes
+            for node, data in loaded_graph.nodes(data=True):
+                if not isinstance(data, dict):
+                    logger.error(f"[LogicMapper] Invalid node data for {node}")
+                    return False
+            
+            # Accept the validated graph
+            self.graph = loaded_graph
             
             # Reconstruct target states list
             self.target_states = [
@@ -432,7 +451,7 @@ class LogicMapper:
                 if data.get("state_type") in ["privileged", "target"]
             ]
             
-            logger.info(f"[LogicMapper] Loaded graph: {self.graph.number_of_nodes()} states, "
+            logger.info(f"[LogicMapper] Loaded and validated graph: {self.graph.number_of_nodes()} states, "
                        f"{self.graph.number_of_edges()} transitions")
             return True
         except Exception as e:

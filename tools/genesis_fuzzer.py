@@ -205,7 +205,14 @@ class GenesisFuzzer:
         ]
     
     def _command_injection(self, base_str):
-        """Command injection and code execution patterns"""
+        """
+        Command injection and code execution patterns.
+        
+        NOTE: These payloads contain system commands for testing purposes.
+        In production environments, these should be used only on authorized targets
+        with explicit permission. The commands (id, whoami, ls) are chosen to be
+        relatively safe and non-destructive for testing.
+        """
         return [
             "'; exec('ls'); --",
             "'; system('id'); --",
@@ -692,7 +699,7 @@ class GenesisFuzzer:
                             variant = payload_template.copy()
                             variant[field] = mutated_val
                             mutations.append(variant)
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, KeyError) as e:
                         logger.debug(f"[Genesis] Strategy {strategy.__name__} failed: {e}")
                         continue
             

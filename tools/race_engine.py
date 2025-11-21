@@ -273,7 +273,7 @@ class ChronosEngine:
         mean_time = statistics.mean(response_times)
         median_time = statistics.median(response_times)
         
-        if len(response_times) >= 2:
+        if len(response_times) > 1:  # Need at least 2 points for variance
             stdev_time = statistics.stdev(response_times)
             
             # Coefficient of Variation (CV) = stddev / mean

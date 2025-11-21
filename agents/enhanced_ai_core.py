@@ -54,7 +54,7 @@ async def parse_json_robust(content: str, orchestrator: Optional[MultiLLMOrchest
                 repaired = repair_json(json_match.group(1))
                 return json.loads(repaired)
             except (json.JSONDecodeError, ValueError, TypeError) as e:
-                logger.debug(f"Failed to repair JSON from markdown block (async): {e}")
+                logger.warning(f"Failed to repair JSON from markdown block (async): {e}")
                 pass
     
     # Strategy 2: Extract raw JSON object
@@ -68,7 +68,7 @@ async def parse_json_robust(content: str, orchestrator: Optional[MultiLLMOrchest
                 repaired = repair_json(json_match.group(0))
                 return json.loads(repaired)
             except (json.JSONDecodeError, ValueError, TypeError) as e:
-                logger.debug(f"Failed to repair JSON from raw object (async): {e}")
+                logger.warning(f"Failed to repair JSON from raw object (async): {e}")
                 pass
     
     # Strategy 3: Try direct parsing
@@ -79,7 +79,7 @@ async def parse_json_robust(content: str, orchestrator: Optional[MultiLLMOrchest
             repaired = repair_json(content)
             return json.loads(repaired)
         except (json.JSONDecodeError, ValueError, TypeError) as e:
-            logger.debug(f"Failed to repair JSON from direct parsing (async): {e}")
+            logger.warning(f"Failed to repair JSON from direct parsing (async): {e}")
             pass
     
     # Strategy 4: AUTO-HEALING with LLM (if orchestrator provided)
