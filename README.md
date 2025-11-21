@@ -8,12 +8,14 @@
 
 Aegis v7.5 goes beyond traditional security scanners by **generating** vulnerabilities instead of just matching signatures:
 
-- 🧬 **Genesis Protocol Fuzzer** - Grammar-based mutation engine finds zero-days through intelligent protocol breaking
-- 🧠 **Cortex Graph Memory** - State-aware navigation with algorithmic backtracking prevents context loss
+- 🧬 **Zero-Day Discovery Engine (Genesis)** - Grammar-based protocol fuzzer discovers integer overflows, logic errors, race conditions, and format string injections through intelligent mutation
+- 🧠 **Cortex Graph Memory (Blackboard Architecture)** - Separates verified facts from strategic goals to maintain infinite context during long campaigns
 - 🔍 **Deep Dive CDP Interceptor** - JavaScript sink detection discovers invisible DOM-based XSS
 - ⏱️ **Chronos Concurrency Engine** - Race condition detection using synchronization barriers
+- 👁️ **Visual-Cognitive Architecture (Set-of-Mark)** - Hacks complex SPAs (React/Vue) by "seeing" and tagging interactive elements, bypassing DOM obfuscation
 - 🪞 **Mirror JS Sandbox** - Execute target's JavaScript to bypass client-side validation
 - 📡 **Echo OOB Correlator** - Detect blind vulnerabilities through out-of-band callbacks
+- 💰 **Cost & Performance Optimization** - Multi-account key sharding for parallel execution and rate-limit evasion
 
 ## 🏗️ Multi-LLM Architecture
 
@@ -24,7 +26,15 @@ Aegis uses **four specialized AI models** via OpenRouter API, each optimized for
 - **Qwen 2.5 72B** (Code Model) - Code analysis, payload generation, script writing, and technical implementation
 - **Qwen 2.5 VL 32B** (Visual Model) - Screenshot analysis, UI reconnaissance, and visual vulnerability detection through multimodal analysis
 
-**🎯 Key Innovation: Environment-Based Configuration**
+**🎯 Key Innovation: Multi-Account API Key Sharding**
+
+All models support **separate API keys per role**, enabling:
+- **Parallel execution** across different OpenRouter accounts to bypass global rate limits
+- **Cost tracking** by isolating spending for each capability (strategy, reasoning, coding, vision)
+- **Budget control** with independent usage limits per model type
+- **Rate limit evasion** by distributing requests across multiple accounts
+
+**Environment-Based Configuration**
 
 All models are **100% configurable via the `.env` file** - no need to edit Python code! Simply change the model identifiers in your `.env` file to use any model available on OpenRouter. This makes it easy to:
 - Test different models for optimal performance
@@ -36,10 +46,52 @@ The orchestrator automatically selects the optimal model for each task. See [MUL
 
 ## 🚀 Core Capabilities
 
-### Zero-Day Discovery
-- **Grammar-based fuzzing** generates thousands of protocol mutations to find logic flaws
-- **7 mutation strategies**: bit flips, integer overflow, format strings, boundary violations, unicode/encoding edge cases, null byte injection, command injection
-- **Anomaly detection** automatically identifies unusual responses indicating vulnerabilities
+### Zero-Day Discovery Engine (Genesis)
+
+The Genesis engine is a **grammar-based protocol fuzzer** that goes beyond traditional signature matching. Instead of searching for known vulnerabilities, it generates mutations based on API documentation analysis to discover previously unknown security flaws:
+
+- **Intelligent Mutation Strategies**: Discovers integer overflows, logic errors, race conditions, and format string injections
+- **Protocol Grammar Analysis**: Parses API specifications to understand expected input formats
+- **Automated Anomaly Detection**: Identifies unusual responses that indicate potential vulnerabilities
+- **7 Advanced Mutation Techniques**: Bit flips, integer overflow triggers, format strings, boundary violations, unicode/encoding edge cases, null byte injection, and command injection patterns
+
+Unlike traditional fuzzers, Genesis understands the semantic meaning of protocol fields and generates context-aware mutations that are more likely to trigger security vulnerabilities.
+
+### Visual-Cognitive Architecture (Set-of-Mark)
+
+Aegis employs **Set-of-Mark (SoM)** technology that enables it to interact with complex single-page applications (React, Vue, Angular) by processing visual information:
+
+- **Visual Element Tagging**: Automatically identifies and tags interactive elements in screenshots
+- **DOM Obfuscation Bypass**: Works even when JavaScript frameworks obscure the traditional DOM structure
+- **SPA Navigation**: Successfully navigates modern web applications that heavily rely on client-side routing
+- **Interactive Element Detection**: Recognizes buttons, forms, links, and other UI components through computer vision
+- **Visual Vulnerability Detection**: Identifies security issues by analyzing UI behavior and visual feedback
+
+This visual-cognitive approach allows Aegis to test applications that are difficult or impossible to analyze using traditional DOM-based tools.
+
+### Blackboard Memory System
+
+The **Blackboard Architecture** separates knowledge into distinct categories to maintain context during long-running security campaigns:
+
+- **Verified Facts Storage**: Maintains a persistent database of confirmed vulnerabilities and system behaviors
+- **Strategic Goals Tracking**: Keeps mission objectives separate from tactical findings
+- **Infinite Context Maintenance**: Survives crashes, restarts, and long-duration missions without losing critical information
+- **Knowledge Graph Navigation**: Links related findings and tracks exploration paths through tested targets
+- **Session Persistence**: Enables multi-day campaigns with automatic state recovery
+
+This architecture solves the "context amnesia" problem common in AI-driven testing, ensuring that insights from earlier phases inform later exploitation attempts.
+
+### Cost & Performance Optimization
+
+Aegis v7.5 implements **multi-account API key sharding** to overcome rate limits and enable cost tracking:
+
+- **Parallel Execution**: Different model types use separate API keys, allowing simultaneous execution
+- **Rate Limit Evasion**: Distribute load across multiple OpenRouter accounts to bypass per-account limits
+- **Granular Cost Tracking**: Monitor spending per capability (strategy, reasoning, coding, vision)
+- **Budget Control**: Set different usage limits for each model role
+- **Account Isolation**: Protect critical operations by isolating them to dedicated API keys
+
+This sophisticated approach enables longer missions and higher throughput while maintaining cost visibility.
 
 ### Advanced Exploitation
 - **DOM-based XSS detection** via Chrome DevTools Protocol hooking
@@ -56,7 +108,6 @@ The orchestrator automatically selects the optimal model for each task. See [MUL
 - Automated reconnaissance (subdomain enumeration, port scanning, endpoint discovery)
 - Vulnerability scanning with session management for authenticated areas
 - Dynamic tool discovery and semi-autonomous operation
-- Visual grounding (Set-of-Mark) for web UI interaction
 
 ## 📋 Setup & Installation
 
