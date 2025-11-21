@@ -34,7 +34,8 @@ class MultiLLMOrchestrator:
     """
     
     def __init__(self):
-        self.api_key = None
+        self.api_key = None  # Legacy field for backward compatibility
+        self.api_keys = {}  # API key registry mapping roles to keys
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
         self.max_retries = 3
@@ -129,22 +130,77 @@ class MultiLLMOrchestrator:
         logger.info(f"   Default Max Tokens: {self.default_max_tokens}")
     
     async def initialize(self):
-        """Initialize the orchestrator and validate API key"""
+        """Initialize the orchestrator and validate API keys with sharding support"""
         try:
-            logger.info("🤖 Initializing Multi-LLM Orchestrator...")
+            logger.info("🤖 Initializing Multi-LLM Orchestrator with API Key Sharding...")
             
-            self.api_key = os.environ.get("OPENROUTER_API_KEY")
-            if not self.api_key:
-                logger.error("❌ OPENROUTER_API_KEY environment variable not set.")
-                raise ValueError("OPENROUTER_API_KEY must be set to use the AI.")
+            # Load master key (required fallback)
+            master_key = os.environ.get("OPENROUTER_API_KEY")
+            if not master_key:
+                master_key = None
             
-            logger.info("✅ API Key loaded successfully.")
+            # Build API key registry with fallback logic
+            # Each role can have its own key, or fallback to master key
+            self.api_keys = {
+                'strategic': os.environ.get("STRATEGIC_API_KEY") or master_key,
+                'vulnerability': os.environ.get("REASONING_API_KEY") or master_key,
+                'coder': os.environ.get("CODE_API_KEY") or master_key,
+                'visual': os.environ.get("VISUAL_API_KEY") or master_key
+            }
+            
+            # Validation: Check for missing keys
+            missing_keys = []
+            for role, key in self.api_keys.items():
+                if not key or key.strip() == "":
+                    missing_keys.append(role)
+            
+            if missing_keys:
+                error_msg = (
+                    f"❌ CRITICAL: Missing API keys for roles: {', '.join(missing_keys)}. "
+                    f"Either set OPENROUTER_API_KEY (master key) or provide specific keys "
+                    f"(STRATEGIC_API_KEY, REASONING_API_KEY, CODE_API_KEY, VISUAL_API_KEY)."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Strip whitespace from all keys
+            for role in self.api_keys:
+                self.api_keys[role] = self.api_keys[role].strip()
+            
+            # Maintain backward compatibility: set legacy self.api_key
+            self.api_key = master_key
+            
+            # Log configuration status with sophisticated reporting
+            logger.info("🔑 API Key Configuration Status:")
+            logger.info(f"   Master Key (OPENROUTER_API_KEY): {'✅ Configured' if master_key else '❌ Not Set'}")
+            logger.info("")
+            logger.info("   Role-Specific Key Assignment:")
+            
+            for role, key in self.api_keys.items():
+                role_key_env_map = {
+                    'strategic': 'STRATEGIC_API_KEY',
+                    'vulnerability': 'REASONING_API_KEY',
+                    'coder': 'CODE_API_KEY',
+                    'visual': 'VISUAL_API_KEY'
+                }
+                
+                role_env_var = role_key_env_map[role]
+                specific_key = os.environ.get(role_env_var)
+                
+                if specific_key and specific_key.strip():
+                    # Using role-specific key
+                    logger.info(f"   ✅ {role.capitalize()}: Using specific key ({role_env_var})")
+                else:
+                    # Falling back to master key
+                    logger.info(f"   ⚠️  {role.capitalize()}: Fallback to master key (OPENROUTER_API_KEY)")
+            
+            logger.info("")
             logger.info(f"📋 Configured LLMs (via OpenRouter):")
             for llm_type, config in self.llms.items():
                 logger.info(f"   • {config.role}: {config.model_name}")
             
             self.is_initialized = True
-            logger.info("✅ Multi-LLM Orchestrator ready.")
+            logger.info("✅ Multi-LLM Orchestrator ready with API Key Sharding enabled.")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize orchestrator: {e}", exc_info=True)
@@ -214,6 +270,7 @@ class MultiLLMOrchestrator:
     ) -> Dict[str, Any]:
         """
         Call a specific LLM via OpenRouter API with retry logic and error handling
+        Uses role-specific API keys from the key registry for granular cost control
         
         Args:
             llm_type: Type of LLM to use ('strategic', 'vulnerability', 'coder', or 'visual')
@@ -229,6 +286,16 @@ class MultiLLMOrchestrator:
         
         if llm_type not in self.llms:
             raise ValueError(f"Unknown LLM type: {llm_type}")
+        
+        # Retrieve role-specific API key from registry
+        if llm_type not in self.api_keys:
+            raise RuntimeError(f"CRITICAL: No API key configured for role '{llm_type}'. This should not happen after initialization.")
+        
+        role_api_key = self.api_keys[llm_type]
+        
+        # Safety check: Ensure key is not empty at runtime
+        if not role_api_key or role_api_key.strip() == "":
+            raise RuntimeError(f"CRITICAL: API key for role '{llm_type}' is empty or invalid at runtime.")
         
         # Use default parameters from environment if not specified
         if temperature is None:
@@ -259,7 +326,7 @@ class MultiLLMOrchestrator:
                 )
                 
                 headers = {
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {role_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "https://github.com/Yahya-hacker/Aegis_agent",
                     "X-Title": "Aegis AI Pentesting Agent"
@@ -506,8 +573,18 @@ class MultiLLMOrchestrator:
             )
             
             # Build the multimodal message
+            # Retrieve role-specific API key for visual model
+            if 'visual' not in self.api_keys:
+                raise RuntimeError("CRITICAL: No API key configured for visual role. This should not happen after initialization.")
+            
+            visual_api_key = self.api_keys['visual']
+            
+            # Safety check
+            if not visual_api_key or visual_api_key.strip() == "":
+                raise RuntimeError("CRITICAL: API key for visual role is empty or invalid at runtime.")
+            
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {visual_api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "https://github.com/Yahya-hacker/Aegis_agent",
                 "X-Title": "Aegis AI Pentesting Agent"
