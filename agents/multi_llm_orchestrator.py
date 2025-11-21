@@ -46,6 +46,16 @@ class MultiLLMOrchestrator:
         self.default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
         self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "4096"))
         
+        # Sophisticated tracking for long missions and complex chains
+        self.usage_tracker = {
+            'strategic': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'vulnerability': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'coder': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'visual': {'calls': 0, 'tokens': 0, 'cost': 0.0}
+        }
+        self.context_history = []  # Track context size over time
+        self.error_patterns = {}  # Track recurring errors for pattern detection
+        
         # Load model names from environment variables with fallback defaults
         # These defaults match the recommended models, but can be changed easily via .env
         strategic_model = os.getenv(
@@ -296,6 +306,9 @@ class MultiLLMOrchestrator:
         if not role_api_key or role_api_key.strip() == "":
             raise RuntimeError(f"CRITICAL: API key for role '{llm_type}' is empty or invalid at runtime.")
         
+        # Log which key role is being used at DEBUG level (as required by Task 1)
+        logger.debug(f"🔑 Using API key for role '{llm_type}' (key preview: {role_api_key[:10]}...)")
+        
         # Use default parameters from environment if not specified
         if temperature is None:
             temperature = self.default_temperature
@@ -387,6 +400,27 @@ class MultiLLMOrchestrator:
                         
                         logger.info(f"✅ Response received from {config.role}")
                         
+                        # Track usage for long mission monitoring
+                        usage = result.get('usage', {})
+                        total_tokens = usage.get('total_tokens', 0)
+                        self.usage_tracker[llm_type]['calls'] += 1
+                        self.usage_tracker[llm_type]['tokens'] += total_tokens
+                        
+                        # Warn if approaching context limits (sophisticated monitoring)
+                        if total_tokens > 0:
+                            self.context_history.append({
+                                'llm_type': llm_type,
+                                'tokens': total_tokens,
+                                'timestamp': asyncio.get_event_loop().time()
+                            })
+                            
+                            # Warn if single call uses >75% of max tokens
+                            if total_tokens > (max_tokens * 0.75):
+                                logger.warning(
+                                    f"⚠️  HIGH TOKEN USAGE: {llm_type} used {total_tokens}/{max_tokens} tokens. "
+                                    f"Consider chunking or summarizing for long missions."
+                                )
+                        
                         # Display the LLM interaction with full reasoning
                         self.reasoning_display.show_llm_interaction(
                             llm_name=config.role,
@@ -394,10 +428,12 @@ class MultiLLMOrchestrator:
                             response=content,
                             metadata={
                                 "model": config.model_name,
-                                "usage": result.get('usage', {}),
+                                "usage": usage,
                                 "temperature": temperature,
                                 "max_tokens": max_tokens,
-                                "attempt": attempt + 1
+                                "attempt": attempt + 1,
+                                "cumulative_calls": self.usage_tracker[llm_type]['calls'],
+                                "cumulative_tokens": self.usage_tracker[llm_type]['tokens']
                             }
                         )
                         
@@ -406,7 +442,7 @@ class MultiLLMOrchestrator:
                             'model': config.model_name,
                             'role': config.role,
                             'llm_type': llm_type,
-                            'usage': result.get('usage', {})
+                            'usage': usage
                         }
                         
             except asyncio.TimeoutError:
@@ -418,6 +454,16 @@ class MultiLLMOrchestrator:
                     continue
                 raise RuntimeError(f"Request to {config.role} timed out after {self.max_retries} attempts")
             except Exception as e:
+                error_key = f"{type(e).__name__}:{str(e)[:50]}"
+                self.error_patterns[error_key] = self.error_patterns.get(error_key, 0) + 1
+                
+                # Sophisticated error pattern detection for long missions
+                if self.error_patterns[error_key] >= 3:
+                    logger.error(
+                        f"🔴 RECURRING ERROR PATTERN DETECTED: '{error_key}' occurred {self.error_patterns[error_key]} times. "
+                        f"This may indicate a systemic issue in long missions or complex exploit chains."
+                    )
+                
                 logger.error(f"Error calling {config.role} (attempt {attempt + 1}/{self.max_retries}): {e}", exc_info=True)
                 if attempt < self.max_retries - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
@@ -665,3 +711,57 @@ class MultiLLMOrchestrator:
         except Exception as e:
             logger.error(f"Error in multimodal task: {e}", exc_info=True)
             return {'error': str(e)}
+    
+    def get_usage_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive usage statistics for monitoring long missions and complex chains.
+        
+        This is critical for identifying issues like:
+        - Context window exhaustion over time
+        - Unbalanced load across different model types
+        - Cumulative cost tracking per role
+        - Detecting when to checkpoint or summarize state
+        
+        Returns:
+            Dictionary with detailed usage statistics per role
+        """
+        total_calls = sum(stats['calls'] for stats in self.usage_tracker.values())
+        total_tokens = sum(stats['tokens'] for stats in self.usage_tracker.values())
+        
+        stats = {
+            'total_calls': total_calls,
+            'total_tokens': total_tokens,
+            'by_role': self.usage_tracker.copy(),
+            'context_history_size': len(self.context_history),
+            'unique_error_patterns': len(self.error_patterns),
+            'recurring_errors': {k: v for k, v in self.error_patterns.items() if v >= 2}
+        }
+        
+        logger.info("📊 Long Mission Statistics:")
+        logger.info(f"   Total LLM Calls: {total_calls}")
+        logger.info(f"   Total Tokens Used: {total_tokens:,}")
+        logger.info(f"   Breakdown by Role:")
+        for role, role_stats in self.usage_tracker.items():
+            if role_stats['calls'] > 0:
+                avg_tokens = role_stats['tokens'] / role_stats['calls']
+                logger.info(f"      {role}: {role_stats['calls']} calls, {role_stats['tokens']:,} tokens (avg: {avg_tokens:.0f})")
+        
+        if stats['recurring_errors']:
+            logger.warning(f"   ⚠️  Recurring Errors: {len(stats['recurring_errors'])} patterns detected")
+        
+        return stats
+    
+    def reset_usage_tracking(self):
+        """
+        Reset usage tracking for a new mission phase.
+        Useful for checkpointing in long-running missions.
+        """
+        logger.info("🔄 Resetting usage tracking for new mission phase...")
+        self.usage_tracker = {
+            'strategic': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'vulnerability': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'coder': {'calls': 0, 'tokens': 0, 'cost': 0.0},
+            'visual': {'calls': 0, 'tokens': 0, 'cost': 0.0}
+        }
+        self.context_history = []
+        # Keep error_patterns to track systemic issues across resets
