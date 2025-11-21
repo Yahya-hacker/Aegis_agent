@@ -135,9 +135,7 @@ class MultiLLMOrchestrator:
             logger.info("🤖 Initializing Multi-LLM Orchestrator with API Key Sharding...")
             
             # Load master key (required fallback)
-            master_key = os.environ.get("OPENROUTER_API_KEY")
-            if not master_key:
-                master_key = None
+            master_key = os.environ.get("OPENROUTER_API_KEY") or None
             
             # Build API key registry with fallback logic
             # Each role can have its own key, or fallback to master key
@@ -167,8 +165,9 @@ class MultiLLMOrchestrator:
             for role in self.api_keys:
                 self.api_keys[role] = self.api_keys[role].strip()
             
-            # Maintain backward compatibility: set legacy self.api_key
-            self.api_key = master_key
+            # Maintain backward compatibility: set legacy self.api_key to master key if available
+            # If no master key but all roles have specific keys, self.api_key remains None
+            self.api_key = master_key if master_key else None
             
             # Log configuration status with sophisticated reporting
             logger.info("🔑 API Key Configuration Status:")
