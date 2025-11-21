@@ -1,17 +1,23 @@
 # tools/race_engine.py
-# --- VERSION 7.5 - Chronos Concurrency Engine ---
+# --- VERSION 7.5 - Chronos Concurrency Engine with Statistical Anomaly Detection ---
 """
-The "Chronos" Concurrency Engine - Race Condition Detection
+The "Chronos" Concurrency Engine - Advanced Race Condition Detection
 
-A "Gatekeeper" socket engine that opens multiple connections, sends the first
-byte of requests to all connections, waits, and then sends the last byte to all
-simultaneously to detect race conditions and time-of-check-time-of-use (TOCTOU) bugs.
+Implements:
+1. GatekeeperSync - Rigorous asyncio.Barrier for microsecond-precise synchronization
+2. Statistical Verification - Response time distribution analysis
+3. Proper Resource Cleanup - Context managers for aiohttp sessions
+
+Uses synchronization barriers to ensure requests leave at the exact same microsecond,
+then analyzes response time distributions to detect race conditions via statistical
+anomalies (standard deviation spikes).
 """
 
 import asyncio
 import aiohttp
 import logging
 import time
+import statistics
 from typing import Dict, List, Any, Optional
 from collections import Counter
 
@@ -20,18 +26,25 @@ logger = logging.getLogger(__name__)
 
 class ChronosEngine:
     """
-    Synchronization Barrier Pattern for Race Condition Testing.
+    GatekeeperSync Synchronization Barrier Pattern for Race Condition Testing.
     
-    This engine:
-    1. Opens multiple concurrent connections
-    2. Sends requests simultaneously using barrier synchronization
-    3. Analyzes responses for race condition indicators
+    This engine implements:
+    1. Rigorous asyncio.Barrier logic for microsecond-precise synchronization
+    2. Statistical anomaly detection via response time distribution analysis
+    3. Proper resource cleanup with context managers
+    
+    The key insight: Race conditions manifest as statistical anomalies in
+    response times and content. When the standard deviation spikes, it indicates
+    concurrent access issues.
     """
     
     def __init__(self):
-        """Initialize the Chronos race engine"""
+        """Initialize the Chronos race engine with statistical tracking"""
         self.default_threads = 30
         self.results_history: List[Dict] = []
+        
+        # Statistical baseline tracking
+        self.baseline_stats: Optional[Dict[str, float]] = None
         
     async def execute_race(
         self,
@@ -96,8 +109,23 @@ class ChronosEngine:
             if error_results:
                 logger.warning(f"[Chronos] {len(error_results)} requests failed with errors")
         
-        # Analyze results for race condition indicators
+        # STATISTICAL VERIFICATION - The heart of race condition detection
+        statistical_analysis = self._statistical_verification(valid_results)
+        
+        # Traditional anomaly analysis
         analysis = self._analyze_results_for_anomalies(valid_results)
+        
+        # Combine statistical and traditional analysis
+        combined_findings = analysis.get("findings", []) + statistical_analysis.get("findings", [])
+        combined_confidence = min(
+            analysis.get("confidence", 0) + statistical_analysis.get("severity_score", 0),
+            100
+        )
+        
+        has_anomaly = (
+            analysis.get("has_anomaly", False) or 
+            statistical_analysis.get("has_statistical_anomaly", False)
+        )
         
         # Store in history
         race_test = {
@@ -106,11 +134,17 @@ class ChronosEngine:
             "threads": threads,
             "total_requests": len(valid_results),
             "errors": len(error_results),
-            "analysis": analysis
+            "analysis": analysis,
+            "statistical_analysis": statistical_analysis,
+            "has_anomaly": has_anomaly,
+            "combined_confidence": combined_confidence
         }
         self.results_history.append(race_test)
         
-        logger.info(f"[Chronos] Race test completed. Anomalies detected: {analysis['has_anomaly']}")
+        logger.info(f"[Chronos] Race test completed. Anomalies: {has_anomaly}, "
+                   f"Confidence: {combined_confidence}%")
+        if statistical_analysis.get("has_statistical_anomaly"):
+            logger.info(f"[Chronos] Statistical anomaly detected with {len(statistical_analysis.get('findings', []))} indicators")
         
         return {
             "success": True,
@@ -118,7 +152,11 @@ class ChronosEngine:
             "total_requests": len(valid_results),
             "errors": len(error_results),
             "analysis": analysis,
-            "summary": self._generate_summary(valid_results, analysis)
+            "statistical_analysis": statistical_analysis,
+            "has_anomaly": has_anomaly,
+            "combined_confidence": combined_confidence,
+            "combined_findings": combined_findings,
+            "summary": self._generate_summary(valid_results, {"findings": combined_findings, "has_anomaly": has_anomaly})
         }
     
     async def _attack_worker(
@@ -200,6 +238,128 @@ class ChronosEngine:
                 "worker_id": worker_id,
                 "error": str(e),
                 "timestamp": time.time()
+            }
+    
+    def _statistical_verification(self, results: List[Dict]) -> Dict[str, Any]:
+        """
+        STATISTICAL ANOMALY DETECTION - The key to detecting race conditions.
+        
+        When race conditions occur, response times exhibit high variance due to
+        resource contention. This method analyzes the statistical distribution
+        of response times to detect anomalies.
+        
+        Key metrics:
+        1. Standard Deviation - High stddev indicates variance in processing times
+        2. Coefficient of Variation (CV) - Normalized measure of dispersion
+        3. Outlier Detection - Responses that deviate significantly from mean
+        
+        Args:
+            results: List of request results
+        
+        Returns:
+            Dictionary with statistical analysis
+        """
+        valid_results = [r for r in results if "error" not in r and "response_time" in r]
+        
+        if len(valid_results) < 3:
+            return {
+                "has_statistical_anomaly": False,
+                "reason": "Insufficient data for statistical analysis"
+            }
+        
+        response_times = [r["response_time"] for r in valid_results]
+        
+        # Calculate statistical metrics
+        mean_time = statistics.mean(response_times)
+        median_time = statistics.median(response_times)
+        
+        if len(response_times) >= 2:
+            stdev_time = statistics.stdev(response_times)
+            
+            # Coefficient of Variation (CV) = stddev / mean
+            # CV > 0.5 indicates high variability (potential race condition)
+            cv = stdev_time / mean_time if mean_time > 0 else 0
+            
+            # Detect outliers using IQR method
+            sorted_times = sorted(response_times)
+            q1_idx = len(sorted_times) // 4
+            q3_idx = (3 * len(sorted_times)) // 4
+            q1 = sorted_times[q1_idx]
+            q3 = sorted_times[q3_idx]
+            iqr = q3 - q1
+            
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+            
+            outliers = [t for t in response_times if t < lower_bound or t > upper_bound]
+            outlier_pct = (len(outliers) / len(response_times)) * 100 if response_times else 0
+            
+            findings = []
+            severity_score = 0
+            
+            # High standard deviation indicates resource contention
+            if stdev_time > mean_time * 0.5:  # stddev > 50% of mean
+                findings.append({
+                    "type": "high_response_time_variance",
+                    "severity": "HIGH",
+                    "description": f"High variance in response times (stddev: {stdev_time:.3f}s, mean: {mean_time:.3f}s)",
+                    "indicator": "STRONG indicator of race condition - resource contention detected"
+                })
+                severity_score += 50
+            
+            # High coefficient of variation
+            if cv > 0.5:
+                findings.append({
+                    "type": "high_coefficient_variation",
+                    "severity": "MEDIUM",
+                    "description": f"Coefficient of variation: {cv:.2f} (threshold: 0.5)",
+                    "indicator": "Statistical anomaly in processing times"
+                })
+                severity_score += 30
+            
+            # Significant number of outliers
+            if outlier_pct > 10:
+                findings.append({
+                    "type": "outlier_detection",
+                    "severity": "MEDIUM",
+                    "description": f"{outlier_pct:.1f}% of responses are outliers",
+                    "indicator": "Inconsistent processing times suggest race condition"
+                })
+                severity_score += 25
+            
+            # Large gap between mean and median (skewed distribution)
+            if abs(mean_time - median_time) > mean_time * 0.3:
+                findings.append({
+                    "type": "skewed_distribution",
+                    "severity": "LOW",
+                    "description": f"Skewed distribution (mean: {mean_time:.3f}s, median: {median_time:.3f}s)",
+                    "indicator": "Non-uniform processing times"
+                })
+                severity_score += 15
+            
+            return {
+                "has_statistical_anomaly": severity_score >= 30,
+                "severity_score": severity_score,
+                "findings": findings,
+                "statistics": {
+                    "mean": mean_time,
+                    "median": median_time,
+                    "stdev": stdev_time,
+                    "coefficient_variation": cv,
+                    "outliers": len(outliers),
+                    "outlier_percentage": outlier_pct,
+                    "min_time": min(response_times),
+                    "max_time": max(response_times)
+                }
+            }
+        else:
+            return {
+                "has_statistical_anomaly": False,
+                "reason": "Insufficient variance for analysis",
+                "statistics": {
+                    "mean": mean_time,
+                    "median": median_time
+                }
             }
     
     def _analyze_results_for_anomalies(self, results: List[Dict]) -> Dict[str, Any]:
