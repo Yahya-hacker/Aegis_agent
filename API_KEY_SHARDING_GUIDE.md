@@ -278,6 +278,64 @@ A: No performance impact. Key lookup is instant from the registry dictionary.
 **Q: Can I track which key was used for each request?**  
 A: Yes, check the logs. Each LLM call logs which role and model were used, allowing you to correlate with your OpenRouter dashboard.
 
+**Q: How can I monitor token usage during long missions?**  
+A: The orchestrator includes sophisticated tracking. Call `orchestrator.get_usage_statistics()` to see cumulative stats by role, including total calls, tokens, and recurring error patterns.
+
+**Q: What happens if I exceed token limits during complex exploit chains?**  
+A: The system automatically warns when a single call uses >75% of max_tokens and tracks context history to detect exhaustion patterns over time.
+
+---
+
+## Long Mission Monitoring
+
+Aegis v7.5 includes **sophisticated tracking** for long-running missions and complex exploit chains to prevent common AI issues:
+
+### Automatic Context Monitoring
+
+The orchestrator tracks:
+- **Token usage per call** and cumulative totals by role
+- **Context history** over time to detect patterns
+- **Automatic warnings** when approaching limits (>75% max_tokens)
+- **Error pattern detection** to identify systemic issues
+
+### Getting Usage Statistics
+
+During or after a mission, get comprehensive stats:
+
+```python
+stats = orchestrator.get_usage_statistics()
+
+# Returns:
+# {
+#     'total_calls': 150,
+#     'total_tokens': 245000,
+#     'by_role': {
+#         'strategic': {'calls': 50, 'tokens': 75000},
+#         'vulnerability': {'calls': 40, 'tokens': 80000},
+#         'coder': {'calls': 45, 'tokens': 70000},
+#         'visual': {'calls': 15, 'tokens': 20000}
+#     },
+#     'recurring_errors': {...}
+# }
+```
+
+### Mission Checkpointing
+
+For very long missions, reset tracking between phases:
+
+```python
+orchestrator.reset_usage_tracking()
+```
+
+This clears call/token counters while preserving error patterns for systemic issue detection.
+
+### Common Issues Detected
+
+1. **Context Window Exhaustion**: Warns when individual calls use >75% of max_tokens
+2. **Recurring Errors**: Detects patterns after 3+ occurrences of the same error
+3. **Unbalanced Load**: Statistics show if one role is being overused
+4. **Token Accumulation**: Tracks cumulative usage to prevent quota exhaustion
+
 ---
 
 ## Support

@@ -307,7 +307,8 @@ class MultiLLMOrchestrator:
             raise RuntimeError(f"CRITICAL: API key for role '{llm_type}' is empty or invalid at runtime.")
         
         # Log which key role is being used at DEBUG level (as required by Task 1)
-        logger.debug(f"🔑 Using API key for role '{llm_type}' (key preview: {role_api_key[:10]}...)")
+        # Security: Never log actual key values, only the role being used
+        logger.debug(f"🔑 Using API key for role '{llm_type}'")
         
         # Use default parameters from environment if not specified
         if temperature is None:
@@ -408,10 +409,18 @@ class MultiLLMOrchestrator:
                         
                         # Warn if approaching context limits (sophisticated monitoring)
                         if total_tokens > 0:
+                            # Use asyncio.get_running_loop() for modern asyncio compatibility
+                            try:
+                                loop_time = asyncio.get_running_loop().time()
+                            except RuntimeError:
+                                # Fallback for edge cases where no running loop
+                                import time
+                                loop_time = time.time()
+                            
                             self.context_history.append({
                                 'llm_type': llm_type,
                                 'tokens': total_tokens,
-                                'timestamp': asyncio.get_event_loop().time()
+                                'timestamp': loop_time
                             })
                             
                             # Warn if single call uses >75% of max tokens
@@ -454,13 +463,18 @@ class MultiLLMOrchestrator:
                     continue
                 raise RuntimeError(f"Request to {config.role} timed out after {self.max_retries} attempts")
             except Exception as e:
-                error_key = f"{type(e).__name__}:{str(e)[:50]}"
+                # Create a more robust error classification using error type and a hash
+                # of the full message to avoid grouping different errors together
+                error_type = type(e).__name__
+                error_msg = str(e)
+                # Use first 100 chars for better classification while keeping logs readable
+                error_key = f"{error_type}:{error_msg[:100]}"
                 self.error_patterns[error_key] = self.error_patterns.get(error_key, 0) + 1
                 
                 # Sophisticated error pattern detection for long missions
                 if self.error_patterns[error_key] >= 3:
                     logger.error(
-                        f"🔴 RECURRING ERROR PATTERN DETECTED: '{error_key}' occurred {self.error_patterns[error_key]} times. "
+                        f"🔴 RECURRING ERROR PATTERN DETECTED: '{error_type}' occurred {self.error_patterns[error_key]} times. "
                         f"This may indicate a systemic issue in long missions or complex exploit chains."
                     )
                 

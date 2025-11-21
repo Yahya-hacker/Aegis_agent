@@ -8,7 +8,7 @@
 
 Aegis v7.5 goes beyond traditional security scanners by **generating** vulnerabilities instead of just matching signatures:
 
-- 🧬 **Zero-Day Discovery Engine (Genesis)** - Grammar-based protocol fuzzer discovers integer overflows, logic errors, race conditions, and format string injections through intelligent mutation
+- 🧬 **Zero-Day Discovery Engine (Genesis)** - Grammar-based protocol fuzzer generates mutations to discover previously unknown vulnerabilities including integer overflows, logic errors, race conditions, and format string injections
 - 🧠 **Cortex Graph Memory (Blackboard Architecture)** - Separates verified facts from strategic goals to maintain infinite context during long campaigns
 - 🔍 **Deep Dive CDP Interceptor** - JavaScript sink detection discovers invisible DOM-based XSS
 - ⏱️ **Chronos Concurrency Engine** - Race condition detection using synchronization barriers

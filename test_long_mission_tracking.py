@@ -14,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from agents.multi_llm_orchestrator import MultiLLMOrchestrator
 
+# Test constants
+TEST_API_KEY = "test_key_12345"
+
 async def test_usage_tracking():
     """Test that usage tracking works correctly"""
     print("\n" + "=" * 80)
@@ -21,7 +24,7 @@ async def test_usage_tracking():
     print("=" * 80)
     
     # Set test API key
-    os.environ["OPENROUTER_API_KEY"] = "test_key_12345"
+    os.environ["OPENROUTER_API_KEY"] = TEST_API_KEY
     
     # Clear role-specific keys
     for key in ["STRATEGIC_API_KEY", "REASONING_API_KEY", "CODE_API_KEY", "VISUAL_API_KEY"]:
@@ -78,7 +81,7 @@ async def test_error_pattern_tracking():
     print("TEST: Error Pattern Tracking")
     print("=" * 80)
     
-    os.environ["OPENROUTER_API_KEY"] = "test_key_12345"
+    os.environ["OPENROUTER_API_KEY"] = TEST_API_KEY
     
     try:
         orchestrator = MultiLLMOrchestrator()
@@ -106,7 +109,7 @@ async def test_context_history_tracking():
     print("TEST: Context History Tracking")
     print("=" * 80)
     
-    os.environ["OPENROUTER_API_KEY"] = "test_key_12345"
+    os.environ["OPENROUTER_API_KEY"] = TEST_API_KEY
     
     try:
         orchestrator = MultiLLMOrchestrator()
