@@ -1,0 +1,46 @@
+{
+  "name": "Kali Linux - Aegis Studio",
+  "image": "kalilinux/kali-rolling",
+  
+  "features": {
+    // Installe les utilitaires de base (git, zsh, curl)
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "username": "root",
+      "userUid": "0",
+      "userGid": "0",
+      "upgradePackages": false
+    },
+    // Installe Python (requis pour Aegis)
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    },
+    // Installe Go (requis pour les outils de reco comme subfinder/naabu cités dans le README)
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "latest"
+    }
+  },
+
+  // Commandes à lancer à la création du conteneur
+  // Note: On installe les outils essentiels pour Aegis ici
+  "updateContentCommand": "apt-get update && apt-get install -y python3-pip nmap iputils-ping dnsutils",
+
+  // Une fois le conteneur créé, on installe les dépendances Python de votre agent
+  "postCreateCommand": "pip install -r requirements.txt",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.debugpy"
+      ]
+    }
+  },
+
+  // Important pour les outils de scan (nmap) : rester en ROOT
+  "remoteUser": "root"
+}
