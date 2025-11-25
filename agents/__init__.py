@@ -10,11 +10,8 @@ from .learning_engine import AegisLearningEngine
 from .field_tester import AegisFieldTester
 
 # Legacy import for backwards compatibility (deprecated)
-try:
-    from .ai_core import AegisAI
-except SyntaxError:
-    # Old ai_core.py is incomplete, use enhanced version
-    AegisAI = EnhancedAegisAI
+# Old ai_core.py is incomplete/removed, use enhanced version
+AegisAI = EnhancedAegisAI
 
 __all__ = [
     'EnhancedAegisAI',

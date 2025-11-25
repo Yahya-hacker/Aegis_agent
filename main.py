@@ -10,7 +10,11 @@ import os
 import logging
 from pathlib import Path
 
-# Configuration du logging (très important pour le debug)
+# Pour le env
+from dotenv import load_dotenv
+load_dotenv() # Charge les variables du fichier .env
+
+# Configuration du logging (très important pour le debug) 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,7 +23,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-
+                                             
 logger = logging.getLogger(__name__)
 
 # Ajoute la racine du projet au PYTHONPATH

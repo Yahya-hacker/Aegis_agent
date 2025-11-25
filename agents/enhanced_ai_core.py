@@ -864,14 +864,17 @@ class EnhancedAegisAI:
         Returns:
             Pruned history with summary of old interactions
         """
-        if len(history) <= self.max_history_size:
+        # Reduce max history size to prevent token overflow
+        effective_max_history = min(self.max_history_size, 10)
+        
+        if len(history) <= effective_max_history:
             return history
         
-        # Keep the last max_history_size interactions
-        recent = history[-self.max_history_size:]
+        # Keep the last effective_max_history interactions
+        recent = history[-effective_max_history:]
         
         # Summarize older interactions if we haven't done so recently
-        older = history[:-self.max_history_size]
+        older = history[:-effective_max_history]
         
         # Extract key information from older interactions
         key_findings = []
@@ -879,25 +882,31 @@ class EnhancedAegisAI:
         for item in older:
             content = item.get('content', '')
             if 'vulnerability' in content.lower() or 'finding' in content.lower():
-                key_findings.append(content[:100])  # First 100 chars
+                # Extract just the core finding if possible
+                key_findings.append(content[:150] + "..." if len(content) > 150 else content)
             if 'decision' in content.lower() or 'action' in content.lower():
-                key_decisions.append(content[:100])
+                key_decisions.append(content[:100] + "..." if len(content) > 100 else content)
         
         # Build comprehensive summary
         summary_parts = [
-            f"[Context from {len(older)} previous interactions:",
-            f"Key findings: {len(key_findings)}",
-            f"Key decisions: {len(key_decisions)}"
+            f"[Context Summary: {len(older)} previous steps condensed]",
+            f"Key findings ({len(key_findings)}):"
         ]
         
-        if key_findings:
-            summary_parts.append(f"Notable findings: {', '.join(key_findings[:3])}")
+        # Add up to 5 most recent key findings
+        for finding in key_findings[-5:]:
+            summary_parts.append(f"- {finding}")
+            
+        summary_parts.append(f"Key decisions ({len(key_decisions)}):")
+        # Add up to 5 most recent key decisions
+        for decision in key_decisions[-5:]:
+            summary_parts.append(f"- {decision}")
         
-        summary_content = " ".join(summary_parts) + "]"
+        summary_content = "\n".join(summary_parts)
         
         # Create a summary entry
         summary_entry = {
-            "role": "system",
+            "type": "system", # Changed from role to type to match agent memory structure
             "content": summary_content
         }
         
@@ -1015,12 +1024,23 @@ Analyze this conversation and determine if we have all information (target and r
         Decides the next action based on BBP rules and agent memory
         Uses Mixtral 8x7B for vulnerability analysis and exploitation planning
         
-        Note: This is synchronous to maintain compatibility with existing code
+        Note: This is synchronous to maintain compatibility with existing code.
+        If called from an async context, use get_next_action_async() instead.
         """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+            
+        if loop and loop.is_running():
+            # We are in an async context, we cannot use asyncio.run()
+            # The caller should have used get_next_action_async()
+            raise RuntimeError("get_next_action() called from a running event loop. Use await get_next_action_async() instead.")
+            
         # Run async function in sync context
-        return asyncio.run(self._get_next_action_async(bbp_rules, agent_memory))
+        return asyncio.run(self.get_next_action_async(bbp_rules, agent_memory))
     
-    async def _get_next_action_async(self, bbp_rules: str, agent_memory: List[Dict]) -> Dict:
+    async def get_next_action_async(self, bbp_rules: str, agent_memory: List[Dict]) -> Dict:
         """Async implementation of get_next_action"""
         if not self.is_initialized:
             return {"tool": "system", "message": "AI not initialized"}
@@ -1082,7 +1102,7 @@ PHASE 4 - MULTIMODAL CAPABILITIES & VISUAL GROUNDING:
 You now have access to visual reconnaissance tools for analyzing web interfaces:
 - capture_screenshot_som(url, full_page=True/False): Capture screenshot with Set-of-Mark (SoM) visual grounding
   * Returns a screenshot with numbered red badges on all clickable elements
-  * Provides element_mapping with {ID: selector} for each interactive element
+  * Provides element_mapping with {{ID: selector}} for each interactive element
   * Use this when you need to understand the UI layout and identify clickable elements
 - click_element_by_id(url, element_id): Click a specific element using its SoM ID
   * Must be called AFTER capture_screenshot_som

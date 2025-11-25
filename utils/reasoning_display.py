@@ -176,15 +176,21 @@ class ReasoningDisplay:
             logger.debug(f"  Prompt: {prompt[:200]}...")
             logger.debug(f"  Response: {response[:200]}...")
     
-    def show_action_proposal(self, action: Dict[str, Any], reasoning: Optional[str] = None):
+    def show_action_proposal(self, action: Dict[str, Any], reasoning: Optional[Any] = None):
         """
         Display a proposed action with reasoning
         
         Args:
             action: The action dictionary
-            reasoning: Reasoning behind the action
+            reasoning: Reasoning behind the action (string or dict)
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Handle dictionary reasoning (extract content or convert to string)
+        if isinstance(reasoning, dict):
+            reasoning = reasoning.get('content', json.dumps(reasoning, indent=2))
+        elif reasoning is not None and not isinstance(reasoning, str):
+            reasoning = str(reasoning)
         
         if self.verbose:
             print(f"\n{self._color('╔' + '═' * 78 + '╗', 'YELLOW')}")

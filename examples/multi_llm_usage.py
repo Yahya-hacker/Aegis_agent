@@ -57,7 +57,7 @@ async def example_vulnerability_analysis():
         {"type": "observation", "content": "Port scan on www.example.com found: 80, 443 open"},
     ]
     
-    action = ai.get_next_action(bbp_rules, agent_memory)
+    action = await ai.get_next_action_async(bbp_rules, agent_memory)
     print(f"Next action: {action}")
 
 async def example_code_analysis():

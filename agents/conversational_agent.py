@@ -168,7 +168,7 @@ class AegisConversation:
                 thought_type="analysis"
             )
             
-            action = self.ai_core.get_next_action(bbp_rules, self.agent_memory)
+            action = await self.ai_core.get_next_action_async(bbp_rules, self.agent_memory)
             
             print(f"🤖 PROPOSITION IA : {action}")
             
@@ -280,8 +280,8 @@ class AegisConversation:
                 # BLACKBOARD MEMORY: Extract facts from tool output
                 if result.get("status") == "success":
                     try:
-                        mission_context = f"Target: {mission_target}, Rules: {bbp_rules}"
-                        await ai_core.extract_facts_from_output(tool, result, mission_context)
+                        mission_context = f"Target: {target}, Rules: {bbp_rules}"
+                        await self.ai_core.extract_facts_from_output(tool, result, mission_context)
                     except Exception as e:
                         logger.warning(f"Failed to extract facts: {e}")
                 

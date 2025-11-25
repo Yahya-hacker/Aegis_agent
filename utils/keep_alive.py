@@ -74,7 +74,7 @@ class KeepAlive:
             
             # Method 2: Update process title if available (Linux/Unix)
             try:
-                import setproctitle
+                import setproctitle  # type: ignore
                 elapsed = int(time.time() - self.start_time) if self.start_time else 0
                 setproctitle.setproctitle(f"aegis_agent [running {elapsed}s]")
             except ImportError:
