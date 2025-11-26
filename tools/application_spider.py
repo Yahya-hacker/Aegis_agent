@@ -1,6 +1,19 @@
 """
-Application Spider Tool for Aegis AI
-Cognitive web application crawler with 3 levels of depth
+Application Spider Tool for Aegis AI.
+
+Cognitive web application crawler with 3 levels of depth for discovering
+API endpoints, routes, forms, and application logic.
+
+Levels:
+    1. Fast (HTML parsing) - Parse HTML for links and forms
+    2. Static JS (JavaScript analysis) - Download and analyze JS files for API routes
+    3. Deep Visual (AI-powered) - Use visual reconnaissance and AI analysis
+
+Features:
+    - Authenticated crawling with session cookies
+    - JavaScript API endpoint extraction
+    - AI-powered minified JS de-obfuscation
+    - Visual element discovery with multimodal LLM
 """
 
 import asyncio
@@ -18,32 +31,38 @@ logger = logging.getLogger(__name__)
 
 class ApplicationSpiderTool:
     """
-    Multi-level application spider for discovering API endpoints, routes, and logic
+    Multi-level application spider for discovering API endpoints, routes, and logic.
     
-    Levels:
-    1. Fast (HTML parsing): Parse HTML for links and forms
-    2. Static JS (JavaScript analysis): Download and analyze JS files for API routes
-    3. Deep Visual (AI-powered): Use visual reconnaissance and AI analysis
+    This tool provides three levels of crawling depth:
+        - Fast: HTML parsing for links and forms (fastest, good for initial recon)
+        - Static JS: JavaScript analysis for API routes (medium, finds hidden endpoints)
+        - Deep Visual: AI-powered screenshot analysis (slowest, best coverage)
+    
+    Attributes:
+        orchestrator: MultiLLMOrchestrator instance for AI-powered analysis.
+        timeout: Default request timeout in seconds.
+        max_redirects: Maximum number of redirects to follow.
+        discovered_map: Dictionary storing discovered URLs, forms, APIs, JS files.
     """
     
     def __init__(self, orchestrator=None):
         """
-        Initialize the application spider
+        Initialize the application spider.
         
         Args:
-            orchestrator: MultiLLMOrchestrator instance for AI-powered analysis
+            orchestrator: Optional MultiLLMOrchestrator instance for AI-powered analysis.
         """
         self.orchestrator = orchestrator
         self.timeout = 30.0
         self.max_redirects = 5
-        self.discovered_map = {
+        self.discovered_map: Dict[str, Any] = {
             "urls": set(),
             "forms": [],
             "api_endpoints": set(),
             "js_files": set(),
             "interesting_patterns": []
         }
-        logger.info("ApplicationSpiderTool initialized")
+        logger.info("🕷️ ApplicationSpiderTool initialized")
     
     def _load_session_data(self) -> Optional[Dict]:
         """

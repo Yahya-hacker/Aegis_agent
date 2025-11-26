@@ -1,15 +1,21 @@
 # tools/genesis_fuzzer.py
 # --- VERSION 7.5 - Genesis Protocol Fuzzer with Evolutionary Mutations ---
 """
-The "Genesis" Protocol Fuzzer - Evolutionary Genetic Mutation Engine
+The "Genesis" Protocol Fuzzer - Evolutionary Genetic Mutation Engine.
 
 Implements an advanced fuzzer using:
-1. Genetic Mutation Fuzzing - Byte-level mutations with feedback loops
-2. Differential Analysis - Levenshtein distance, timing, and structure analysis
-3. Context Awareness - Technology-specific mutation strategies
+    1. Genetic Mutation Fuzzing - Byte-level mutations with feedback loops
+    2. Differential Analysis - Levenshtein distance, timing, and structure analysis
+    3. Context Awareness - Technology-specific mutation strategies
 
 Instead of relying on static payloads, Genesis takes valid requests and applies
 intelligent mutations to discover zero-day vulnerabilities.
+
+Features:
+    - 7+ mutation strategies (overflow, format string, unicode, etc.)
+    - Technology fingerprinting for context-aware payloads
+    - Statistical anomaly detection for blind vulnerability discovery
+    - Baseline capture and differential response analysis
 """
 
 import random
@@ -62,15 +68,25 @@ class GenesisFuzzer:
     """
     Evolutionary Genetic Mutation Fuzzer with Differential Analysis.
     
-    Key improvements over static payloads:
-    1. Takes valid requests and applies byte-level mutations
-    2. Uses feedback loop to identify successful mutation patterns
-    3. Performs differential analysis to detect subtle vulnerabilities
-    4. Context-aware mutations based on detected technology
+    Key improvements over static payload scanners:
+        1. Takes valid requests and applies byte-level mutations
+        2. Uses feedback loop to identify successful mutation patterns
+        3. Performs differential analysis to detect subtle vulnerabilities
+        4. Context-aware mutations based on detected technology stack
+    
+    Attributes:
+        mutation_strategies: List of mutation strategy functions.
+        grammar: Protocol grammar definition for smart mutations.
+        max_mutations_per_field: Maximum mutations to generate per field.
+        baseline_response: Baseline response for differential analysis.
+        tech_patterns: Patterns for detecting technology stacks.
+        tech_specific_mutations: Technology-specific mutation strategies.
+        successful_mutations: History of mutations that found anomalies.
+        mutation_effectiveness: Tracking mutation strategy effectiveness.
     """
     
     def __init__(self):
-        """Initialize the Genesis fuzzer with evolutionary mutation strategies"""
+        """Initialize the Genesis fuzzer with evolutionary mutation strategies."""
         self.mutation_strategies = [
             self._bit_flip,
             self._integer_overflow,
@@ -80,7 +96,7 @@ class GenesisFuzzer:
             self._null_byte_injection,
             self._command_injection
         ]
-        self.grammar = {}
+        self.grammar: Dict = {}
         self.max_mutations_per_field = 50
         
         # Baseline response tracking for differential analysis
@@ -109,29 +125,56 @@ class GenesisFuzzer:
         self.successful_mutations: List[Dict] = []
         self.mutation_effectiveness: Dict[str, int] = {}
         
-    def compile_grammar(self, llm_grammar_definition: dict):
+        logger.info("🧬 GenesisFuzzer initialized with evolutionary mutation engine")
+        
+    def compile_grammar(self, llm_grammar_definition: Dict) -> None:
         """
         Accepts a JSON schema from the LLM defining the target protocol.
         
+        The grammar definition helps Genesis understand the expected structure
+        of inputs, enabling smarter mutations that are more likely to find
+        vulnerabilities.
+        
         Args:
-            llm_grammar_definition: Dictionary defining protocol structure
-                Example: {
-                    "username": {"type": "string", "max_len": 20},
-                    "age": {"type": "integer", "min": 0, "max": 120},
-                    "email": {"type": "email"}
-                }
+            llm_grammar_definition: Dictionary defining protocol structure.
+                Example::
+                
+                    {
+                        "username": {"type": "string", "max_len": 20},
+                        "age": {"type": "integer", "min": 0, "max": 120},
+                        "email": {"type": "email"}
+                    }
         """
         self.grammar = llm_grammar_definition
-        logger.info(f"[Genesis] Compiled grammar with {len(self.grammar)} fields")
+        logger.info(f"🧬 Compiled grammar with {len(self.grammar)} fields")
+    
+    def _bit_flip(self, base_val: Any) -> List[Any]:
+        """
+        Bit flip mutations for binary protocols.
         
-    def _bit_flip(self, base_val):
-        """Bit flip mutations for binary protocols"""
+        Args:
+            base_val: Base integer value to mutate.
+            
+        Returns:
+            List[Any]: List of mutated values with flipped bits.
+        """
         if isinstance(base_val, int):
             return [base_val ^ 1, base_val ^ 0xFF, base_val ^ 0xFFFF]
         return []
     
-    def _integer_overflow(self, base_val):
-        """Smart integer edge cases for overflow/underflow detection"""
+    def _integer_overflow(self, base_val: Any) -> List[Any]:
+        """
+        Smart integer edge cases for overflow/underflow detection.
+        
+        Generates values at boundary conditions for 8/16/32/64-bit
+        integers in both signed and unsigned representations.
+        
+        Args:
+            base_val: Base value (ignored, returns static edge cases).
+            
+        Returns:
+            List[Any]: List of integer boundary values.
+        """
         return [
             0,                      # Zero
             -1,                     # Negative one

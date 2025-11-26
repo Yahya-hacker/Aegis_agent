@@ -1,16 +1,22 @@
 # tools/race_engine.py
 # --- VERSION 7.5 - Chronos Concurrency Engine with Statistical Anomaly Detection ---
 """
-The "Chronos" Concurrency Engine - Advanced Race Condition Detection
+The "Chronos" Concurrency Engine - Advanced Race Condition Detection.
 
 Implements:
-1. GatekeeperSync - Rigorous asyncio.Barrier for microsecond-precise synchronization
-2. Statistical Verification - Response time distribution analysis
-3. Proper Resource Cleanup - Context managers for aiohttp sessions
+    1. GatekeeperSync - Rigorous asyncio.Barrier for microsecond-precise synchronization
+    2. Statistical Verification - Response time distribution analysis
+    3. Proper Resource Cleanup - Context managers for aiohttp sessions
 
 Uses synchronization barriers to ensure requests leave at the exact same microsecond,
 then analyzes response time distributions to detect race conditions via statistical
 anomalies (standard deviation spikes).
+
+Features:
+    - Asyncio barrier synchronization for simultaneous request release
+    - Statistical anomaly detection (stddev, CV, outliers)
+    - Response content and timing analysis
+    - Counter race condition detection with ID extraction
 """
 
 import asyncio
@@ -29,22 +35,29 @@ class ChronosEngine:
     GatekeeperSync Synchronization Barrier Pattern for Race Condition Testing.
     
     This engine implements:
-    1. Rigorous asyncio.Barrier logic for microsecond-precise synchronization
-    2. Statistical anomaly detection via response time distribution analysis
-    3. Proper resource cleanup with context managers
+        1. Rigorous asyncio.Barrier logic for microsecond-precise synchronization
+        2. Statistical anomaly detection via response time distribution analysis
+        3. Proper resource cleanup with context managers
     
     The key insight: Race conditions manifest as statistical anomalies in
     response times and content. When the standard deviation spikes, it indicates
     concurrent access issues.
+    
+    Attributes:
+        default_threads: Default number of concurrent threads for race testing.
+        results_history: History of race test results for analysis.
+        baseline_stats: Statistical baseline for comparison.
     """
     
     def __init__(self):
-        """Initialize the Chronos race engine with statistical tracking"""
+        """Initialize the Chronos race engine with statistical tracking."""
         self.default_threads = 30
         self.results_history: List[Dict] = []
         
         # Statistical baseline tracking
         self.baseline_stats: Optional[Dict[str, float]] = None
+        
+        logger.info("⏱️ ChronosEngine initialized for race condition detection")
         
     async def execute_race(
         self,

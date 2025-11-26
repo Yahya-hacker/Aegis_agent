@@ -1,11 +1,28 @@
 # tools/cdp_hooks.py
 # --- VERSION 7.5 - Deep Dive CDP Interceptor ---
 """
-The "Deep Dive" CDP Interceptor - JavaScript Sink Detection
+The "Deep Dive" CDP Interceptor - JavaScript Sink Detection.
 
 Uses Chrome DevTools Protocol (CDP) to hook JavaScript sinks and detect DOM XSS.
 The agent injects a "Spy" script that reports whenever dangerous functions are
 called with user input, enabling detection of invisible attack surfaces.
+
+Features:
+    - Hooks dangerous JavaScript sinks (eval, innerHTML, document.write, etc.)
+    - Monitors console output for trap triggers
+    - Correlates trap triggers with payloads to confirm vulnerabilities
+    - Attribute mutation observation for event handler XSS
+    - Automated DOM XSS testing workflow
+
+Trapped Sinks:
+    - eval()
+    - setTimeout() / setInterval() with string arguments
+    - Function constructor
+    - innerHTML / outerHTML assignments
+    - document.write() / document.writeln()
+    - location assignments
+    - postMessage()
+    - Event handler attributes (onclick, onerror, etc.)
 """
 
 import asyncio
@@ -177,23 +194,29 @@ class CDPHooks:
     Chrome DevTools Protocol Hooks for detecting DOM-based vulnerabilities.
     
     This class provides functionality to:
-    1. Inject JavaScript hooks into pages before they load
-    2. Monitor console output for trap triggers
-    3. Correlate trap triggers with payloads to confirm vulnerabilities
+        1. Inject JavaScript hooks into pages before they load
+        2. Monitor console output for trap triggers
+        3. Correlate trap triggers with payloads to confirm vulnerabilities
+    
+    Attributes:
+        trapped_events: List of captured trap events from JavaScript sinks.
+        browser: Playwright Browser instance.
+        playwright: Playwright instance for browser management.
     """
     
     def __init__(self):
-        """Initialize CDP hooks manager"""
+        """Initialize CDP hooks manager with empty event tracking."""
         self.trapped_events: List[Dict[str, Any]] = []
         self.browser: Optional[Browser] = None
         self.playwright = None
-        
+        logger.info("🔧 CDPHooks initialized for JavaScript sink detection")
+    
     async def initialize(self, headless: bool = True) -> None:
         """
         Initialize Playwright browser with CDP support.
         
         Args:
-            headless: Whether to run browser in headless mode
+            headless: Whether to run browser in headless mode (default: True).
         """
         if self.playwright is None:
             self.playwright = await async_playwright().start()
@@ -201,22 +224,26 @@ class CDPHooks:
                 headless=headless,
                 args=['--disable-blink-features=AutomationControlled']
             )
-            logger.info("[CDP] Browser initialized with hooks support")
+            logger.info("🌐 Browser initialized with CDP hooks support")
     
     async def close(self) -> None:
-        """Close the browser and cleanup"""
+        """Close the browser and cleanup resources."""
         if self.browser:
             await self.browser.close()
         if self.playwright:
             await self.playwright.stop()
-        logger.info("[CDP] Browser closed")
+        logger.info("🔧 CDP browser closed")
     
     async def inject_hooks(self, page: Page) -> None:
         """
-        Injects the Spy script before the page loads.
+        Inject the Spy script before the page loads.
+        
+        The script hooks dangerous JavaScript sinks and reports whenever
+        they are called. This enables detection of DOM-based XSS that
+        would be invisible to traditional scanners.
         
         Args:
-            page: Playwright page object
+            page: Playwright page object to inject hooks into.
         """
         # Set up console message listener
         page.on("console", self._handle_console_message)
@@ -224,15 +251,16 @@ class CDPHooks:
         # Inject hooks before page navigation
         await page.add_init_script(JS_HOOK_PAYLOAD)
         
-        logger.info("[CDP] JavaScript hooks injected into page")
+        logger.info("🛡️ JavaScript hooks injected into page")
     
     def _handle_console_message(self, msg) -> None:
         """
         Handle console messages from the page.
-        Filters for AEGIS_TRAP markers.
+        
+        Filters for AEGIS_TRAP markers and extracts trap data.
         
         Args:
-            msg: Console message object
+            msg: Console message object from Playwright.
         """
         text = msg.text
         

@@ -1,6 +1,15 @@
 """
-Tool Installer for Aegis AI
-Secure tool installation with human-in-the-loop confirmation
+Tool Installer for Aegis AI.
+
+Secure tool installation with human-in-the-loop confirmation.
+Allows AI to request tool installations from GitHub repositories,
+but requires explicit human approval before executing.
+
+Features:
+    - Human-in-the-loop confirmation for security
+    - GitHub repository validation
+    - Installation logging and history
+    - Timeout protection for long installations
 """
 
 import asyncio
@@ -15,16 +24,20 @@ logger = logging.getLogger(__name__)
 
 class ToolInstaller:
     """
-    Secure tool installer with human-in-the-loop confirmation
+    Secure tool installer with human-in-the-loop confirmation.
     
     Allows AI to request tool installations from GitHub repositories,
-    but requires explicit human approval before executing.
+    but requires explicit human approval before executing. This ensures
+    security while enabling the agent to expand its capabilities.
+    
+    Attributes:
+        install_log_file: Path to JSON file storing installation history.
     """
     
     def __init__(self):
-        """Initialize the tool installer"""
+        """Initialize the tool installer with default log path."""
         self.install_log_file = Path("data/tool_install_log.json")
-        logger.info("ToolInstaller initialized")
+        logger.info("🔧 ToolInstaller initialized")
     
     async def request_install_from_github(
         self,
