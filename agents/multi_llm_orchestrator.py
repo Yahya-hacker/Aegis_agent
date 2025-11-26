@@ -292,6 +292,7 @@ DO NOT propose the same action again. Think creatively about alternative approac
             )
             
             # Parse the new action from response
+            # NOTE: Import here to avoid circular import (enhanced_ai_core imports MultiLLMOrchestrator)
             from agents.enhanced_ai_core import parse_json_robust
             
             new_action = await parse_json_robust(

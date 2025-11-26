@@ -9,6 +9,7 @@ from tools.python_tools import PythonToolManager
 from tools.visual_recon import get_visual_recon_tool
 from utils.database_manager import get_database
 from utils.impact_quantifier import get_impact_quantifier
+from agents.enhanced_ai_core import parse_json_robust
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,6 @@ If you cannot suggest a fix, respond with:
             content = response.get('content', '')
             
             # Use robust JSON parser from enhanced_ai_core instead of brittle regex+json.loads
-            from agents.enhanced_ai_core import parse_json_robust
-            
             correction = await parse_json_robust(
                 content,
                 orchestrator=self.ai_core.orchestrator,

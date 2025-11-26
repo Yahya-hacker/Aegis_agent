@@ -10,12 +10,14 @@ Features:
     - DOM snapshot extraction with selector-based element extraction
     - Click element by SoM ID for precise UI navigation
     - Auto-installation of Chromium if not found
+    - Stealth mode to bypass WAF/bot detection
 """
 
 import asyncio
 import base64
 import json
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 # Version constant for user agent and compatibility tracking
 AEGIS_VERSION = "7.5"
+
+# Default stealth user agent - configurable via environment variable
+# Use a recent Chrome version to avoid detection
+DEFAULT_STEALTH_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
 
 
 class VisualReconTool:
@@ -195,6 +201,9 @@ class VisualReconTool:
             
             # Create browser context with stealth parameters
             # Use realistic user agent matching real Chrome to avoid detection
+            # User agent is configurable via STEALTH_USER_AGENT environment variable
+            stealth_user_agent = os.getenv('STEALTH_USER_AGENT', DEFAULT_STEALTH_USER_AGENT)
+            
             headers = {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
@@ -203,7 +212,7 @@ class VisualReconTool:
             
             self.context = await self.browser.new_context(
                 viewport={'width': self.viewport_width, 'height': self.viewport_height},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                user_agent=stealth_user_agent,
                 java_script_enabled=True,
                 locale='en-US',
                 extra_http_headers=headers
