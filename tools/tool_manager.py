@@ -109,9 +109,9 @@ class RealToolManager:
         
         for tool in tools:
             try:
+                # Use shell=False with list arguments for security
                 result = subprocess.run(
-                    f"which {tool}",
-                    shell=True,
+                    ["which", tool],
                     capture_output=True,
                     text=True,
                     check=True
@@ -210,6 +210,14 @@ class RealToolManager:
             - DAST templates enabled (-dast)
             - All template types (-t)
         
+        Warning:
+            The default rate limit of 150 req/sec is aggressive and may:
+            - Trigger WAF/IDS defensive measures
+            - Overwhelm underpowered target systems
+            - Be inappropriate for production environments
+            
+            Consider lowering the rate for sensitive targets.
+        
         Args:
             target_url: Target URL to scan for vulnerabilities.
             
@@ -222,6 +230,7 @@ class RealToolManager:
         output_file = output_dir / f"nuclei_{safe_name}.jsonl"
 
         # GOD MODE: Aggressive Nuclei configuration
+        # WARNING: High rate limit (150 req/sec) may trigger defensive measures
         args = [
             "-u", target_url,
             "-severity", "low,medium,high,critical",
@@ -230,8 +239,10 @@ class RealToolManager:
             # God Mode settings
             "-bs", "10",       # Batch size
             "-c", "50",        # Concurrency
-            "-rate-limit", "150",  # Rate limit
+            "-rate-limit", "150",  # Rate limit (aggressive - may trigger WAF)
         ]
+        
+        logger.warning("⚠️ Using aggressive rate limit (150 req/sec) - may trigger defensive measures")
         
         # Add DAST if high impact mode
         if self.high_impact_mode:

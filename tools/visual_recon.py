@@ -17,11 +17,15 @@ import base64
 import json
 import logging
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
 logger = logging.getLogger(__name__)
+
+# Version constant for user agent and compatibility tracking
+AEGIS_VERSION = "7.5"
 
 
 class VisualReconTool:
@@ -105,8 +109,11 @@ class VisualReconTool:
         """
         logger.info("🔧 Chrome binary not found. Auto-installing Chromium...")
         try:
+            # Use sys.executable to find the Python interpreter, then invoke playwright module
+            # This is safer than relying on PATH for the playwright command
+            import sys
             result = subprocess.run(
-                ["playwright", "install", "chromium"],
+                [sys.executable, "-m", "playwright", "install", "chromium"],
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minute timeout
@@ -121,7 +128,7 @@ class VisualReconTool:
             logger.error("❌ Chromium installation timed out after 5 minutes")
             return False
         except FileNotFoundError:
-            logger.error("❌ Playwright command not found. Install with: pip install playwright")
+            logger.error("❌ Python or playwright module not found")
             return False
         except Exception as e:
             logger.error(f"❌ Error installing Chromium: {e}")
@@ -167,7 +174,7 @@ class VisualReconTool:
                     else:
                         raise RuntimeError(
                             "Failed to auto-install Chromium. "
-                            "Please run: playwright install chromium"
+                            "Please run: pip install playwright && playwright install chromium"
                         )
                 else:
                     raise  # Re-raise if not a Chrome binary issue
@@ -175,7 +182,7 @@ class VisualReconTool:
             # Create browser context
             self.context = await self.browser.new_context(
                 viewport={'width': self.viewport_width, 'height': self.viewport_height},
-                user_agent='Aegis-AI/7.5 Visual Recon Tool'
+                user_agent=f'Aegis-AI/{AEGIS_VERSION} Visual Recon Tool'
             )
             
             # Load and inject session cookies

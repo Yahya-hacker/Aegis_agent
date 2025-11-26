@@ -89,7 +89,7 @@ class PythonToolManager:
         try:
             self.nm = nmap.PortScanner()
         except nmap.PortScannerError:
-            logger.error("❌ Nmap is not installed. 'nmap_scan' will fail.")
+            logger.error("❌ Nmap is not installed. Methods using nmap (nmap_scan, advanced_port_scan) will fail.")
             self.nm = None
         
         # Options Selenium with stealth

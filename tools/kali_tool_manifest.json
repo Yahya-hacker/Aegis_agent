@@ -3,7 +3,7 @@
     {
       "tool_name": "genesis_fuzz_api",
       "binary_name": "python",
-      "description": "PRIORITY: Genesis Protocol Fuzzer for discovering zero-day vulnerabilities in API endpoints using evolutionary genetic mutations, differential analysis, and context-aware testing. Best tool for API security testing.",
+      "description": "Evolutionary genetic mutation fuzzer for API endpoints. Uses byte-level mutations, differential response analysis, and technology fingerprinting to discover zero-day vulnerabilities. Recommended for REST/GraphQL/JSON endpoints.",
       "intrusive": true,
       "category": "zero_day_discovery",
       "priority": 1,
