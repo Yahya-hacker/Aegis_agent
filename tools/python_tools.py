@@ -1,31 +1,95 @@
 # tools/python_tools.py
-# --- VERSION ENHANCED - With Stealth & OOB Detection ---
+# --- VERSION ENHANCED - With Stealth, OOB Detection & Self-Healing Chrome ---
+"""
+Python-based security tools for Aegis AI.
+
+Provides browser automation, network scanning, session management,
+and advanced security testing capabilities using Selenium, Nmap, and aiohttp.
+
+Features:
+    - Stealth HTTP requests with random User-Agents and proxies
+    - OOB (Out-of-Band) detection for blind vulnerabilities
+    - Multi-session management for privilege escalation testing
+    - JavaScript sandbox execution for client-side bypass
+    - Self-healing Chrome binary detection
+"""
 
 import asyncio
 import aiohttp
 import logging
 import random
 import os
+import shutil
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 import nmap
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from urllib.parse import urlparse
 from utils.helpers import AegisHelpers
 
 logger = logging.getLogger(__name__)
 
+# Standard Chrome binary paths on Linux systems
+CHROME_BINARY_PATHS = [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    "/usr/local/bin/google-chrome",
+]
+
+
+def find_chrome_binary() -> Optional[str]:
+    """
+    Find Chrome binary in standard Linux paths.
+    
+    Searches common installation locations for Chrome/Chromium browser.
+    This implements the self-healing infrastructure pattern for browser detection.
+    
+    Returns:
+        Optional[str]: Path to Chrome binary if found, None otherwise.
+    """
+    for path in CHROME_BINARY_PATHS:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            logger.info(f"🔧 Found Chrome binary at: {path}")
+            return path
+    
+    # Try using 'which' command as fallback
+    for browser in ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]:
+        binary_path = shutil.which(browser)
+        if binary_path:
+            logger.info(f"🔧 Found Chrome binary via which: {binary_path}")
+            return binary_path
+    
+    logger.warning("⚠️ Chrome binary not found in standard paths")
+    return None
+
+
 class PythonToolManager:
-    """Gère les outils avec des bibliothèques Python (Nmap, Selenium) + Stealth & OOB"""
+    """
+    Manages security tools using Python libraries (Nmap, Selenium) with stealth features.
+    
+    Provides browser automation, network scanning, and session management
+    with built-in stealth capabilities like random User-Agents, proxy rotation,
+    and request jittering.
+    
+    Attributes:
+        nm: Nmap PortScanner instance for network scanning.
+        selenium_options: Chrome options configured for headless stealth operation.
+        oob_payloads: Storage for Out-of-Band detection payloads.
+        sessions: Multi-session storage for privilege escalation testing.
+    """
     
     def __init__(self):
+        """Initialize the PythonToolManager with Nmap and Selenium configuration."""
         try:
             self.nm = nmap.PortScanner()
         except nmap.PortScannerError:
-            logger.error("Nmap n'est pas installé. 'nmap_scan' échouera.")
+            logger.error("❌ Nmap is not installed. 'nmap_scan' will fail.")
             self.nm = None
         
         # Options Selenium with stealth
@@ -36,16 +100,54 @@ class PythonToolManager:
         # Use random User-Agent for Selenium
         self.selenium_options.add_argument(f'user-agent={AegisHelpers.get_random_user_agent()}')
         
-        # TASK 2: OOB detection storage
-        self.oob_payloads = {}  # {payload_id: {url: str, created_at: timestamp}}
+        # Set Chrome binary path if found
+        chrome_binary = find_chrome_binary()
+        if chrome_binary:
+            self.selenium_options.binary_location = chrome_binary
+        
+        # OOB detection storage
+        self.oob_payloads: Dict[str, Dict] = {}
         
         # Multi-session storage for privilege escalation testing
-        self.sessions = {}  # {session_name: session_data}
+        self.sessions: Dict[str, Dict] = {}
+        
+        logger.info("🔧 PythonToolManager initialized")
 
     def _get_selenium_driver(self):
-        """Initialise et retourne un driver Selenium."""
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=self.selenium_options)
+        """
+        Initialize and return a Selenium Chrome WebDriver.
+        
+        Implements self-healing: if WebDriver fails to find Chrome binary,
+        searches standard Linux paths before falling back to default.
+        
+        Returns:
+            webdriver.Chrome: Configured Chrome WebDriver instance.
+            
+        Raises:
+            Exception: If Chrome binary cannot be found or WebDriver fails to initialize.
+        """
+        try:
+            service = Service(ChromeDriverManager().install())
+            return webdriver.Chrome(service=service, options=self.selenium_options)
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Check if error is related to Chrome binary
+            if 'chrome' in error_msg or 'binary' in error_msg or 'executable' in error_msg:
+                logger.warning(f"⚠️ WebDriver init failed: {e}")
+                logger.info("🔧 Searching for Chrome binary in standard paths...")
+                
+                chrome_binary = find_chrome_binary()
+                if chrome_binary:
+                    self.selenium_options.binary_location = chrome_binary
+                    logger.info(f"🔧 Retrying with Chrome binary: {chrome_binary}")
+                    service = Service(ChromeDriverManager().install())
+                    return webdriver.Chrome(service=service, options=self.selenium_options)
+                else:
+                    raise RuntimeError(
+                        "Chrome binary not found. Please install Chrome/Chromium: "
+                        "apt install chromium-browser or apt install google-chrome-stable"
+                    )
+            raise
 
     async def advanced_technology_detection(self, target: str) -> Dict:
         """Advanced technology detection with stealth features + session injection"""

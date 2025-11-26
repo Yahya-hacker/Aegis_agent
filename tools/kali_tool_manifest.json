@@ -1,6 +1,38 @@
 {
   "tools": [
     {
+      "tool_name": "genesis_fuzz_api",
+      "binary_name": "python",
+      "description": "PRIORITY: Genesis Protocol Fuzzer for discovering zero-day vulnerabilities in API endpoints using evolutionary genetic mutations, differential analysis, and context-aware testing. Best tool for API security testing.",
+      "intrusive": true,
+      "category": "zero_day_discovery",
+      "priority": 1,
+      "use_case": "API endpoints, REST APIs, GraphQL, JSON endpoints",
+      "args_schema": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "Target API endpoint URL"
+        },
+        "method": {
+          "type": "string",
+          "required": false,
+          "description": "HTTP method (default: POST)"
+        },
+        "base_payload": {
+          "type": "object",
+          "required": false,
+          "description": "Base payload to mutate (e.g., {\"username\": \"admin\", \"password\": \"test\"})"
+        },
+        "grammar": {
+          "type": "object",
+          "required": false,
+          "description": "Protocol grammar definition for smart mutations"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"genesis_fuzz_api\", \"args\": {\"url\": \"<API_URL>\", \"method\": \"POST\", \"base_payload\": {}}}"
+    },
+    {
       "tool_name": "subdomain_enumeration",
       "binary_name": "subfinder",
       "description": "Find subdomains using passive sources",

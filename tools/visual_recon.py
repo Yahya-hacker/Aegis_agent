@@ -1,12 +1,22 @@
 """
-Visual Reconnaissance Tool for Aegis AI
-Provides authenticated visual data gathering using Playwright
+Visual Reconnaissance Tool for Aegis AI.
+
+Provides authenticated visual data gathering using Playwright with
+Set-of-Mark (SoM) visual grounding for precise UI element interaction.
+
+Features:
+    - Authenticated screenshot capture with session cookies
+    - SoM visual grounding with numbered element badges
+    - DOM snapshot extraction with selector-based element extraction
+    - Click element by SoM ID for precise UI navigation
+    - Auto-installation of Chromium if not found
 """
 
 import asyncio
 import base64
 import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -20,26 +30,37 @@ class VisualReconTool:
     screenshot capture, and DOM analysis.
     
     This tool reuses session management from tool_manager.py to maintain
-    authenticated state during visual reconnaissance.
+    authenticated state during visual reconnaissance. Includes auto-installation
+    of Chromium browser if not found.
+    
+    Attributes:
+        browser: Playwright Browser instance.
+        context: Playwright BrowserContext with session cookies.
+        playwright: Playwright instance for browser management.
+        viewport_width: Default viewport width in pixels.
+        viewport_height: Default viewport height in pixels.
+        timeout: Default operation timeout in milliseconds.
     """
     
     def __init__(self):
-        """Initialize the visual recon tool"""
+        """Initialize the visual recon tool with default settings."""
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.playwright = None
         self.viewport_width = 1920
         self.viewport_height = 1080
         self.timeout = 30000  # 30 seconds
-        logger.info("VisualReconTool initialized")
+        logger.info("🔧 VisualReconTool initialized")
     
     def _load_session_data(self) -> Optional[Dict]:
         """
-        Load session data from file if it exists
-        Copied from tools/tool_manager.py for authenticated requests
+        Load session data from file if it exists.
+        
+        Copied from tools/tool_manager.py for authenticated requests.
         
         Returns:
-            Session data dictionary or None if not found
+            Optional[Dict]: Session data dictionary containing cookies and headers,
+                or None if session file not found or invalid.
         """
         session_file = Path("data/session.json")
         if session_file.exists():
@@ -47,20 +68,21 @@ class VisualReconTool:
                 with open(session_file, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                logger.warning(f"Failed to load session data: {e}")
+                logger.warning(f"⚠️ Failed to load session data: {e}")
         
         return None
     
     def _build_cookie_header(self, session_data: Dict) -> str:
         """
-        Build cookie header from session data
-        Copied from tools/tool_manager.py for authenticated requests
+        Build cookie header from session data.
+        
+        Copied from tools/tool_manager.py for authenticated requests.
         
         Args:
-            session_data: Session data dictionary with cookies
+            session_data: Session data dictionary with cookies.
             
         Returns:
-            Cookie header string
+            str: Cookie header string in format "name1=value1; name2=value2".
         """
         if not session_data or 'cookies' not in session_data:
             return ""
@@ -71,8 +93,50 @@ class VisualReconTool:
         
         return "; ".join(cookie_pairs)
     
+    def _install_chromium(self) -> bool:
+        """
+        Auto-install Chromium browser using Playwright's install command.
+        
+        Called automatically when Playwright fails to launch due to missing
+        Chrome binary. This implements the self-healing infrastructure pattern.
+        
+        Returns:
+            bool: True if installation succeeded, False otherwise.
+        """
+        logger.info("🔧 Chrome binary not found. Auto-installing Chromium...")
+        try:
+            result = subprocess.run(
+                ["playwright", "install", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            if result.returncode == 0:
+                logger.info("✅ Chromium installed successfully via Playwright")
+                return True
+            else:
+                logger.error(f"❌ Chromium installation failed: {result.stderr}")
+                return False
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Chromium installation timed out after 5 minutes")
+            return False
+        except FileNotFoundError:
+            logger.error("❌ Playwright command not found. Install with: pip install playwright")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error installing Chromium: {e}")
+            return False
+    
     async def _initialize_browser(self) -> None:
-        """Initialize Playwright browser with session cookies"""
+        """
+        Initialize Playwright browser with session cookies.
+        
+        Implements self-healing: if Playwright fails to launch due to missing
+        Chrome binary, automatically runs 'playwright install chromium' and retries.
+        
+        Raises:
+            RuntimeError: If browser initialization fails after auto-install attempt.
+        """
         if self.browser is not None:
             return  # Already initialized
         
@@ -80,16 +144,38 @@ class VisualReconTool:
             logger.info("🌐 Initializing Playwright browser...")
             self.playwright = await async_playwright().start()
             
-            # Launch browser in headless mode
-            self.browser = await self.playwright.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox']
-            )
+            # First attempt to launch browser
+            try:
+                self.browser = await self.playwright.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-setuid-sandbox']
+                )
+            except Exception as launch_error:
+                error_msg = str(launch_error).lower()
+                # Check if error is related to missing Chrome binary
+                if 'chrome' in error_msg or 'chromium' in error_msg or 'executable' in error_msg:
+                    logger.warning(f"⚠️ Browser launch failed: {launch_error}")
+                    
+                    # Auto-install Chromium
+                    if self._install_chromium():
+                        # Retry browser launch after installation
+                        logger.info("🔄 Retrying browser launch after Chromium installation...")
+                        self.browser = await self.playwright.chromium.launch(
+                            headless=True,
+                            args=['--no-sandbox', '--disable-setuid-sandbox']
+                        )
+                    else:
+                        raise RuntimeError(
+                            "Failed to auto-install Chromium. "
+                            "Please run: playwright install chromium"
+                        )
+                else:
+                    raise  # Re-raise if not a Chrome binary issue
             
             # Create browser context
             self.context = await self.browser.new_context(
                 viewport={'width': self.viewport_width, 'height': self.viewport_height},
-                user_agent='Aegis-AI/7.0 Visual Recon Tool'
+                user_agent='Aegis-AI/7.5 Visual Recon Tool'
             )
             
             # Load and inject session cookies
@@ -114,11 +200,16 @@ class VisualReconTool:
             logger.info("✅ Browser initialized with session")
             
         except Exception as e:
-            logger.error(f"Failed to initialize browser: {e}", exc_info=True)
+            logger.error(f"❌ Failed to initialize browser: {e}", exc_info=True)
             raise
     
     async def _cleanup_browser(self) -> None:
-        """Cleanup browser resources"""
+        """
+        Cleanup browser resources.
+        
+        Closes context, browser, and playwright instances in order.
+        Safe to call multiple times.
+        """
         try:
             if self.context:
                 await self.context.close()
@@ -132,10 +223,10 @@ class VisualReconTool:
                 await self.playwright.stop()
                 self.playwright = None
             
-            logger.info("Browser cleaned up")
+            logger.info("🔧 Browser cleaned up")
             
         except Exception as e:
-            logger.error(f"Error cleaning up browser: {e}", exc_info=True)
+            logger.error(f"❌ Error cleaning up browser: {e}", exc_info=True)
     
     async def capture_screenshot(
         self,
@@ -145,16 +236,25 @@ class VisualReconTool:
         wait_for_selector: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Capture a screenshot of a web page with authenticated session
+        Capture a screenshot of a web page with authenticated session.
         
         Args:
-            url: Target URL to screenshot
-            output_path: Optional path to save screenshot (default: data/screenshots/)
-            full_page: Whether to capture full page or just viewport
-            wait_for_selector: Optional CSS selector to wait for before screenshot
+            url: Target URL to screenshot.
+            output_path: Optional path to save screenshot (default: data/screenshots/).
+            full_page: Whether to capture full page or just viewport.
+            wait_for_selector: Optional CSS selector to wait for before screenshot.
             
         Returns:
-            Dictionary with screenshot data and metadata
+            Dict[str, Any]: Dictionary containing:
+                - status: "success" or "error"
+                - url: The URL that was captured
+                - screenshot_path: Path where screenshot was saved
+                - screenshot_size: Size of screenshot in bytes
+                - page_title: Title of the page
+                - viewport: Viewport dimensions
+                - full_page: Whether full page was captured
+                - screenshot_base64: Base64 encoded screenshot data
+                - error: Error message if status is "error"
         """
         logger.info(f"📸 Capturing screenshot: {url}")
         
