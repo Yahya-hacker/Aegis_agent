@@ -800,7 +800,72 @@ class EnhancedAegisAI:
     
     All models can be easily changed via .env file without modifying Python code.
     Temperature and max_tokens are also configurable via environment variables.
+    
+    System prompts are also fully configurable via .env file:
+    - TRIAGE_SYSTEM_PROMPT: System prompt for mission triage
+    - NEXT_ACTION_SYSTEM_PROMPT: System prompt for next action decisions
+    - CODE_ANALYSIS_SYSTEM_PROMPT: System prompt for code analysis
+    - PAYLOAD_GEN_SYSTEM_PROMPT: System prompt for payload generation
+    - VERIFICATION_SYSTEM_PROMPT: System prompt for finding verification
+    - TRIAGE_FINDING_SYSTEM_PROMPT: System prompt for vulnerability triage
+    - FACT_EXTRACTION_SYSTEM_PROMPT: System prompt for fact extraction
     """
+    
+    # Default system prompts - can be overridden via .env file
+    DEFAULT_TRIAGE_SYSTEM_PROMPT = """You are Aegis AI, a cybersecurity mission planner. Your goal is to gather ALL necessary information before launching a mission.
+
+Required information:
+1. **TARGET** (e.g., "example.com", "192.168.1.1", or a file like "image.png")
+2. **RULES** (e.g., scope, out-of-scope, rate limits, CTF rules)
+
+YOUR TASK:
+- Analyze the conversation history
+- If information is missing, ask a CLEAR and CONCISE question
+- When user provides information, acknowledge it and ask for what's next
+- **DO NOT start any scans yourself**
+
+**ONCE YOU HAVE ALL INFORMATION (TARGET + RULES)**, respond ONLY with this JSON:
+```json
+{
+  "response_type": "start_mission",
+  "target": "[the main target]",
+  "rules": "[summary of all rules and instructions]"
+}
+```
+
+If information is missing, respond with:
+```json
+{
+  "response_type": "question",
+  "text": "[your question to the user]"
+}
+```"""
+
+    DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT = """You are an expert code analyst specialized in security vulnerabilities.
+Analyze the provided code and identify:
+1. Security vulnerabilities
+2. Potential exploits
+3. Weaknesses in implementation
+4. Recommended fixes
+
+Provide detailed analysis with severity ratings."""
+
+    DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT = """You are an expert payload engineer for penetration testing.
+Generate safe, educational payloads for vulnerability testing.
+Always include:
+1. The payload code/string
+2. How to use it
+3. Expected result
+4. Safety considerations"""
+
+    DEFAULT_VERIFICATION_SYSTEM_PROMPT = """You are a Senior Security Engineer reviewing a junior researcher's vulnerability report.
+Your role is to act as a "Devil's Advocate" and critically assess whether this is a legitimate finding or a false positive."""
+
+    DEFAULT_TRIAGE_FINDING_SYSTEM_PROMPT = """You are an expert security analyst performing vulnerability triage.
+Re-assess vulnerability's TRUE PRIORITY considering real-world exploitability and business impact."""
+
+    DEFAULT_FACT_EXTRACTION_SYSTEM_PROMPT = """You are analyzing the output of a security testing tool to extract key information.
+Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, and RELATIONSHIPS."""
     
     def __init__(self, learning_engine: AegisLearningEngine = None):
         self.orchestrator = MultiLLMOrchestrator()
@@ -814,6 +879,22 @@ class EnhancedAegisAI:
         self.context_summary = None  # Summary of older context
         self.db = get_database()  # TASK 2: Mission database integration
         self.blackboard = MissionBlackboard()  # Mission blackboard memory
+        
+        # Load configurable system prompts from environment
+        # NO HARDCODED PROMPTS - All configurable via .env
+        self.system_prompts = {
+            'triage': os.getenv('TRIAGE_SYSTEM_PROMPT', self.DEFAULT_TRIAGE_SYSTEM_PROMPT),
+            'code_analysis': os.getenv('CODE_ANALYSIS_SYSTEM_PROMPT', self.DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT),
+            'payload_generation': os.getenv('PAYLOAD_GEN_SYSTEM_PROMPT', self.DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT),
+            'verification': os.getenv('VERIFICATION_SYSTEM_PROMPT', self.DEFAULT_VERIFICATION_SYSTEM_PROMPT),
+            'triage_finding': os.getenv('TRIAGE_FINDING_SYSTEM_PROMPT', self.DEFAULT_TRIAGE_FINDING_SYSTEM_PROMPT),
+            'fact_extraction': os.getenv('FACT_EXTRACTION_SYSTEM_PROMPT', self.DEFAULT_FACT_EXTRACTION_SYSTEM_PROMPT),
+        }
+        
+        # Load next_action system prompt (can be multi-line, stored in file or env)
+        self.next_action_system_prompt_template = os.getenv('NEXT_ACTION_SYSTEM_PROMPT', None)
+        
+        logger.info("📝 System prompts loaded from environment (configurable via .env)")
         
         # PHASE 2: Business logic mapper for application-specific testing
         from utils.business_logic_mapper import get_business_logic_mapper
@@ -855,8 +936,15 @@ class EnhancedAegisAI:
     
     def _prune_memory(self, history: List[Dict]) -> List[Dict]:
         """
-        Enhanced memory management to prevent "Digital Alzheimer's"
-        Keeps recent detailed interactions and maintains contextual summary
+        Enhanced memory management to prevent "Digital Alzheimer's" (Infinite Memory Fix)
+        
+        Implements a "Sliding Window Summary" approach:
+        - Keeps the first 2 messages (Mission context) intact
+        - Keeps the last 10 messages (Recent actions) intact
+        - Summarizes the middle section to prevent context overflow
+        
+        This prevents the agent from forgetting mission rules while still
+        maintaining recent action context for continuity.
         
         Args:
             history: Full conversation history
@@ -864,53 +952,80 @@ class EnhancedAegisAI:
         Returns:
             Pruned history with summary of old interactions
         """
-        # Reduce max history size to prevent token overflow
-        effective_max_history = min(self.max_history_size, 10)
+        # Configuration: adjust these for different context window sizes
+        KEEP_FIRST_MESSAGES = 2  # Mission context messages
+        KEEP_LAST_MESSAGES = 10  # Recent actions
+        COMPRESSION_THRESHOLD = 15  # Start compressing when history exceeds this
         
-        if len(history) <= effective_max_history:
+        if len(history) <= COMPRESSION_THRESHOLD:
             return history
         
-        # Keep the last effective_max_history interactions
-        recent = history[-effective_max_history:]
+        logger.info("🧹 Compressing memory (Sliding Window)...")
         
-        # Summarize older interactions if we haven't done so recently
-        older = history[:-effective_max_history]
+        # Keep the first 2 messages (Mission context) and the last 10 (Recent actions)
+        first_messages = history[:KEEP_FIRST_MESSAGES]
+        recent_messages = history[-KEEP_LAST_MESSAGES:]
         
-        # Extract key information from older interactions
+        # Get the middle section to summarize
+        middle_section = history[KEEP_FIRST_MESSAGES:-KEEP_LAST_MESSAGES]
+        omitted_count = len(middle_section)
+        
+        # Extract key information from the middle section
         key_findings = []
         key_decisions = []
-        for item in older:
-            content = item.get('content', '')
-            if 'vulnerability' in content.lower() or 'finding' in content.lower():
-                # Extract just the core finding if possible
-                key_findings.append(content[:150] + "..." if len(content) > 150 else content)
-            if 'decision' in content.lower() or 'action' in content.lower():
-                key_decisions.append(content[:100] + "..." if len(content) > 100 else content)
+        key_errors = []
         
-        # Build comprehensive summary
+        for item in middle_section:
+            content = item.get('content', '')
+            item_type = item.get('type', '')
+            
+            # Extract findings
+            if 'vulnerability' in content.lower() or 'finding' in content.lower() or 'found' in content.lower():
+                key_findings.append(content[:150] + "..." if len(content) > 150 else content)
+            
+            # Extract decisions/actions
+            if 'action' in content.lower() or 'decision' in content.lower() or item_type == 'action':
+                key_decisions.append(content[:100] + "..." if len(content) > 100 else content)
+            
+            # Extract errors (important to remember failures)
+            if 'error' in content.lower() or 'failed' in content.lower() or item_type == 'error':
+                key_errors.append(content[:100] + "..." if len(content) > 100 else content)
+        
+        # Build comprehensive gap summary
         summary_parts = [
-            f"[Context Summary: {len(older)} previous steps condensed]",
-            f"Key findings ({len(key_findings)}):"
+            f"[... {omitted_count} intermediate steps omitted for efficiency. Consult Blackboard for verified facts ...]"
         ]
         
-        # Add up to 5 most recent key findings
-        for finding in key_findings[-5:]:
-            summary_parts.append(f"- {finding}")
-            
-        summary_parts.append(f"Key decisions ({len(key_decisions)}):")
-        # Add up to 5 most recent key decisions
-        for decision in key_decisions[-5:]:
-            summary_parts.append(f"- {decision}")
+        if key_findings:
+            summary_parts.append(f"\nKey findings from omitted steps ({len(key_findings)}):")
+            for finding in key_findings[-5:]:  # Last 5 findings
+                summary_parts.append(f"  • {finding}")
+        
+        if key_decisions:
+            summary_parts.append(f"\nKey decisions from omitted steps ({len(key_decisions)}):")
+            for decision in key_decisions[-5:]:  # Last 5 decisions
+                summary_parts.append(f"  • {decision}")
+        
+        if key_errors:
+            summary_parts.append(f"\nRecorded failures (avoid repeating) ({len(key_errors)}):")
+            for error in key_errors[-3:]:  # Last 3 errors
+                summary_parts.append(f"  ⚠️ {error}")
         
         summary_content = "\n".join(summary_parts)
         
-        # Create a summary entry
-        summary_entry = {
-            "type": "system", # Changed from role to type to match agent memory structure
+        # Create a gap summary entry
+        gap_summary = {
+            "type": "system",
             "content": summary_content
         }
         
-        return [summary_entry] + recent
+        # Construct the pruned memory: first messages + gap summary + recent messages
+        pruned_memory = first_messages + [gap_summary] + recent_messages
+        
+        logger.info(f"📊 Memory compressed: {len(history)} → {len(pruned_memory)} entries "
+                   f"({omitted_count} steps summarized)")
+        
+        return pruned_memory
     
     # --- LEVEL 1: STRATEGIC TRIAGE (using Llama 70B) ---
     async def triage_mission(self, conversation_history: List[Dict]) -> Dict:
@@ -931,34 +1046,8 @@ class EnhancedAegisAI:
             }
         )
         
-        system_prompt = """You are Aegis AI, a cybersecurity mission planner. Your goal is to gather ALL necessary information before launching a mission.
-
-Required information:
-1. **TARGET** (e.g., "example.com", "192.168.1.1", or a file like "image.png")
-2. **RULES** (e.g., scope, out-of-scope, rate limits, CTF rules)
-
-YOUR TASK:
-- Analyze the conversation history
-- If information is missing, ask a CLEAR and CONCISE question
-- When user provides information, acknowledge it and ask for what's next
-- **DO NOT start any scans yourself**
-
-**ONCE YOU HAVE ALL INFORMATION (TARGET + RULES)**, respond ONLY with this JSON:
-```json
-{
-  "response_type": "start_mission",
-  "target": "[the main target]",
-  "rules": "[summary of all rules and instructions]"
-}
-```
-
-If information is missing, respond with:
-```json
-{
-  "response_type": "question",
-  "text": "[your question to the user]"
-}
-```"""
+        # Use configurable system prompt from .env or default
+        system_prompt = self.system_prompts.get('triage', self.DEFAULT_TRIAGE_SYSTEM_PROMPT)
 
         # Convert conversation history to message format
         conversation_text = "\n".join([
@@ -1314,14 +1403,8 @@ Based on this context, what should be the next action? Respond with JSON only.""
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        system_prompt = """You are an expert code analyst specialized in security vulnerabilities.
-Analyze the provided code and identify:
-1. Security vulnerabilities
-2. Potential exploits
-3. Weaknesses in implementation
-4. Recommended fixes
-
-Provide detailed analysis with severity ratings."""
+        # Use configurable system prompt from .env or default
+        system_prompt = self.system_prompts.get('code_analysis', self.DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT)
 
         user_message = f"""Context: {context}
 
@@ -1364,13 +1447,8 @@ Provide a comprehensive security analysis."""
         
         constraints_text = "\n".join(constraints) if constraints else "No specific constraints"
         
-        system_prompt = f"""You are an expert payload engineer for penetration testing.
-Generate safe, educational payloads for vulnerability testing.
-Always include:
-1. The payload code/string
-2. How to use it
-3. Expected result
-4. Safety considerations"""
+        # Use configurable system prompt from .env or default
+        system_prompt = self.system_prompts.get('payload_generation', self.DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT)
 
         user_message = f"""Generate a payload for:
 Vulnerability Type: {vulnerability_type}

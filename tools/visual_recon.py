@@ -141,6 +141,9 @@ class VisualReconTool:
         Implements self-healing: if Playwright fails to launch due to missing
         Chrome binary, automatically runs 'playwright install chromium' and retries.
         
+        Stealth Mode: Uses specific browser arguments to hide automation fingerprints
+        and bypass WAF/bot detection systems.
+        
         Raises:
             RuntimeError: If browser initialization fails after auto-install attempt.
         """
@@ -148,14 +151,25 @@ class VisualReconTool:
             return  # Already initialized
         
         try:
-            logger.info("🌐 Initializing Playwright browser...")
+            logger.info("🌐 Initializing Playwright browser with stealth mode...")
             self.playwright = await async_playwright().start()
+            
+            # Stealth browser launch arguments to hide bot signature
+            stealth_args = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',  # HIDES BOT STATUS
+                '--disable-infobars',
+                '--window-size=1920,1080',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+            ]
             
             # First attempt to launch browser
             try:
                 self.browser = await self.playwright.chromium.launch(
                     headless=True,
-                    args=['--no-sandbox', '--disable-setuid-sandbox']
+                    args=stealth_args
                 )
             except Exception as launch_error:
                 error_msg = str(launch_error).lower()
@@ -169,7 +183,7 @@ class VisualReconTool:
                         logger.info("🔄 Retrying browser launch after Chromium installation...")
                         self.browser = await self.playwright.chromium.launch(
                             headless=True,
-                            args=['--no-sandbox', '--disable-setuid-sandbox']
+                            args=stealth_args
                         )
                     else:
                         raise RuntimeError(
@@ -179,11 +193,24 @@ class VisualReconTool:
                 else:
                     raise  # Re-raise if not a Chrome binary issue
             
-            # Create browser context
+            # Create browser context with stealth parameters
+            # Use realistic user agent matching real Chrome to avoid detection
+            headers = {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+            }
+            
             self.context = await self.browser.new_context(
                 viewport={'width': self.viewport_width, 'height': self.viewport_height},
-                user_agent=f'Aegis-AI/{AEGIS_VERSION} Visual Recon Tool'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                java_script_enabled=True,
+                locale='en-US',
+                extra_http_headers=headers
             )
+            
+            # CRITICAL: Remove the webdriver property to hide bot status
+            await self.context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             # Load and inject session cookies
             session_data = self._load_session_data()

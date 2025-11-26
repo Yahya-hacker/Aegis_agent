@@ -3,12 +3,10 @@ set -e
 
 echo "🔧 Installing missing tools..."
 
-# Update apt
+echo "🔧 Installing System Dependencies (Critical)..."
 sudo apt-get update
-
-# Install Nmap and SQLMap
-echo "📦 Installing Nmap and SQLMap..."
-sudo apt-get install -y nmap sqlmap
+# Added libpcap-dev (for Naabu) and python3-venv, build-essential for compilation
+sudo apt-get install -y nmap sqlmap libpcap-dev python3-venv build-essential libffi-dev python3-dev git
 
 # Install Go tools
 echo "📦 Installing Go tools..."
@@ -44,4 +42,9 @@ export PATH=$PATH:$(go env GOPATH)/bin
 echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.zshrc
 echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc
 
-echo "✅ All tools installed successfully!"
+echo "🔧 Installing Playwright System Dependencies..."
+# This is the missing magic line for the 'Cannot find Chrome' error
+pip install playwright
+playwright install --with-deps chromium
+
+echo "✅ Environment is battle-ready."

@@ -108,12 +108,16 @@ If you cannot suggest a fix, respond with:
             
             content = response.get('content', '')
             
-            # Extract JSON from response
-            import json
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                correction = json.loads(json_match.group(0))
+            # Use robust JSON parser from enhanced_ai_core instead of brittle regex+json.loads
+            from agents.enhanced_ai_core import parse_json_robust
+            
+            correction = await parse_json_robust(
+                content,
+                orchestrator=self.ai_core.orchestrator,
+                context="Self-correction of tool arguments"
+            )
+            
+            if correction:
                 corrected_args = correction.get('corrected_args')
                 reasoning = correction.get('reasoning', 'No reasoning provided')
                 

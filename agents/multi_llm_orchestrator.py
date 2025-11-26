@@ -10,12 +10,13 @@ Manages four specialized LLMs via OpenRouter API with multi-account sharding:
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import time
 import aiohttp
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import logging
 from utils.reasoning_display import get_reasoning_display
 
@@ -64,6 +65,12 @@ class MultiLLMOrchestrator:
         self._initialize_usage_tracker()
         self.context_history = []  # Track context size over time
         self.error_patterns = {}  # Track recurring errors for pattern detection
+        
+        # Loop Breaker: Track action history to detect repetitive loops
+        self.action_history: List[str] = []
+        self.max_action_history = 20  # Keep last N actions for loop detection
+        self.loop_detection_window = 3  # Check last N actions for loops
+        self.loop_occurrence_threshold = 2  # Trigger if same action appears N times in window
         
         # Load model names from environment variables with fallback defaults
         # These defaults match the recommended models, but can be changed easily via .env
@@ -155,6 +162,161 @@ class MultiLLMOrchestrator:
         """
         self.usage_tracker = {role: {'calls': 0, 'tokens': 0, 'cost': 0.0} for role in self.ALL_ROLES}
     
+    def _compute_action_signature(self, action: Dict[str, Any]) -> str:
+        """
+        Compute a unique signature for an action to enable loop detection.
+        
+        Args:
+            action: Action dictionary with tool and args
+            
+        Returns:
+            Hash string representing the action
+        """
+        # Create a normalized representation of the action
+        tool = action.get('tool', '')
+        args = action.get('args', {})
+        
+        # Sort args keys for consistent hashing
+        normalized = f"{tool}:{json.dumps(args, sort_keys=True)}"
+        return hashlib.md5(normalized.encode()).hexdigest()[:16]
+    
+    def _detect_loop(self, new_action: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        Detect if the agent is stuck in a repetitive action loop.
+        
+        This implements the "Watcher" pattern to break infinite loops where the agent
+        tries the same action repeatedly without making progress.
+        
+        Args:
+            new_action: The proposed new action
+            
+        Returns:
+            Tuple of (is_loop_detected, loop_description)
+        """
+        # Compute signature for the new action
+        new_signature = self._compute_action_signature(new_action)
+        
+        # Check if this exact action was proposed in the last N turns
+        recent_actions = self.action_history[-self.loop_detection_window:]
+        occurrences = recent_actions.count(new_signature)
+        
+        if occurrences >= self.loop_occurrence_threshold:
+            tool = new_action.get('tool', 'unknown')
+            target = new_action.get('args', {}).get('target', 
+                     new_action.get('args', {}).get('domain',
+                     new_action.get('args', {}).get('url', 'unknown')))
+            
+            loop_description = f"Action '{tool}' on '{target}' proposed {occurrences + 1} times in last {self.loop_detection_window} turns"
+            logger.warning(f"🔄 LOOP DETECTED: {loop_description}")
+            return True, loop_description
+        
+        return False, None
+    
+    def record_action(self, action: Dict[str, Any]) -> None:
+        """
+        Record an action in the history for loop detection.
+        
+        Args:
+            action: The action that was executed
+        """
+        signature = self._compute_action_signature(action)
+        self.action_history.append(signature)
+        
+        # Maintain bounded history
+        if len(self.action_history) > self.max_action_history:
+            self.action_history = self.action_history[-self.max_action_history:]
+    
+    async def check_and_handle_loop(
+        self,
+        proposed_action: Dict[str, Any],
+        system_prompt: str,
+        user_message: str
+    ) -> Dict[str, Any]:
+        """
+        Check for action loops and handle them by forcing a strategy pivot.
+        
+        This is the "Watcher" that prevents the agent from getting stuck.
+        If a loop is detected, it injects a special system message to force
+        the LLM to choose a completely different approach.
+        
+        Args:
+            proposed_action: The action proposed by the LLM
+            system_prompt: Original system prompt
+            user_message: Original user message
+            
+        Returns:
+            Either the original action (if no loop) or a new action after forcing a pivot
+        """
+        is_loop, loop_description = self._detect_loop(proposed_action)
+        
+        if not is_loop:
+            # No loop, record and return the action
+            self.record_action(proposed_action)
+            return proposed_action
+        
+        logger.warning(f"🔄 Logic Loop Detected: {loop_description}")
+        logger.warning("🔄 Forcing a strategy pivot...")
+        
+        # Show reasoning about the loop detection
+        self.reasoning_display.show_thought(
+            f"Loop detected - forcing strategy change",
+            thought_type="warning",
+            metadata={
+                "loop_description": loop_description,
+                "proposed_tool": proposed_action.get('tool'),
+                "action_history_size": len(self.action_history)
+            }
+        )
+        
+        # Force a pivot by adding a strong directive to the system prompt
+        pivot_system_prompt = f"""{system_prompt}
+
+⚠️ CRITICAL LOOP DETECTED ⚠️
+You have been stuck in a loop: {loop_description}
+
+You MUST:
+1. Choose a COMPLETELY DIFFERENT tool than '{proposed_action.get('tool')}'
+2. Or target a DIFFERENT URL/domain/endpoint
+3. Consider moving to a different phase of testing (e.g., if stuck on recon, try exploitation)
+4. If you've exhausted options for the current target, use 'finish_mission' with a summary
+
+DO NOT propose the same action again. Think creatively about alternative approaches."""
+        
+        # Re-execute the task with the pivot prompt
+        try:
+            response = await self.execute_task(
+                task_type='next_action',  # Use the same task type
+                system_prompt=pivot_system_prompt,
+                user_message=user_message,
+                temperature=self.default_temperature + 0.1  # Slightly higher temp for creativity
+            )
+            
+            # Parse the new action from response
+            from agents.enhanced_ai_core import parse_json_robust
+            
+            new_action = await parse_json_robust(
+                response.get('content', ''),
+                orchestrator=self,
+                context="Pivot action after loop detection"
+            )
+            
+            if new_action and new_action.get('tool') != proposed_action.get('tool'):
+                logger.info(f"✅ Successfully pivoted to new action: {new_action.get('tool')}")
+                self.record_action(new_action)
+                return new_action
+            else:
+                # Still same action or failed to parse, return with warning
+                logger.warning("⚠️ Pivot failed, returning original action with loop warning")
+                proposed_action['_loop_warning'] = loop_description
+                self.record_action(proposed_action)
+                return proposed_action
+                
+        except Exception as e:
+            logger.error(f"Error during loop pivot: {e}")
+            proposed_action['_loop_warning'] = f"Loop detected but pivot failed: {e}"
+            self.record_action(proposed_action)
+            return proposed_action
+
     async def initialize(self):
         """Initialize the orchestrator and validate API keys with sharding support"""
         try:
