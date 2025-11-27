@@ -10,13 +10,14 @@ This test verifies that all enhanced features work together:
 """
 
 import sys
+import asyncio
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def test_integration():
+async def test_integration():
     """Test all features working together"""
     print("\n" + "="*70)
     print("INTEGRATION TEST - All Enhanced Features")
@@ -36,7 +37,7 @@ def test_integration():
     blackboard.add_relationship("Weak CSRF", "ALLOWS_ACTION", "Account Takeover")
     blackboard.add_goal("Exploit CSRF vulnerability")
     
-    paths = blackboard.get_attack_path("Account Takeover")
+    paths = blackboard.get_attack_path("Account Takeover", source="example.com")
     print(f"  ✓ Knowledge graph: {blackboard.knowledge_graph.number_of_nodes()} nodes, "
           f"{blackboard.knowledge_graph.number_of_edges()} edges")
     print(f"  ✓ Attack paths to 'Account Takeover': {len(paths)}")
@@ -44,7 +45,8 @@ def test_integration():
     # Feature D: Robust JSON Parsing
     print("\n[D] Testing Robust JSON Parsing...")
     malformed_json = '```json\n{"key": "value", "incomplete": "test'
-    parsed = parse_json_robust(malformed_json)
+    # Need to await since it's an async function
+    parsed = await parse_json_robust(malformed_json)
     if parsed:
         print(f"  ✓ Successfully repaired and parsed malformed JSON")
         print(f"     Result: {parsed}")
@@ -160,14 +162,14 @@ if __name__ == "__main__":
     return True
 
 
-def main():
+async def main():
     """Run integration test"""
     print("\n" + "="*70)
     print("ENHANCED FEATURES INTEGRATION TEST")
     print("="*70)
     
     try:
-        test_integration()
+        await test_integration()
         
         print("\n" + "="*70)
         print("FINAL SUMMARY - ALL ENHANCEMENTS IMPLEMENTED")
@@ -207,5 +209,5 @@ def main():
 
 
 if __name__ == "__main__":
-    success = main()
+    success = asyncio.run(main())
     sys.exit(0 if success else 1)

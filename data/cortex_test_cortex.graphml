@@ -20,49 +20,49 @@
       <data key="d5">0</data>
       <data key="d6">entry</data>
     </node>
-    <node id="node_1_1469">
+    <node id="node_1_9152">
       <data key="d2">https://example.com/login</data>
       <data key="d3">{"forms": ["login_form"]}</data>
       <data key="d4">abc123</data>
-      <data key="d5">1764187325.7516286</data>
+      <data key="d5">1764271049.0895271</data>
       <data key="d7">1</data>
       <data key="d6">state</data>
     </node>
-    <node id="node_2_5383">
+    <node id="node_2_402">
       <data key="d2">https://example.com/dashboard</data>
       <data key="d3">{"authenticated": true}</data>
       <data key="d4" />
-      <data key="d5">1764187325.7525408</data>
+      <data key="d5">1764271049.0930004</data>
       <data key="d7">1</data>
       <data key="d6">state</data>
     </node>
-    <node id="node_3_3300">
+    <node id="node_3_3254">
       <data key="d2">https://example.com/admin</data>
       <data key="d3">{"error": "Access Denied"}</data>
       <data key="d4" />
-      <data key="d5">1764187325.7533314</data>
+      <data key="d5">1764271049.0943992</data>
       <data key="d7">1</data>
       <data key="d6">state</data>
     </node>
-    <edge source="root" target="node_1_1469">
+    <edge source="root" target="node_1_9152">
       <data key="d8">Navigate to login page</data>
       <data key="d9">1.0</data>
       <data key="d10">200</data>
-      <data key="d11">1764187325.7516432</data>
+      <data key="d11">1764271049.0895476</data>
     </edge>
-    <edge source="node_1_1469" target="node_2_5383">
+    <edge source="node_1_9152" target="node_2_402">
       <data key="d8">Submit credentials</data>
       <data key="d9">0.8</data>
       <data key="d10">302</data>
-      <data key="d11">1764187325.7525487</data>
+      <data key="d11">1764271049.0930164</data>
     </edge>
-    <edge source="node_2_5383" target="node_3_3300">
+    <edge source="node_2_402" target="node_3_3254">
       <data key="d8">Click admin panel</data>
       <data key="d9">0.5</data>
       <data key="d10">403</data>
-      <data key="d11">1764187325.753338</data>
+      <data key="d11">1764271049.0944226</data>
     </edge>
-    <data key="d0">node_3_3300</data>
+    <data key="d0">node_3_3254</data>
     <data key="d1">3</data>
   </graph>
 </graphml>
