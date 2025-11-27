@@ -979,16 +979,46 @@ class PythonToolManager:
         # Escape arguments for JSON
         args_json = json.dumps(arguments)
         
-        # Create wrapper script that calls the function
+        # Encode JS code to Base64 to prevent syntax errors with backticks/quotes
+        import base64
+        js_code_b64 = base64.b64encode(js_code.encode('utf-8')).decode('utf-8')
+
+        # Create a secure sandbox wrapper using Node.js vm module
+        # This prevents access to process, fs, and require
+        # We decode the Base64 code inside the wrapper to avoid string escaping issues
         wrapper = f"""
-{js_code}
+const vm = require('vm');
+
+// Decode the target code from Base64
+const codeBuffer = Buffer.from('{js_code_b64}', 'base64');
+const targetCode = codeBuffer.toString('utf-8');
+
+const wrappedCode = `
+${{targetCode}}
 
 // Aegis wrapper to call the function
 try {{
     const result = {function_name}(...{args_json});
-    console.log(JSON.stringify({{ success: true, result: result }}));
+    JSON.stringify({{ success: true, result: result }});
 }} catch (error) {{
-    console.log(JSON.stringify({{ success: false, error: error.message }}));
+    JSON.stringify({{ success: false, error: error.message }});
+}}
+`;
+
+try {{
+    // Create a secure context without access to sensitive globals
+    const context = vm.createContext({{
+        console: {{ log: () => {{}} }}, // Disable console logs inside sandbox
+        btoa: (str) => Buffer.from(str).toString('base64'),
+        atob: (str) => Buffer.from(str, 'base64').toString('binary'),
+        JSON: JSON
+    }});
+
+    // Execute code in sandbox with timeout
+    const result = vm.runInContext(wrappedCode, context, {{ timeout: 1000 }});
+    console.log(result);
+}} catch (e) {{
+    console.log(JSON.stringify({{ success: false, error: 'Sandbox Error: ' + e.message }}));
 }}
 """
         

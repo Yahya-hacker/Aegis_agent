@@ -49,6 +49,12 @@ async def main():
     print("   • Llama 70B: Planification stratégique et triage")
     print("   • Mixtral 8x7B: Analyse de vulnérabilités et exploitation")
     print("   • Qwen-coder: Analyse de code et génération de payloads")
+
+    # Run Dependency Checks
+    from utils.dependency_check import check_dependencies
+    if not check_dependencies():
+        print("❌ Startup Aborted due to missing dependencies.")
+        sys.exit(1)
     
     # TASK 3: Initialize dynamic tool loader
     print("\n🔧 Initializing dynamic tool arsenal...")

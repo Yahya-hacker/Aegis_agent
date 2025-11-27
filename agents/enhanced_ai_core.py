@@ -991,26 +991,49 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
             if 'error' in content.lower() or 'failed' in content.lower() or item_type == 'error':
                 key_errors.append(content[:100] + "..." if len(content) > 100 else content)
         
-        # Build comprehensive gap summary
+        # Build comprehensive gap summary with improved context retention
         summary_parts = [
-            f"[... {omitted_count} intermediate steps omitted for efficiency. Consult Blackboard for verified facts ...]"
+            f"--- MEMORY SUMMARY ({omitted_count} steps) ---",
+            "CRITICAL CONTEXT FROM OMITTED HISTORY:",
         ]
         
+        # 1. Mission Parameters (Implicitly preserved in first 2 messages, but good to reinforce)
+        mission_type = "Pentest Mission"
+        for item in middle_section:
+             if 'mission' in item.get('content', '').lower() and 'type' in item.get('content', '').lower():
+                 mission_type = "Mission Context Found"
+                 break
+
+        # 2. Key Findings - Prioritize high severity
         if key_findings:
-            summary_parts.append(f"\nKey findings from omitted steps ({len(key_findings)}):")
-            for finding in key_findings[-5:]:  # Last 5 findings
+            summary_parts.append(f"\nKEY FINDINGS ({len(key_findings)} total):")
+            # Filter for critical/high severity keywords to prioritize
+            critical_findings = [f for f in key_findings if 'critical' in f.lower() or 'high' in f.lower()]
+            other_findings = [f for f in key_findings if f not in critical_findings]
+
+            # Show all critical findings (up to 5), then fill with others
+            display_findings = critical_findings[:5]
+            if len(display_findings) < 5:
+                display_findings.extend(other_findings[:5 - len(display_findings)])
+
+            for finding in display_findings:
                 summary_parts.append(f"  • {finding}")
-        
+
+        # 3. Key Decisions - Focus on strategy pivots
         if key_decisions:
-            summary_parts.append(f"\nKey decisions from omitted steps ({len(key_decisions)}):")
+            summary_parts.append(f"\nKEY DECISIONS ({len(key_decisions)} total):")
             for decision in key_decisions[-5:]:  # Last 5 decisions
                 summary_parts.append(f"  • {decision}")
         
+        # 4. Failures - Crucial for avoiding loops
         if key_errors:
-            summary_parts.append(f"\nRecorded failures (avoid repeating) ({len(key_errors)}):")
-            for error in key_errors[-3:]:  # Last 3 errors
+            summary_parts.append(f"\nFAILED ATTEMPTS (DO NOT REPEAT):")
+            # Deduplicate errors
+            unique_errors = list(set(key_errors))
+            for error in unique_errors[-5:]:  # Last 5 unique errors
                 summary_parts.append(f"  ⚠️ {error}")
-        
+
+        summary_parts.append("--- END SUMMARY ---")
         summary_content = "\n".join(summary_parts)
         
         # Create a gap summary entry

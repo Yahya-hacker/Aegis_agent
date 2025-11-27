@@ -103,7 +103,8 @@ class AegisConversation:
     
     async def _get_user_input(self) -> str:
         try:
-            return input("\n🧑‍💻 VOUS: ").strip()
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, lambda: input("\n🧑‍💻 VOUS: ").strip())
         except (EOFError, KeyboardInterrupt):
             raise
 
@@ -183,7 +184,8 @@ class AegisConversation:
                     print("="*70)
                     
                     try:
-                        user_response = input("\n❓ Do you approve this tool installation? (y/n): ").lower().strip()
+                        loop = asyncio.get_event_loop()
+                        user_response = await loop.run_in_executor(None, lambda: input("\n❓ Do you approve this tool installation? (y/n): ").lower().strip())
                     except EOFError:
                         user_response = 'n'
                     
@@ -248,7 +250,8 @@ class AegisConversation:
                 # Intrusive tool: ask for approval
                 print(f"⚠️ ATTENTION: Action INTRUSIVE détectée!")
                 try:
-                    response = input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip()
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(None, lambda: input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip())
                 except EOFError:
                     break
             
