@@ -110,34 +110,108 @@ class VisualReconTool:
         Called automatically when Playwright fails to launch due to missing
         Chrome binary. This implements the self-healing infrastructure pattern.
         
+        Steps:
+        1. Install chromium browser binary
+        2. Install OS dependencies (critical for headless operation)
+        3. If permission denied, prompt user for sudo approval
+        
         Returns:
             bool: True if installation succeeded, False otherwise.
         """
         logger.info("🔧 Chrome binary not found. Auto-installing Chromium...")
+        
         try:
-            # Use sys.executable to find the Python interpreter, then invoke playwright module
-            # This is safer than relying on PATH for the playwright command
             import sys
+            
+            # Step 1: Install chromium browser binary
+            logger.info("📦 Step 1: Installing Chromium browser...")
             result = subprocess.run(
                 [sys.executable, "-m", "playwright", "install", "chromium"],
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minute timeout
             )
-            if result.returncode == 0:
-                logger.info("✅ Chromium installed successfully via Playwright")
+            
+            if result.returncode != 0:
+                logger.error(f"❌ Chromium browser installation failed: {result.stderr}")
+                return False
+            
+            logger.info("✅ Chromium browser installed successfully")
+            
+            # Step 2: Install OS dependencies (CRITICAL for headless operation)
+            logger.info("📦 Step 2: Installing OS dependencies...")
+            deps_result = subprocess.run(
+                [sys.executable, "-m", "playwright", "install-deps", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minute timeout for deps
+            )
+            
+            if deps_result.returncode == 0:
+                logger.info("✅ Chromium OS dependencies installed successfully")
                 return True
             else:
-                logger.error(f"❌ Chromium installation failed: {result.stderr}")
-                return False
+                # Check if it's a permission error
+                stderr = deps_result.stderr.lower()
+                if "permission denied" in stderr or "sudo" in stderr or "root" in stderr:
+                    logger.warning("⚠️ Permission denied. OS dependencies require elevated privileges.")
+                    logger.info("💡 Attempting installation with sudo...")
+                    
+                    # Try with sudo
+                    return self._install_chromium_deps_with_sudo()
+                else:
+                    logger.warning(f"⚠️ OS dependency installation failed (non-fatal): {deps_result.stderr}")
+                    # Browser might still work without all deps
+                    return True
+                    
         except subprocess.TimeoutExpired:
-            logger.error("❌ Chromium installation timed out after 5 minutes")
+            logger.error("❌ Chromium installation timed out")
             return False
         except FileNotFoundError:
             logger.error("❌ Python or playwright module not found")
             return False
         except Exception as e:
             logger.error(f"❌ Error installing Chromium: {e}")
+            return False
+    
+    def _install_chromium_deps_with_sudo(self) -> bool:
+        """
+        Install Chromium OS dependencies with sudo (elevated privileges).
+        
+        This is called when regular install-deps fails due to permissions.
+        Uses subprocess to run playwright install-deps with sudo.
+        
+        Returns:
+            bool: True if installation succeeded, False otherwise.
+        """
+        import sys
+        
+        try:
+            logger.info("🔑 Running: sudo playwright install-deps chromium")
+            logger.warning("⚠️ This requires sudo access. You may be prompted for your password.")
+            
+            # Run with sudo - this will prompt for password if needed
+            result = subprocess.run(
+                ["sudo", sys.executable, "-m", "playwright", "install-deps", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minute timeout
+            )
+            
+            if result.returncode == 0:
+                logger.info("✅ Chromium OS dependencies installed with sudo successfully")
+                return True
+            else:
+                logger.error(f"❌ sudo installation failed: {result.stderr}")
+                logger.info("💡 You can manually install dependencies by running:")
+                logger.info("   sudo playwright install-deps chromium")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Chromium deps installation with sudo timed out")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error installing Chromium deps with sudo: {e}")
             return False
     
     async def _initialize_browser(self) -> None:

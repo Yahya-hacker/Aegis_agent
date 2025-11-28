@@ -92,19 +92,247 @@ class AegisScanner:
         except:
             return False
     
-    async def _self_correct_and_retry(self, tool: str, original_args: Dict, error_message: str) -> Optional[Dict]:
+    def _summarize_output(self, tool_name: str, output: str, target: str = "") -> Dict[str, Any]:
+        """
+        Smart Summarization: Avoid flooding the LLM context window with massive outputs.
+        
+        If output exceeds 2000 chars:
+        1. Extract key information (open ports, vulnerabilities, etc.)
+        2. Save full output to data/evidence/ for reference
+        3. Return only the summary to the LLM
+        
+        Args:
+            tool_name: Name of the tool that produced the output
+            output: Raw output string from the tool
+            target: Target that was scanned (for file naming)
+            
+        Returns:
+            Dict with 'summary' (for LLM) and 'evidence_file' (path to full output)
+        """
+        MAX_OUTPUT_LENGTH = 2000
+        
+        # If output is small enough, return as-is
+        if len(output) <= MAX_OUTPUT_LENGTH:
+            return {
+                "summary": output,
+                "evidence_file": None,
+                "was_summarized": False
+            }
+        
+        logger.info(f"📊 Output too large ({len(output)} chars), summarizing...")
+        
+        # Save full output to evidence file
+        evidence_file = self._save_evidence(tool_name, output, target)
+        
+        # Extract summary based on tool type
+        summary = self._extract_summary(tool_name, output)
+        
+        return {
+            "summary": summary,
+            "evidence_file": evidence_file,
+            "was_summarized": True,
+            "original_length": len(output)
+        }
+    
+    def _save_evidence(self, tool_name: str, output: str, target: str = "") -> str:
+        """
+        Save full tool output to evidence file.
+        
+        Args:
+            tool_name: Name of the tool
+            output: Full output to save
+            target: Target identifier for file naming
+            
+        Returns:
+            Path to the saved evidence file
+        """
+        import time
+        
+        # Create evidence directory
+        evidence_dir = Path("data/evidence")
+        evidence_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Generate safe filename
+        safe_target = re.sub(r'[^a-zA-Z0-9]', '_', target)[:50] if target else "unknown"
+        timestamp = int(time.time())
+        filename = f"{tool_name}_{safe_target}_{timestamp}.txt"
+        filepath = evidence_dir / filename
+        
+        # Save output
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(f"# Tool: {tool_name}\n")
+                f.write(f"# Target: {target}\n")
+                f.write(f"# Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"# Output Length: {len(output)} chars\n")
+                f.write("=" * 60 + "\n\n")
+                f.write(output)
+            
+            logger.info(f"💾 Full output saved to: {filepath}")
+            return str(filepath)
+        except Exception as e:
+            logger.error(f"Failed to save evidence: {e}")
+            return ""
+    
+    def _extract_summary(self, tool_name: str, output: str) -> str:
+        """
+        Extract key information from tool output based on tool type.
+        
+        Uses regex patterns to extract:
+        - Open ports from nmap/naabu
+        - Vulnerabilities from nuclei
+        - SQL injection points from sqlmap
+        - Interesting strings from reverse engineering
+        
+        Args:
+            tool_name: Name of the tool
+            output: Full output string
+            
+        Returns:
+            Summarized output (max ~1500 chars)
+        """
+        summary_parts = [f"📋 SUMMARY ({tool_name}) - Full output saved to evidence file\n"]
+        
+        if tool_name in ["nmap_scan", "nmap", "port_scanning"]:
+            # Extract open ports from nmap output
+            open_ports = []
+            
+            # Pattern for nmap output: "PORT     STATE SERVICE"
+            port_pattern = r'(\d+)/(\w+)\s+(open|filtered)\s+(\S+)'
+            matches = re.findall(port_pattern, output)
+            
+            if matches:
+                summary_parts.append("\n🔓 OPEN PORTS:")
+                for port, protocol, state, service in matches[:20]:  # Limit to 20 ports
+                    summary_parts.append(f"  • {port}/{protocol} ({state}) - {service}")
+                
+                if len(matches) > 20:
+                    summary_parts.append(f"  ... and {len(matches) - 20} more ports")
+            else:
+                # Try XML format
+                xml_ports = re.findall(r'<port protocol="(\w+)" portid="(\d+)".*?state="(\w+)".*?name="([^"]*)"', output)
+                if xml_ports:
+                    summary_parts.append("\n🔓 OPEN PORTS:")
+                    for protocol, port, state, service in xml_ports[:20]:
+                        summary_parts.append(f"  • {port}/{protocol} ({state}) - {service}")
+        
+        elif tool_name in ["vulnerability_scan", "nuclei"]:
+            # Extract vulnerabilities
+            summary_parts.append("\n⚠️ VULNERABILITIES FOUND:")
+            
+            # Pattern for nuclei JSONL output indicators
+            vuln_pattern = r'"template-id":\s*"([^"]+)".*?"severity":\s*"([^"]+)"'
+            matches = re.findall(vuln_pattern, output)
+            
+            if matches:
+                severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+                matches = sorted(matches, key=lambda x: severity_order.get(x[1].lower(), 5))
+                
+                for template_id, severity in matches[:15]:
+                    emoji = "🔴" if severity.lower() in ["critical", "high"] else "🟡" if severity.lower() == "medium" else "🟢"
+                    summary_parts.append(f"  {emoji} [{severity.upper()}] {template_id}")
+                
+                if len(matches) > 15:
+                    summary_parts.append(f"  ... and {len(matches) - 15} more findings")
+            else:
+                summary_parts.append("  No specific vulnerabilities extracted")
+        
+        elif tool_name in ["run_sqlmap", "sqlmap"]:
+            # Extract SQL injection info
+            if "is vulnerable" in output.lower():
+                summary_parts.append("\n💉 SQL INJECTION CONFIRMED!")
+                
+                # Extract injection type
+                inj_types = re.findall(r'Type:\s*([^\n]+)', output)
+                if inj_types:
+                    summary_parts.append("\nInjection Types:")
+                    for inj_type in inj_types[:5]:
+                        summary_parts.append(f"  • {inj_type.strip()}")
+                
+                # Extract payload examples
+                payloads = re.findall(r'Payload:\s*([^\n]+)', output)
+                if payloads:
+                    summary_parts.append("\nPayload Examples:")
+                    for payload in payloads[:3]:
+                        summary_parts.append(f"  • {payload.strip()[:100]}")
+            else:
+                summary_parts.append("\n❌ No SQL injection detected")
+        
+        elif tool_name in ["analyze_binary", "reverse_engine"]:
+            # Extract interesting strings and functions
+            summary_parts.append("\n🔍 BINARY ANALYSIS:")
+            
+            # Count strings
+            strings_match = re.search(r'"total_count":\s*(\d+)', output)
+            if strings_match:
+                summary_parts.append(f"  Total strings: {strings_match.group(1)}")
+            
+            # Extract interesting strings
+            interesting = re.findall(r'"interesting_strings":\s*\[([^\]]+)\]', output)
+            if interesting:
+                summary_parts.append("\n  Interesting strings found (flags, passwords, URLs, etc.)")
+            
+            # Extract entry point
+            entry = re.search(r'"entry_point":\s*"([^"]+)"', output)
+            if entry:
+                summary_parts.append(f"  Entry point: {entry.group(1)}")
+        
+        elif tool_name in ["check_binary_protections", "pwn"]:
+            # Extract security protections
+            summary_parts.append("\n🛡️ BINARY PROTECTIONS:")
+            
+            protections = {
+                'NX': re.search(r'"nx":\s*(true|false|null)', output),
+                'Canary': re.search(r'"canary":\s*(true|false|null)', output),
+                'PIE': re.search(r'"pie":\s*(true|false|null)', output),
+                'RELRO': re.search(r'"relro":\s*"?([^",}]+)', output),
+            }
+            
+            for prot, match in protections.items():
+                if match:
+                    value = match.group(1)
+                    emoji = "✅" if value == "true" or value == "full" else "❌" if value == "false" or value == "none" else "⚠️"
+                    summary_parts.append(f"  {emoji} {prot}: {value}")
+        
+        else:
+            # Generic summary - first and last 500 chars
+            summary_parts.append("\n📄 OUTPUT EXCERPT:")
+            summary_parts.append(output[:500])
+            summary_parts.append("\n... [truncated] ...\n")
+            summary_parts.append(output[-500:])
+        
+        summary = "\n".join(summary_parts)
+        
+        # Ensure summary doesn't exceed limit
+        if len(summary) > 1500:
+            summary = summary[:1500] + "\n... [summary truncated]"
+        
+        return summary
+    
+    async def _self_correct_and_retry(self, tool: str, original_args: Dict, error_message: str, recursion_depth: int = 0) -> Optional[Dict]:
         """
         Self-Correction Loop: Use Coder LLM to suggest fixes for failed commands
+        
+        Supports recursive healing - if initial correction fails, can ask the Coder LLM
+        to fix its own fix (up to 1 recursion).
         
         Args:
             tool: The tool that failed
             original_args: Original arguments that caused the failure
             error_message: The error message from the failure
+            recursion_depth: Current recursion level (max 1 for recursive healing)
             
         Returns:
             Corrected arguments dict or None if correction fails
         """
-        logger.info(f"🔧 Self-Correction: Attempting to fix failed {tool} command...")
+        max_recursion = 1  # Allow one recursive healing attempt
+        
+        if recursion_depth > max_recursion:
+            logger.warning(f"❌ Max recursion depth ({max_recursion}) reached for self-correction")
+            return None
+        
+        recursion_label = f" (recursion {recursion_depth})" if recursion_depth > 0 else ""
+        logger.info(f"🔧 Self-Correction{recursion_label}: Attempting to fix failed {tool} command...")
         
         correction_prompt = f"""A security testing tool failed with an error. Analyze the error and suggest a fixed command.
 
@@ -164,7 +392,21 @@ If you cannot suggest a fix, respond with:
                     logger.warning(f"❌ Coder LLM could not suggest a fix")
                     return None
             
-            logger.warning("Could not parse correction JSON")
+            # If JSON parsing failed, attempt recursive healing (ask LLM to fix its own response)
+            if recursion_depth < max_recursion:
+                logger.warning(f"⚠️ Could not parse correction JSON, attempting recursive healing...")
+                
+                # Create a new error message about the malformed response
+                recursive_error = f"Previous correction attempt returned invalid JSON. Raw response: {content[:500]}"
+                
+                return await self._self_correct_and_retry(
+                    tool, 
+                    original_args, 
+                    recursive_error,
+                    recursion_depth + 1
+                )
+            
+            logger.warning("Could not parse correction JSON after recursive attempts")
             return None
             
         except Exception as e:
@@ -306,13 +548,26 @@ If you cannot suggest a fix, respond with:
             elif tool == "nmap_scan":
                 target = args.get("target")
                 ports = args.get("ports", "80,443,8080,8443")
+                intensity = args.get("intensity", "normal")
                 if not target: return {"status": "error", "error": "Cible manquante"}
                 
-                # TASK 2: Execute and record in database
-                result = await self.python_tools.nmap_scan(target, ports)
+                # TASK 2: Execute and record in database (use real_tools for intensity support)
+                result = await self.real_tools.nmap_scan(target, ports, intensity=intensity)
                 if result.get("status") == "success":
-                    data = result.get("data", [])
-                    scan_result = f"Scanned {len(data)} ports" if isinstance(data, list) else "Completed"
+                    data = result.get("data", {})
+                    
+                    # TASK 5: Smart Summarization - avoid flooding LLM context
+                    if isinstance(data, dict) and "output" in data:
+                        raw_output = data["output"]
+                        summarized = self._summarize_output("nmap_scan", raw_output, target)
+                        
+                        # Replace raw output with summary for LLM
+                        data["output"] = summarized["summary"]
+                        data["evidence_file"] = summarized.get("evidence_file")
+                        data["was_summarized"] = summarized.get("was_summarized", False)
+                        result["data"] = data
+                    
+                    scan_result = f"Scanned with intensity={intensity}"
                     self.db.mark_scanned(target, "nmap_scan", scan_result)
                 return result
 
@@ -348,6 +603,7 @@ If you cannot suggest a fix, respond with:
             # Outils d'Attaque et d'Analyse Logique (NOUVEAU)
             elif tool == "vulnerability_scan":
                 target_url = args.get("target")
+                intensity = args.get("intensity", "normal")
                 if not target_url: 
                     return {"status": "error", "error": "Cible URL manquante"}
                 if '://' not in target_url: 
@@ -356,10 +612,10 @@ If you cannot suggest a fix, respond with:
                     return {"status": "error", "error": f"Invalid URL format: {target_url}"}
                 
                 # TASK 2: Execute, record scan and findings in database
-                result = await self.real_tools.vulnerability_scan(target_url)
+                result = await self.real_tools.vulnerability_scan(target_url, intensity=intensity)
                 if result.get("status") == "success":
                     data = result.get("data", [])
-                    scan_result = f"Found {len(data)} vulnerabilities" if isinstance(data, list) else "Completed"
+                    scan_result = f"Found {len(data)} vulnerabilities (intensity={intensity})" if isinstance(data, list) else "Completed"
                     self.db.mark_scanned(target_url, "vulnerability_scan", scan_result)
                     
                     # TASK 3: Verify each finding before adding to database
@@ -389,15 +645,25 @@ If you cannot suggest a fix, respond with:
 
             elif tool == "run_sqlmap":
                 target_url = args.get("target")
+                intensity = args.get("intensity", "normal")
                 if not target_url: return {"status": "error", "error": "Cible URL manquante"}
                 
                 # TASK 2: Execute and record findings
-                result = await self.real_tools.run_sqlmap(target_url)
+                result = await self.real_tools.run_sqlmap(target_url, intensity=intensity)
                 if result.get("status") == "success":
                     data = result.get("data", {})
                     vulnerable = data.get("vulnerable", False)
                     scan_result = "SQL Injection found" if vulnerable else "No SQL Injection"
                     self.db.mark_scanned(target_url, "run_sqlmap", scan_result)
+                    
+                    # TASK 5: Smart Summarization for large SQLMap output
+                    if "output" in data:
+                        raw_output = data["output"]
+                        summarized = self._summarize_output("run_sqlmap", raw_output, target_url)
+                        data["output"] = summarized["summary"]
+                        data["evidence_file"] = summarized.get("evidence_file")
+                        data["was_summarized"] = summarized.get("was_summarized", False)
+                        result["data"] = data
                     
                     # TASK 3: Verify finding before recording if vulnerable
                     if vulnerable:

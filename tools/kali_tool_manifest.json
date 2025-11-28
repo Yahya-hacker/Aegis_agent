@@ -65,7 +65,7 @@
     {
       "tool_name": "nmap_scan",
       "binary_name": "nmap",
-      "description": "Detailed network scan with service detection",
+      "description": "Detailed network scan with service detection. Supports intensity modes: 'stealth' (slow, fragmented packets), 'normal' (balanced), 'aggressive' (full ports, OS detection).",
       "intrusive": false,
       "category": "reconnaissance",
       "args_schema": {
@@ -77,10 +77,16 @@
         "ports": {
           "type": "string",
           "required": false,
-          "description": "Comma-separated port list (default: 80,443,8080,8443)"
+          "description": "Comma-separated port list (default varies by intensity)"
+        },
+        "intensity": {
+          "type": "string",
+          "required": false,
+          "enum": ["stealth", "normal", "aggressive"],
+          "description": "Scan intensity: 'stealth' (T2, fragmented), 'normal' (T3), 'aggressive' (T4, all ports, OS detection). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\"}}"
+      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\", \"intensity\": \"normal\"}}"
     },
     {
       "tool_name": "url_discovery",
@@ -115,7 +121,7 @@
     {
       "tool_name": "vulnerability_scan",
       "binary_name": "nuclei",
-      "description": "Fast vulnerability scanner using templates",
+      "description": "Fast vulnerability scanner using templates. Supports intensity modes: 'stealth' (low rate 10 req/s), 'normal' (balanced 50 req/s), 'aggressive' (150 req/s with DAST).",
       "intrusive": true,
       "category": "vulnerability_assessment",
       "args_schema": {
@@ -123,14 +129,20 @@
           "type": "string",
           "required": true,
           "description": "Target URL to scan"
+        },
+        "intensity": {
+          "type": "string",
+          "required": false,
+          "enum": ["stealth", "normal", "aggressive"],
+          "description": "Scan intensity: 'stealth' (10 req/s, evade WAF), 'normal' (50 req/s), 'aggressive' (150 req/s, DAST). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"normal\"}}"
     },
     {
       "tool_name": "run_sqlmap",
       "binary_name": "sqlmap",
-      "description": "SQL injection detection and exploitation",
+      "description": "SQL injection detection and exploitation. Supports intensity modes: 'stealth' (level=1, risk=1), 'normal' (level=3, risk=2), 'aggressive' (level=5, risk=3).",
       "intrusive": true,
       "category": "exploitation",
       "args_schema": {
@@ -138,9 +150,15 @@
           "type": "string",
           "required": true,
           "description": "Target URL with parameter"
+        },
+        "intensity": {
+          "type": "string",
+          "required": false,
+          "enum": ["stealth", "normal", "aggressive"],
+          "description": "Test intensity: 'stealth' (minimal testing), 'normal' (balanced), 'aggressive' (maximum detection). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"normal\"}}"
     },
     {
       "tool_name": "discover_interactables",

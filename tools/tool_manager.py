@@ -28,8 +28,10 @@ class RealToolManager:
     """
     Manages REAL security tool execution via subprocess with rate limiting.
     
-    Implements "God Mode" aggressive scan configurations for comprehensive
-    security testing while respecting rate limits and resource constraints.
+    Implements adaptive intensity modes for comprehensive security testing:
+    - stealth: Low and slow, evades detection
+    - normal: Balanced approach
+    - aggressive: Maximum speed and coverage (God Mode)
     
     Attributes:
         tool_paths: Dictionary mapping tool names to their binary paths.
@@ -39,6 +41,25 @@ class RealToolManager:
         active_processes: Counter for currently running processes.
         high_impact_mode: When True, uses maximum aggression settings.
     """
+    
+    # Intensity configurations for each tool
+    INTENSITY_CONFIGS = {
+        "nmap": {
+            "stealth": ["-sS", "-T2", "-f"],  # Fragmented packets, slow timing
+            "normal": ["-sS", "-T3"],          # SYN scan, normal timing
+            "aggressive": ["-sS", "-T4", "-A", "-p-"],  # Aggressive, all ports, OS detection
+        },
+        "nuclei": {
+            "stealth": ["-rl", "10", "-c", "5"],  # Rate limit 10, concurrency 5
+            "normal": ["-rl", "50", "-c", "25"],   # Rate limit 50, concurrency 25
+            "aggressive": ["-rl", "150", "-c", "50", "-dast"],  # Max rate, DAST enabled
+        },
+        "sqlmap": {
+            "stealth": ["--level=1", "--risk=1"],  # Minimal testing
+            "normal": ["--level=3", "--risk=2"],   # Balanced testing
+            "aggressive": ["--level=5", "--risk=3"],  # Maximum testing
+        },
+    }
     
     def __init__(self, high_impact_mode: bool = False):
         """
@@ -58,6 +79,28 @@ class RealToolManager:
         
         # God Mode configuration
         self.high_impact_mode = high_impact_mode
+    
+    def get_intensity_args(self, tool_name: str, intensity: str = 'normal') -> List[str]:
+        """
+        Get intensity-specific command arguments for a tool.
+        
+        Args:
+            tool_name: Name of the tool (nmap, nuclei, sqlmap)
+            intensity: Intensity level ('stealth', 'normal', 'aggressive')
+            
+        Returns:
+            List of command-line arguments for the specified intensity
+        """
+        if tool_name not in self.INTENSITY_CONFIGS:
+            logger.warning(f"No intensity config for {tool_name}, using empty args")
+            return []
+        
+        tool_config = self.INTENSITY_CONFIGS[tool_name]
+        if intensity not in tool_config:
+            logger.warning(f"Invalid intensity '{intensity}' for {tool_name}, using 'normal'")
+            intensity = 'normal'
+        
+        return tool_config[intensity].copy()
     
     def _load_session_data(self) -> Dict:
         """
@@ -199,27 +242,22 @@ class RealToolManager:
         subdomains = [s for s in result["stdout"].strip().split('\n') if s.strip()]
         return {"status": "success", "data": subdomains}
         
-    async def vulnerability_scan(self, target_url: str) -> Dict:
+    async def vulnerability_scan(self, target_url: str, intensity: str = 'normal') -> Dict:
         """
-        Scan a URL with Nuclei using God Mode aggressive configuration.
+        Scan a URL with Nuclei using adaptive intensity configuration.
         
-        God Mode settings:
-            - Increased batch size (-bs 10)
-            - High concurrency (-c 50)
-            - Elevated rate limit (-rate-limit 150)
-            - DAST templates enabled (-dast)
-            - All template types (-t)
+        Intensity modes:
+            - stealth: Low rate (10 req/sec), low concurrency (5) - evades detection
+            - normal: Balanced rate (50 req/sec), moderate concurrency (25)
+            - aggressive: High rate (150 req/sec), high concurrency (50), DAST enabled
         
         Warning:
-            The default rate limit of 150 req/sec is aggressive and may:
-            - Trigger WAF/IDS defensive measures
-            - Overwhelm underpowered target systems
-            - Be inappropriate for production environments
-            
-            Consider lowering the rate for sensitive targets.
+            Aggressive mode may trigger WAF/IDS defensive measures.
+            Use stealth mode for sensitive targets.
         
         Args:
             target_url: Target URL to scan for vulnerabilities.
+            intensity: Scan intensity ('stealth', 'normal', 'aggressive'). Default: 'normal'
             
         Returns:
             Dict: Dictionary with status and list of discovered vulnerabilities.
@@ -229,25 +267,27 @@ class RealToolManager:
         safe_name = re.sub(r'[^a-zA-Z0-9]', '_', target_url)
         output_file = output_dir / f"nuclei_{safe_name}.jsonl"
 
-        # GOD MODE: Aggressive Nuclei configuration
-        # WARNING: High rate limit (150 req/sec) may trigger defensive measures
+        # Get intensity-specific arguments
+        intensity_args = self.get_intensity_args("nuclei", intensity)
+        
+        # Base Nuclei arguments
         args = [
             "-u", target_url,
             "-severity", "low,medium,high,critical",
             "-jsonl",
             "-o", str(output_file),
-            # God Mode settings
-            "-bs", "10",       # Batch size
-            "-c", "50",        # Concurrency
-            "-rate-limit", "150",  # Rate limit (aggressive - may trigger WAF)
+            "-bs", "10",  # Batch size
         ]
         
-        logger.warning("⚠️ Using aggressive rate limit (150 req/sec) - may trigger defensive measures")
+        # Add intensity-specific args
+        args.extend(intensity_args)
         
-        # Add DAST if high impact mode
-        if self.high_impact_mode:
-            args.extend(["-dast"])
-            logger.info("🛡️ God Mode: DAST scanning enabled")
+        if intensity == 'aggressive' or self.high_impact_mode:
+            logger.warning("⚠️ Using aggressive mode - may trigger defensive measures")
+        elif intensity == 'stealth':
+            logger.info("🕵️ Stealth mode: Low rate, minimal footprint")
+        else:
+            logger.info("🔧 Normal mode: Balanced scanning")
         
         # Inject session cookies if available
         session_data = self._load_session_data()
@@ -297,20 +337,19 @@ class RealToolManager:
                     continue
         return {"status": "success", "data": open_ports}
     
-    async def nmap_scan(self, target: str, ports: str = None) -> Dict:
+    async def nmap_scan(self, target: str, ports: str = None, intensity: str = 'normal') -> Dict:
         """
-        Perform comprehensive Nmap scan with God Mode configuration.
+        Perform Nmap scan with adaptive intensity configuration.
         
-        God Mode settings:
-            - SYN scan (-sS)
-            - Service version detection (-sV)
-            - Full port range (-p-)
-            - Aggressive timing (-T4)
-            - High minimum rate (--min-rate 1000)
+        Intensity modes:
+            - stealth: SYN scan, slow timing (-T2), fragmented packets (-f)
+            - normal: SYN scan, normal timing (-T3)
+            - aggressive: SYN scan, aggressive timing (-T4), OS detection (-A), all ports (-p-)
         
         Args:
             target: Target host or IP to scan.
-            ports: Optional comma-separated port list. If None, scans all ports.
+            ports: Optional comma-separated port list. If None and aggressive, scans all ports.
+            intensity: Scan intensity ('stealth', 'normal', 'aggressive'). Default: 'normal'
             
         Returns:
             Dict: Dictionary with status and list of discovered services.
@@ -318,24 +357,42 @@ class RealToolManager:
         if "nmap" not in self.tool_paths:
             return {"status": "error", "error": "Nmap not found in PATH"}
         
-        # GOD MODE: Aggressive Nmap configuration
-        args = [
-            target,
-            "-sS",              # SYN scan
-            "-sV",              # Service version detection
-            "-T4",              # Aggressive timing
-            "--min-rate", "1000",  # Fast rate
-            "-oX", "-",         # XML output to stdout
-        ]
+        # Get intensity-specific arguments
+        intensity_args = self.get_intensity_args("nmap", intensity)
         
-        # Use provided ports or full range
+        # Base arguments
+        args = [target]
+        
+        # Add intensity-specific args
+        args.extend(intensity_args)
+        
+        # Add service version detection for normal and aggressive
+        if intensity != 'stealth':
+            args.append("-sV")
+        
+        # XML output
+        args.extend(["-oX", "-"])
+        
+        # Use provided ports or auto-determine based on intensity
         if ports:
             args.extend(["-p", ports])
+        elif intensity == 'aggressive':
+            # Full port scan only in aggressive mode (already included in INTENSITY_CONFIGS)
+            pass
         else:
-            args.extend(["-p-"])  # Full port scan
+            # Default ports for stealth and normal
+            args.extend(["-p", "80,443,8080,8443,22,21,25,53,110,143,3306,5432"])
         
-        logger.info(f"🔧 Nmap God Mode scan: {target}")
-        result = await self._execute("nmap", args, timeout=900)  # 15 min timeout
+        if intensity == 'stealth':
+            logger.info(f"🕵️ Nmap Stealth scan: {target} (fragmented, slow)")
+        elif intensity == 'aggressive':
+            logger.warning(f"⚠️ Nmap Aggressive scan: {target} (full ports, OS detection)")
+        else:
+            logger.info(f"🔧 Nmap Normal scan: {target}")
+        
+        # Timeout varies by intensity
+        timeout = 1800 if intensity == 'aggressive' else (600 if intensity == 'normal' else 900)
+        result = await self._execute("nmap", args, timeout=timeout)
         
         if result["status"] == "error":
             return result
@@ -365,38 +422,48 @@ class RealToolManager:
             
         return {"status": "success", "data": [u for u in urls if u.strip()]}
 
-    async def run_sqlmap(self, target_url: str, high_impact: bool = False) -> Dict:
+    async def run_sqlmap(self, target_url: str, intensity: str = 'normal', high_impact: bool = False) -> Dict:
         """
-        Execute SQLMap SQL injection testing with configurable aggression.
+        Execute SQLMap SQL injection testing with adaptive intensity.
         
-        Standard mode uses level=3, risk=2.
-        High Impact mode uses level=5, risk=3 for maximum detection.
+        Intensity modes:
+            - stealth: level=1, risk=1 - Minimal testing, low detection risk
+            - normal: level=3, risk=2 - Balanced testing
+            - aggressive: level=5, risk=3 - Maximum detection, may cause issues
         
         Args:
             target_url: Target URL with parameter to test.
-            high_impact: If True, uses maximum aggression (level=5, risk=3).
+            intensity: Test intensity ('stealth', 'normal', 'aggressive'). Default: 'normal'
+            high_impact: Deprecated. Use intensity='aggressive' instead.
             
         Returns:
             Dict: Dictionary with status and vulnerability detection results.
         """
         logger.info(f"🛡️ Launching SQLMap on: {target_url}")
         
-        # Determine aggression level
-        use_high_impact = high_impact or self.high_impact_mode
+        # Handle legacy high_impact parameter
+        if high_impact or self.high_impact_mode:
+            intensity = 'aggressive'
         
-        if use_high_impact:
-            # GOD MODE: Maximum SQLMap aggression
-            args = [
-                "-u", target_url,
-                "--batch",
-                "--random-agent",
-                "--level=5",
-                "--risk=3"
-            ]
-            logger.info("🛡️ God Mode: SQLMap level=5, risk=3")
+        # Get intensity-specific arguments
+        intensity_args = self.get_intensity_args("sqlmap", intensity)
+        
+        # Base SQLMap arguments
+        args = [
+            "-u", target_url,
+            "--batch",
+            "--random-agent",
+        ]
+        
+        # Add intensity-specific args
+        args.extend(intensity_args)
+        
+        if intensity == 'stealth':
+            logger.info("🕵️ SQLMap Stealth mode: level=1, risk=1")
+        elif intensity == 'aggressive':
+            logger.warning("⚠️ SQLMap Aggressive mode: level=5, risk=3 - may cause issues")
         else:
-            # Standard mode
-            args = ["-u", target_url, "--batch", "--level=3", "--risk=2"]
+            logger.info("🔧 SQLMap Normal mode: level=3, risk=2")
         
         # Inject session cookies if available
         session_data = self._load_session_data()
