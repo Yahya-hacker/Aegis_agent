@@ -400,15 +400,19 @@ DO NOT propose the same action again. Think creatively about alternative approac
             logger.error(f"❌ Failed to initialize orchestrator: {e}", exc_info=True)
             raise
     
-    def select_llm(self, task_type: str) -> str:
+    def select_llm(self, task_type: str, domain_context: str = None) -> str:
         """
-        Intelligently selects the most appropriate LLM for a given task
+        Intelligently selects the most appropriate LLM for a given task.
+        
+        When domain_context is provided, the selection is adjusted based on the
+        operation domain (e.g., Binary exploitation prioritizes Coder LLM).
         
         Args:
             task_type: Type of task to perform
+            domain_context: Optional domain context ("Web", "Binary", "Network", "Crypto", "Forensics")
             
         Returns:
-            Key of the selected LLM ('strategic', 'vulnerability', or 'coder')
+            Key of the selected LLM ('strategic', 'vulnerability', 'coder', or 'visual')
         """
         task_mapping = {
             # Strategic tasks
@@ -436,10 +440,37 @@ DO NOT propose the same action again. Think creatively about alternative approac
             'exploit_coding': 'coder',
             'technical_implementation': 'coder',
             'tool_orchestration': 'coder',
+            
+            # CTF-specific task types
+            'crypto_analysis': 'vulnerability',
+            'binary_analysis': 'coder',
+            'forensics_analysis': 'vulnerability',
+            'network_analysis': 'vulnerability',
+            'pwn_exploit': 'coder',
         }
         
         selected = task_mapping.get(task_type, 'strategic')
-        logger.info(f"🎯 Task '{task_type}' → LLM: {self.llms[selected].role}")
+        
+        # Domain context overrides for specific scenarios
+        if domain_context:
+            if domain_context == "Binary" and task_type in ['next_action', 'exploit_planning', 'vulnerability_analysis']:
+                # Binary exploitation benefits from the Coder LLM for writing exploits
+                selected = 'coder'
+                logger.info(f"🎯 Domain override: Binary context → prioritizing Coder LLM")
+            elif domain_context == "Crypto" and task_type in ['next_action', 'vulnerability_analysis']:
+                # Cryptographic challenges benefit from the Reasoning LLM
+                selected = 'vulnerability'
+                logger.info(f"🎯 Domain override: Crypto context → prioritizing Reasoning LLM")
+            elif domain_context == "Network" and task_type in ['next_action']:
+                # Network analysis benefits from the Reasoning LLM
+                selected = 'vulnerability'
+                logger.info(f"🎯 Domain override: Network context → prioritizing Reasoning LLM")
+            elif domain_context == "Forensics" and task_type in ['next_action']:
+                # Forensics benefits from the Reasoning LLM for evidence analysis
+                selected = 'vulnerability'
+                logger.info(f"🎯 Domain override: Forensics context → prioritizing Reasoning LLM")
+        
+        logger.info(f"🎯 Task '{task_type}' (domain={domain_context or 'None'}) → LLM: {self.llms[selected].role}")
         
         # Show reasoning about LLM selection
         self.reasoning_display.show_thought(
@@ -447,6 +478,7 @@ DO NOT propose the same action again. Think creatively about alternative approac
             thought_type="decision",
             metadata={
                 "task_type": task_type,
+                "domain_context": domain_context,
                 "selected_llm": selected,
                 "model": self.llms[selected].model_name,
                 "specialization": self.llms[selected].specialization
@@ -457,7 +489,7 @@ DO NOT propose the same action again. Think creatively about alternative approac
     
     async def call_llm(
         self, 
-        llm_type: str, 
+        llm_type: str,
         messages: List[Dict[str, str]], 
         temperature: float = None,
         max_tokens: int = None

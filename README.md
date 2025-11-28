@@ -1,12 +1,74 @@
-# Aegis Agent v7.5 — Elite Offensive Security Platform
+# Aegis Agent v8.0 — Full-Spectrum Cyber Operations Platform
 
 **Aegis Agent** is an AI-powered autonomous penetration testing platform that transforms from traditional vulnerability scanning into an intelligent zero-day research system. Built with a multi-LLM architecture and advanced exploitation capabilities, it discovers vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
+
+**v8.0 NEW:** Full-Spectrum CTF & Red Team Operations with autonomous self-healing capabilities.
 
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
 
 ---
 
-## 🎯 What Makes Aegis v7.5 Unique
+## 🚀 Aegis v8.0: Full-Spectrum Cyber Operations
+
+### NEW: Five Specialized Capability Domains
+
+Aegis v8.0 expands beyond web security into five new domains, making it a complete CTF and Red Team operator:
+
+| Domain | Module | Tools Wrapped | Key Functions |
+|--------|--------|---------------|---------------|
+| **🔐 Cryptography** | `crypto_engine` | Ciphey, hashid, John | `solve_crypto()`, `crack_hash()` |
+| **🔧 Reverse Engineering** | `reverse_engine` | strings, objdump, radare2, gdb | `analyze_binary()`, `disassemble_function()` |
+| **🔬 Forensics** | `forensics_lab` | exiftool, binwalk, steghide, volatility | `analyze_file_artifacts()`, `extract_steghide()` |
+| **💀 Binary Exploitation** | `pwn_exploiter` | checksec, pwntools | `check_binary_protections()`, `find_rop_gadgets()` |
+| **📡 Network Analysis** | `network_sentry` | tshark, tcpdump | `analyze_pcap()`, `follow_tcp_stream()` |
+
+### NEW: Self-Healing Infrastructure
+
+Aegis v8.0 is **Autonomous and Self-Healing**. If a required tool is missing, the agent:
+
+1. **Detects** the missing dependency
+2. **Proposes** installation (or auto-installs if self-healing mode is enabled)
+3. **Adapts** its strategy with fallback mechanisms
+
+```bash
+# Enable self-healing mode
+export AEGIS_SELF_HEALING=true
+
+# The agent will automatically install missing tools like:
+# - radare2 (apt-get install radare2)
+# - ciphey (pip install ciphey)
+# - pwntools (pip install pwntools)
+```
+
+### NEW: Domain-Context Aware LLM Selection
+
+The multi-LLM orchestrator now adapts based on the operation domain:
+
+- **Binary Context** → Prioritizes **Coder LLM** (Qwen) for writing exploit scripts
+- **Crypto Context** → Prioritizes **Reasoning LLM** (DeepSeek) for mathematical analysis
+- **Network Context** → Prioritizes **Reasoning LLM** for protocol analysis
+
+```python
+# Set domain context for optimized LLM selection
+ai_core.blackboard.set_domain_context("Binary")  # For pwn challenges
+ai_core.blackboard.set_domain_context("Crypto")  # For crypto challenges
+```
+
+### CTF Strategy Guide
+
+The AI automatically applies the right tools:
+
+| If you find... | Aegis uses... |
+|----------------|---------------|
+| Hash or ciphertext | `solve_crypto()` or `crack_hash()` |
+| Binary file | `analyze_binary()` → `check_binary_protections()` |
+| Image/PDF/Document | `analyze_file_artifacts()` |
+| PCAP file | `analyze_pcap()` |
+| Pwn challenge | `check_binary_protections()` → `find_rop_gadgets()` |
+
+---
+
+## 🎯 What Makes Aegis Unique
 
 ### Zero-Day Capabilities (Genesis Fuzzer)
 

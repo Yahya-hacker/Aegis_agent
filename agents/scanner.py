@@ -1,20 +1,40 @@
 # agents/scanner.py
-# --- VERSION MODIFIÉE ---
+# --- VERSION 8.0 - Full-Spectrum CTF & Red Team Operations ---
 
 import logging
 from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
+from pathlib import Path
 from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
 from tools.visual_recon import get_visual_recon_tool
+from tools.tool_installer import get_tool_installer
 from utils.database_manager import get_database
 from utils.impact_quantifier import get_impact_quantifier
 from agents.enhanced_ai_core import parse_json_robust
 
+# Import CTF capability modules
+from tools.capabilities import (
+    get_crypto_engine,
+    get_reverse_engine,
+    get_forensics_lab,
+    get_pwn_exploiter,
+    get_network_sentry,
+)
+
 logger = logging.getLogger(__name__)
 
 class AegisScanner:
-    """Exécute les actions granulaires décidées par le cerveau IA."""
+    """
+    Executes granular actions decided by the AI brain.
+    
+    v8.0 adds full-spectrum CTF and Red Team capabilities:
+    - Cryptography (crypto_engine)
+    - Reverse Engineering (reverse_engine)
+    - Digital Forensics (forensics_lab)
+    - Binary Exploitation (pwn_exploiter)
+    - Network Analysis (network_sentry)
+    """
     
     def __init__(self, ai_core):
         self.ai_core = ai_core
@@ -24,6 +44,16 @@ class AegisScanner:
         self.db = get_database()  # Mission database
         self.som_mappings = {}  # Store SoM mappings {url: element_mapping}
         self.impact_quantifier = get_impact_quantifier(ai_core)  # RAG-based impact assessment
+        self.tool_installer = get_tool_installer()  # Self-healing tool installer
+        
+        # Initialize CTF capability engines
+        self.crypto_engine = get_crypto_engine()
+        self.reverse_engine = get_reverse_engine()
+        self.forensics_lab = get_forensics_lab()
+        self.pwn_exploiter = get_pwn_exploiter()
+        self.network_sentry = get_network_sentry()
+        
+        logger.info("🛡️ AegisScanner v8.0 initialized with CTF capabilities")
     
     def _validate_domain(self, domain: str) -> bool:
         """Validate domain name format"""
@@ -624,6 +654,178 @@ If you cannot suggest a fix, respond with:
             elif tool == "rag_statistics":
                 stats = self.impact_quantifier.get_statistics()
                 return {"status": "success", "data": stats}
+            
+            # =================================================================
+            # CTF & ADVANCED OPERATIONS TOOLS (v8.0)
+            # =================================================================
+            
+            # --- CRYPTOGRAPHY TOOLS ---
+            elif tool == "solve_crypto":
+                text_or_file = args.get("text_or_file")
+                if not text_or_file:
+                    return {"status": "error", "error": "text_or_file argument required"}
+                
+                return await self._execute_with_fallback(
+                    "solve_crypto",
+                    lambda: self.crypto_engine.solve_crypto(text_or_file),
+                    text_or_file
+                )
+            
+            elif tool == "crack_hash":
+                hash_value = args.get("hash_value")
+                hash_type = args.get("hash_type")
+                wordlist = args.get("wordlist", "/usr/share/wordlists/rockyou.txt")
+                
+                if not hash_value:
+                    return {"status": "error", "error": "hash_value argument required"}
+                
+                return await self._execute_with_fallback(
+                    "crack_hash",
+                    lambda: self.crypto_engine.crack_hash(hash_value, hash_type, wordlist),
+                    hash_value
+                )
+            
+            # --- REVERSE ENGINEERING TOOLS ---
+            elif tool == "analyze_binary":
+                filepath = args.get("filepath")
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                # Validate file exists
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "analyze_binary",
+                    lambda: self.reverse_engine.analyze_binary(filepath),
+                    filepath
+                )
+            
+            elif tool == "disassemble_function":
+                filepath = args.get("filepath")
+                function_name = args.get("function_name", "main")
+                
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "disassemble_function",
+                    lambda: self.reverse_engine.disassemble_function(filepath, function_name),
+                    filepath
+                )
+            
+            # --- FORENSICS TOOLS ---
+            elif tool == "analyze_file_artifacts":
+                filepath = args.get("filepath")
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "analyze_file_artifacts",
+                    lambda: self.forensics_lab.analyze_file_artifacts(filepath),
+                    filepath
+                )
+            
+            elif tool == "extract_embedded":
+                filepath = args.get("filepath")
+                output_dir = args.get("output_dir")
+                
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "extract_embedded",
+                    lambda: self.forensics_lab.extract_embedded(filepath, output_dir),
+                    filepath
+                )
+            
+            elif tool == "extract_steghide":
+                filepath = args.get("filepath")
+                password = args.get("password", "")
+                output_file = args.get("output_file")
+                
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "extract_steghide",
+                    lambda: self.forensics_lab.extract_steghide(filepath, password, output_file),
+                    filepath
+                )
+            
+            # --- BINARY EXPLOITATION (PWN) TOOLS ---
+            elif tool == "check_binary_protections":
+                filepath = args.get("filepath")
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "check_binary_protections",
+                    lambda: self.pwn_exploiter.check_binary_protections(filepath),
+                    filepath
+                )
+            
+            elif tool == "find_rop_gadgets":
+                filepath = args.get("filepath")
+                max_gadgets = args.get("max_gadgets", 50)
+                
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "find_rop_gadgets",
+                    lambda: self.pwn_exploiter.find_rop_gadgets(filepath, max_gadgets),
+                    filepath
+                )
+            
+            # --- NETWORK ANALYSIS TOOLS ---
+            elif tool == "analyze_pcap":
+                filepath = args.get("filepath")
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "analyze_pcap",
+                    lambda: self.network_sentry.analyze_pcap(filepath),
+                    filepath
+                )
+            
+            elif tool == "follow_tcp_stream":
+                filepath = args.get("filepath")
+                stream_number = args.get("stream_number", 0)
+                
+                if not filepath:
+                    return {"status": "error", "error": "filepath argument required"}
+                
+                if not Path(filepath).exists():
+                    return {"status": "error", "error": f"File not found: {filepath}"}
+                
+                return await self._execute_with_fallback(
+                    "follow_tcp_stream",
+                    lambda: self.network_sentry.follow_tcp_stream(filepath, stream_number),
+                    filepath
+                )
 
             else:
                 logger.warning(f"Outil inconnu demandé par l'IA : {tool}")
@@ -632,3 +834,230 @@ If you cannot suggest a fix, respond with:
         except Exception as e:
             logger.error(f"Erreur fatale en exécutant {tool}: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
+    
+    async def _execute_with_fallback(
+        self,
+        tool_name: str,
+        execute_func,
+        input_data: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a tool with fallback mechanism.
+        
+        If the tool fails (e.g., missing dependency), this method:
+        1. Attempts to install the missing tool (if self-healing enabled)
+        2. Falls back to asking the Coder LLM to write a custom Python script
+        
+        Args:
+            tool_name: Name of the tool being executed
+            execute_func: Async function to execute
+            input_data: Input data for potential fallback script
+            
+        Returns:
+            Tool execution result or fallback result
+        """
+        try:
+            # Try to execute the tool
+            result = await execute_func()
+            
+            # Check if result indicates missing tool
+            if result.get("status") == "error" and "tool_missing" in result:
+                missing_tool = result.get("tool_missing")
+                logger.warning(f"⚠️ Tool '{missing_tool}' is missing, attempting recovery...")
+                
+                # Try self-healing installation
+                install_result = await self.tool_installer.ensure_tool_available(missing_tool)
+                
+                if install_result.get("status") == "success":
+                    logger.info(f"✅ Tool '{missing_tool}' installed, retrying...")
+                    return await execute_func()
+                else:
+                    # Fall back to Coder LLM
+                    logger.info(f"🔧 Falling back to Coder LLM for custom solution...")
+                    return await self._fallback_to_coder_llm(tool_name, input_data, result.get("error", "Tool unavailable"))
+            
+            return result
+            
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"❌ Tool execution failed: {error_msg}")
+            
+            # Check if it's a tool-not-found type error
+            if "not found" in error_msg.lower() or "not installed" in error_msg.lower():
+                logger.info(f"🔧 Falling back to Coder LLM for custom solution...")
+                return await self._fallback_to_coder_llm(tool_name, input_data, error_msg)
+            
+            return {"status": "error", "error": error_msg}
+    
+    async def _fallback_to_coder_llm(
+        self,
+        tool_name: str,
+        input_data: str,
+        error_message: str
+    ) -> Dict[str, Any]:
+        """
+        Fall back to Coder LLM to write a custom Python script.
+        
+        When a specialized tool is unavailable, ask the Coder LLM to
+        write equivalent Python code to accomplish the task.
+        
+        Args:
+            tool_name: Name of the failed tool
+            input_data: Input that was provided to the tool
+            error_message: Error message from the failed attempt
+            
+        Returns:
+            Result from running the generated script, or error if fallback fails
+        """
+        logger.info(f"🤖 Coder LLM fallback for '{tool_name}'...")
+        
+        # Map tool names to descriptions for the prompt
+        tool_descriptions = {
+            "solve_crypto": "analyze and decode/decrypt the given text (try base64, hex, rot13, common ciphers)",
+            "crack_hash": "identify the hash type and attempt common passwords",
+            "analyze_binary": "extract strings and basic info from a binary file",
+            "analyze_file_artifacts": "extract metadata and look for embedded data",
+            "check_binary_protections": "check ELF binary protections (NX, canary, PIE, RELRO)",
+            "analyze_pcap": "parse and extract useful information from network capture",
+        }
+        
+        task_description = tool_descriptions.get(tool_name, f"accomplish what '{tool_name}' would do")
+        
+        fallback_prompt = f"""A security tool failed with error: {error_message}
+
+I need you to write a Python script to {task_description}.
+
+Input data: {input_data[:500]}{'...' if len(input_data) > 500 else ''}
+
+Requirements:
+1. Write a complete, runnable Python script
+2. Use only standard library or commonly available packages
+3. Output results in a structured format (dict or JSON)
+4. Handle errors gracefully
+5. The script should print the results to stdout as JSON
+
+Respond with ONLY the Python code, no explanation:
+```python
+# Your code here
+```"""
+
+        try:
+            # Call the Coder LLM
+            response = await self.ai_core.orchestrator.call_llm(
+                'coder',
+                [
+                    {"role": "system", "content": "You are an expert Python security programmer. Write clean, efficient code."},
+                    {"role": "user", "content": fallback_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2048
+            )
+            
+            content = response.get('content', '')
+            
+            # Extract Python code from response
+            import re
+            code_match = re.search(r'```python\s*(.*?)\s*```', content, re.DOTALL)
+            
+            if code_match:
+                python_code = code_match.group(1)
+                logger.info(f"📝 Generated fallback script ({len(python_code)} chars)")
+                
+                # Execute the generated code safely
+                exec_result = await self._execute_fallback_script(python_code, input_data)
+                
+                return {
+                    "status": "success" if exec_result.get("success") else "partial",
+                    "data": exec_result.get("output"),
+                    "fallback_used": True,
+                    "original_tool": tool_name,
+                    "message": f"Used Coder LLM fallback for {tool_name}"
+                }
+            else:
+                return {
+                    "status": "error",
+                    "error": "Failed to generate fallback script",
+                    "fallback_attempted": True
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Fallback failed: {e}")
+            return {
+                "status": "error",
+                "error": f"Original error: {error_message}. Fallback also failed: {str(e)}",
+                "fallback_attempted": True
+            }
+    
+    async def _execute_fallback_script(
+        self,
+        python_code: str,
+        input_data: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a generated Python script safely.
+        
+        Args:
+            python_code: The Python code to execute
+            input_data: Input data to pass to the script
+            
+        Returns:
+            Dictionary with execution results
+        """
+        import asyncio
+        import tempfile
+        import os
+        
+        try:
+            # Write the script to a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                # Inject input data as a variable
+                full_script = f'''
+import json
+import sys
+
+# Input data from tool
+INPUT_DATA = """{input_data.replace('"', '\\"')}"""
+
+{python_code}
+'''
+                f.write(full_script)
+                script_path = f.name
+            
+            try:
+                # Execute the script with a timeout
+                process = await asyncio.create_subprocess_exec(
+                    'python', script_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=60  # 1 minute timeout
+                )
+                
+                output = stdout.decode('utf-8', errors='replace')
+                errors = stderr.decode('utf-8', errors='replace')
+                
+                # Try to parse output as JSON
+                try:
+                    import json
+                    parsed_output = json.loads(output.strip())
+                except (json.JSONDecodeError, ValueError):
+                    parsed_output = {"raw_output": output}
+                
+                return {
+                    "success": process.returncode == 0,
+                    "output": parsed_output,
+                    "errors": errors if errors else None
+                }
+                
+            finally:
+                # Clean up
+                if os.path.exists(script_path):
+                    os.unlink(script_path)
+                    
+        except asyncio.TimeoutError:
+            return {"success": False, "output": None, "errors": "Script execution timed out"}
+        except Exception as e:
+            return {"success": False, "output": None, "errors": str(e)}

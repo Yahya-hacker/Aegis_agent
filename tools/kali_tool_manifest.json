@@ -490,6 +490,206 @@
         }
       },
       "json_prompt_template": "{\"tool\": \"visual_screenshot\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}"
+    },
+    {
+      "tool_name": "solve_crypto",
+      "binary_name": "python",
+      "description": "Auto-detect and solve cryptographic challenges (hashes, ciphers, encodings). Uses ciphey for auto-decryption and hashid for hash identification.",
+      "intrusive": false,
+      "category": "ctf_crypto",
+      "args_schema": {
+        "text_or_file": {
+          "type": "string",
+          "required": true,
+          "description": "Ciphertext, hash, or path to file containing encrypted content"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"solve_crypto\", \"args\": {\"text_or_file\": \"<CIPHER_TEXT>\"}}"
+    },
+    {
+      "tool_name": "crack_hash",
+      "binary_name": "python",
+      "description": "Attempt to crack a hash using john the ripper with wordlists",
+      "intrusive": false,
+      "category": "ctf_crypto",
+      "args_schema": {
+        "hash_value": {
+          "type": "string",
+          "required": true,
+          "description": "The hash to crack"
+        },
+        "hash_type": {
+          "type": "string",
+          "required": false,
+          "description": "Type of hash (e.g., md5, sha256). Auto-detected if not provided."
+        },
+        "wordlist": {
+          "type": "string",
+          "required": false,
+          "description": "Path to wordlist file (default: rockyou.txt)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"crack_hash\", \"args\": {\"hash_value\": \"<HASH>\", \"hash_type\": \"<TYPE>\"}}"
+    },
+    {
+      "tool_name": "analyze_binary",
+      "binary_name": "python",
+      "description": "Comprehensive binary analysis: extract strings, entry points, sections, and basic disassembly. Uses strings, objdump, readelf, and radare2.",
+      "intrusive": false,
+      "category": "ctf_reverse",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the binary file to analyze"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"analyze_binary\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "disassemble_function",
+      "binary_name": "python",
+      "description": "Disassemble a specific function from a binary using objdump",
+      "intrusive": false,
+      "category": "ctf_reverse",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the binary file"
+        },
+        "function_name": {
+          "type": "string",
+          "required": false,
+          "description": "Name of function to disassemble (default: main)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"disassemble_function\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"function_name\": \"main\"}}"
+    },
+    {
+      "tool_name": "analyze_file_artifacts",
+      "binary_name": "python",
+      "description": "Forensic analysis: extract metadata (EXIF), find embedded files (binwalk), detect steganography. For images, PDFs, and other file types.",
+      "intrusive": false,
+      "category": "ctf_forensics",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the file to analyze"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"analyze_file_artifacts\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "extract_embedded",
+      "binary_name": "python",
+      "description": "Extract embedded files from a container file using binwalk",
+      "intrusive": false,
+      "category": "ctf_forensics",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the file containing embedded data"
+        },
+        "output_dir": {
+          "type": "string",
+          "required": false,
+          "description": "Directory to extract files to"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"extract_embedded\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "extract_steghide",
+      "binary_name": "python",
+      "description": "Extract hidden data from images using steghide (for JPEG/BMP files)",
+      "intrusive": false,
+      "category": "ctf_forensics",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the carrier image file"
+        },
+        "password": {
+          "type": "string",
+          "required": false,
+          "description": "Passphrase for extraction (empty for no password)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"extract_steghide\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"password\": \"\"}}"
+    },
+    {
+      "tool_name": "check_binary_protections",
+      "binary_name": "python",
+      "description": "Check binary security protections: NX, Canary, PIE, RELRO status. Essential for binary exploitation (pwn) challenges.",
+      "intrusive": false,
+      "category": "ctf_pwn",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the binary file"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"check_binary_protections\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "find_rop_gadgets",
+      "binary_name": "python",
+      "description": "Find ROP gadgets in a binary for exploitation. Uses pwntools if available.",
+      "intrusive": false,
+      "category": "ctf_pwn",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the binary file"
+        },
+        "max_gadgets": {
+          "type": "integer",
+          "required": false,
+          "description": "Maximum number of gadgets to return (default: 50)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"find_rop_gadgets\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "analyze_pcap",
+      "binary_name": "python",
+      "description": "Analyze PCAP network capture: extract credentials, HTTP streams, DNS queries, and suspicious flows. Uses tshark.",
+      "intrusive": false,
+      "category": "ctf_network",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the PCAP file"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"analyze_pcap\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+    },
+    {
+      "tool_name": "follow_tcp_stream",
+      "binary_name": "python",
+      "description": "Follow and extract a specific TCP stream from a PCAP file",
+      "intrusive": false,
+      "category": "ctf_network",
+      "args_schema": {
+        "filepath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the PCAP file"
+        },
+        "stream_number": {
+          "type": "integer",
+          "required": false,
+          "description": "TCP stream number to follow (default: 0)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"follow_tcp_stream\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"stream_number\": 0}}"
     }
   ]
 }

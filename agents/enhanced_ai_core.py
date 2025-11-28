@@ -201,7 +201,11 @@ class MissionBlackboard:
     - pending_goals: Objectives to achieve, prioritized
     - discarded_vectors: Attack paths already tried and failed
     - knowledge_graph: NetworkX DiGraph storing relationships between entities
+    - domain_context: Current operation domain (Web, Binary, Network, Crypto, Forensics)
     """
+    
+    # Valid domain contexts for CTF/Red Team operations
+    DOMAIN_CONTEXTS = ["Web", "Binary", "Network", "Crypto", "Forensics", "General"]
     
     def __init__(self, mission_id: Optional[str] = None):
         """
@@ -215,12 +219,39 @@ class MissionBlackboard:
         self.pending_goals: List[str] = []
         self.discarded_vectors: List[str] = []
         self.knowledge_graph = nx.DiGraph()  # Knowledge graph for relationships
+        self.domain_context: str = "General"  # Current operation domain
         self.blackboard_file = Path(f"data/blackboard_{self.mission_id}.json")
         self.graph_file = Path(f"data/graph_{self.mission_id}.graphml")
         
         # Load existing blackboard if it exists
         self._load()
         self._load_graph()
+    
+    def set_domain_context(self, context: str) -> None:
+        """
+        Set the current domain context for the mission.
+        
+        This affects which LLM is prioritized for tasks:
+        - "Binary" -> Prioritize Coder LLM (Qwen) for exploit scripts
+        - "Crypto" -> Prioritize Reasoning LLM (DeepSeek) for mathematical analysis
+        - "Network" -> Prioritize Reasoning LLM for protocol analysis
+        - "Web" -> Balanced approach
+        - "Forensics" -> Prioritize Reasoning LLM for evidence analysis
+        
+        Args:
+            context: One of "Web", "Binary", "Network", "Crypto", "Forensics", "General"
+        """
+        if context not in self.DOMAIN_CONTEXTS:
+            logger.warning(f"Invalid domain context '{context}', using 'General'")
+            context = "General"
+        
+        self.domain_context = context
+        self._save()
+        logger.info(f"🎯 Domain context set to: {context}")
+    
+    def get_domain_context(self) -> str:
+        """Get the current domain context."""
+        return self.domain_context
     
     def _load(self) -> None:
         """Load blackboard from disk if it exists"""
@@ -231,8 +262,10 @@ class MissionBlackboard:
                     self.verified_facts = data.get('verified_facts', [])
                     self.pending_goals = data.get('pending_goals', [])
                     self.discarded_vectors = data.get('discarded_vectors', [])
+                    self.domain_context = data.get('domain_context', 'General')
                     logger.info(f"📋 Loaded blackboard: {len(self.verified_facts)} facts, "
-                              f"{len(self.pending_goals)} goals, {len(self.discarded_vectors)} discarded vectors")
+                              f"{len(self.pending_goals)} goals, {len(self.discarded_vectors)} discarded vectors, "
+                              f"domain={self.domain_context}")
             except Exception as e:
                 logger.warning(f"Failed to load blackboard: {e}")
     
@@ -246,7 +279,8 @@ class MissionBlackboard:
                 'verified_facts': self.verified_facts,
                 'pending_goals': self.pending_goals,
                 'discarded_vectors': self.discarded_vectors,
-                'mission_id': self.mission_id
+                'mission_id': self.mission_id,
+                'domain_context': self.domain_context
             }
             
             with open(self.blackboard_file, 'w') as f:
@@ -1223,6 +1257,57 @@ You now have access to visual reconnaissance tools for analyzing web interfaces:
 - visual_screenshot(url, full_page=True/False): Capture regular authenticated screenshot (no SoM badges)
 - visual_recon.get_dom_snapshot(url, selectors=[]): Extract DOM elements and analyze page structure
 - logic_tester.test_logic_flow(flow_name, steps, expected_behavior): Test business logic for vulnerabilities
+
+CTF & ADVANCED OPERATIONS (v8.0):
+You now have access to specialized capability modules for full-spectrum CTF and red team operations:
+
+CRYPTOGRAPHY (crypto_engine):
+- solve_crypto(text_or_file): Auto-detect hash/encoding and attempt decryption
+  * Identifies hashes using hashid
+  * Auto-decrypts using ciphey
+  * Use when you encounter: base64, hex, hashes, ciphertexts, encoded strings
+- crack_hash(hash_value, hash_type, wordlist): Crack hashes using john
+  * Supports MD5, SHA1, SHA256, bcrypt, and more
+  * Use when you find password hashes in databases, config files, or leaks
+
+REVERSE ENGINEERING (reverse_engine):
+- analyze_binary(filepath): Comprehensive binary analysis
+  * Extracts strings, entry points, sections, symbols
+  * Uses strings, objdump, readelf, radare2
+  * Use when you find: ELF binaries, executables, compiled programs
+- disassemble_function(filepath, function_name): Disassemble specific function
+  * Get assembly code for detailed analysis
+
+FORENSICS (forensics_lab):
+- analyze_file_artifacts(filepath): Extract hidden metadata and embedded files
+  * EXIF metadata extraction using exiftool
+  * Embedded file detection using binwalk
+  * Steganography detection using steghide/zsteg
+  * Use when you find: images, PDFs, documents, firmware files
+- extract_embedded(filepath, output_dir): Extract embedded files with binwalk
+- extract_steghide(filepath, password): Extract steganographic content
+
+BINARY EXPLOITATION / PWN (pwn_exploiter):
+- check_binary_protections(filepath): Report security protections
+  * NX (No-Execute), Stack Canary, PIE, RELRO status
+  * Exploitability assessment
+  * Use FIRST when analyzing any binary for exploitation
+- find_rop_gadgets(filepath): Find ROP gadgets for exploit development
+
+NETWORK ANALYSIS (network_sentry):
+- analyze_pcap(filepath): Comprehensive PCAP analysis
+  * Extract credentials (HTTP Basic, FTP, SMTP)
+  * HTTP streams and DNS queries
+  * Suspicious flow detection
+  * Use when you have: .pcap, .pcapng network capture files
+- follow_tcp_stream(filepath, stream_number): Extract specific TCP conversation
+
+CTF STRATEGY GUIDE:
+- If you encounter a hash/ciphertext -> Use solve_crypto() or crack_hash()
+- If you find a binary file -> Use analyze_binary() then check_binary_protections()
+- If you find an image/PDF/document -> Use analyze_file_artifacts()
+- If you have a PCAP file -> Use analyze_pcap()
+- If you're doing binary exploitation -> check_binary_protections() FIRST, then find_rop_gadgets()
 
 VISUAL GROUNDING WORKFLOW (Set-of-Mark):
 1. First, call capture_screenshot_som(url) to get a tagged screenshot
