@@ -11,8 +11,9 @@ Tools wrapped: ciphey, hashid, john
 
 import asyncio
 import logging
-import subprocess
+import os
 import shutil
+import tempfile
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
@@ -269,9 +270,6 @@ class CryptoEngine:
         if not self.check_dependency("john"):
             logger.warning("john not available, skipping hash cracking")
             return {"status": "skipped", "error": "john not installed"}
-        
-        import tempfile
-        import os
         
         try:
             # Write hash to a temporary file

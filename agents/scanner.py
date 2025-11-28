@@ -1,7 +1,12 @@
 # agents/scanner.py
 # --- VERSION 8.0 - Full-Spectrum CTF & Red Team Operations ---
 
+import asyncio
+import json
 import logging
+import os
+import re
+import tempfile
 from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
 from pathlib import Path
@@ -956,7 +961,6 @@ Respond with ONLY the Python code, no explanation:
             content = response.get('content', '')
             
             # Extract Python code from response
-            import re
             code_match = re.search(r'```python\s*(.*?)\s*```', content, re.DOTALL)
             
             if code_match:
@@ -1003,10 +1007,6 @@ Respond with ONLY the Python code, no explanation:
         Returns:
             Dictionary with execution results
         """
-        import asyncio
-        import tempfile
-        import os
-        
         try:
             # Write the script to a temporary file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
@@ -1041,7 +1041,6 @@ INPUT_DATA = """{input_data.replace('"', '\\"')}"""
                 
                 # Try to parse output as JSON
                 try:
-                    import json
                     parsed_output = json.loads(output.strip())
                 except (json.JSONDecodeError, ValueError):
                     parsed_output = {"raw_output": output}

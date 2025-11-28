@@ -11,8 +11,8 @@ Tools wrapped: exiftool, binwalk, steghide, volatility
 """
 
 import asyncio
+import json
 import logging
-import subprocess
 import shutil
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -169,7 +169,6 @@ class ForensicsLab:
                 timeout=timeout
             )
             
-            import json
             output = stdout.decode('utf-8', errors='replace')
             
             try:
