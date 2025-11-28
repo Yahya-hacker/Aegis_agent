@@ -86,7 +86,7 @@
           "description": "Scan intensity: 'stealth' (T2, fragmented), 'normal' (T3), 'aggressive' (T4, all ports, OS detection). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\", \"intensity\": \"normal\"}}"
+      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\", \"intensity\": \"<INTENSITY>\"}}"
     },
     {
       "tool_name": "url_discovery",
@@ -137,7 +137,7 @@
           "description": "Scan intensity: 'stealth' (10 req/s, evade WAF), 'normal' (50 req/s), 'aggressive' (150 req/s, DAST). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"normal\"}}"
+      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"<INTENSITY>\"}}"
     },
     {
       "tool_name": "run_sqlmap",
@@ -158,7 +158,7 @@
           "description": "Test intensity: 'stealth' (minimal testing), 'normal' (balanced), 'aggressive' (maximum detection). Default: 'normal'"
         }
       },
-      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"normal\"}}"
+      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\", \"intensity\": \"<INTENSITY>\"}}"
     },
     {
       "tool_name": "discover_interactables",

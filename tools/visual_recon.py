@@ -111,9 +111,13 @@ class VisualReconTool:
         Chrome binary. This implements the self-healing infrastructure pattern.
         
         Steps:
-        1. Install chromium browser binary
-        2. Install OS dependencies (critical for headless operation)
-        3. If permission denied, prompt user for sudo approval
+        1. Install chromium browser binary via playwright install chromium
+        2. Install OS dependencies via playwright install-deps chromium
+        3. If permission denied on step 2, automatically attempt sudo installation
+        
+        Note: Sudo is attempted automatically without prompting to enable
+        fully autonomous self-healing. Users will see their password prompt
+        from the system if sudo requires authentication.
         
         Returns:
             bool: True if installation succeeded, False otherwise.

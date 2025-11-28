@@ -41,6 +41,10 @@ class AegisScanner:
     - Network Analysis (network_sentry)
     """
     
+    # Configuration constants
+    MAX_SELF_CORRECTION_RECURSION = 1  # Allow one recursive healing attempt
+    MAX_SUMMARY_OUTPUT_LENGTH = 2000   # Threshold for smart summarization
+    
     def __init__(self, ai_core):
         self.ai_core = ai_core
         self.real_tools = RealToolManager()
@@ -96,7 +100,7 @@ class AegisScanner:
         """
         Smart Summarization: Avoid flooding the LLM context window with massive outputs.
         
-        If output exceeds 2000 chars:
+        If output exceeds MAX_SUMMARY_OUTPUT_LENGTH chars:
         1. Extract key information (open ports, vulnerabilities, etc.)
         2. Save full output to data/evidence/ for reference
         3. Return only the summary to the LLM
@@ -109,10 +113,8 @@ class AegisScanner:
         Returns:
             Dict with 'summary' (for LLM) and 'evidence_file' (path to full output)
         """
-        MAX_OUTPUT_LENGTH = 2000
-        
         # If output is small enough, return as-is
-        if len(output) <= MAX_OUTPUT_LENGTH:
+        if len(output) <= self.MAX_SUMMARY_OUTPUT_LENGTH:
             return {
                 "summary": output,
                 "evidence_file": None,
@@ -314,21 +316,19 @@ class AegisScanner:
         Self-Correction Loop: Use Coder LLM to suggest fixes for failed commands
         
         Supports recursive healing - if initial correction fails, can ask the Coder LLM
-        to fix its own fix (up to 1 recursion).
+        to fix its own fix (up to MAX_SELF_CORRECTION_RECURSION recursions).
         
         Args:
             tool: The tool that failed
             original_args: Original arguments that caused the failure
             error_message: The error message from the failure
-            recursion_depth: Current recursion level (max 1 for recursive healing)
+            recursion_depth: Current recursion level
             
         Returns:
             Corrected arguments dict or None if correction fails
         """
-        max_recursion = 1  # Allow one recursive healing attempt
-        
-        if recursion_depth > max_recursion:
-            logger.warning(f"❌ Max recursion depth ({max_recursion}) reached for self-correction")
+        if recursion_depth > self.MAX_SELF_CORRECTION_RECURSION:
+            logger.warning(f"❌ Max recursion depth ({self.MAX_SELF_CORRECTION_RECURSION}) reached for self-correction")
             return None
         
         recursion_label = f" (recursion {recursion_depth})" if recursion_depth > 0 else ""
@@ -393,11 +393,12 @@ If you cannot suggest a fix, respond with:
                     return None
             
             # If JSON parsing failed, attempt recursive healing (ask LLM to fix its own response)
-            if recursion_depth < max_recursion:
+            if recursion_depth < self.MAX_SELF_CORRECTION_RECURSION:
                 logger.warning(f"⚠️ Could not parse correction JSON, attempting recursive healing...")
                 
-                # Create a new error message about the malformed response
-                recursive_error = f"Previous correction attempt returned invalid JSON. Raw response: {content[:500]}"
+                # Sanitize the content before including in error - remove potential secrets/credentials
+                sanitized_content = self._sanitize_content_for_logging(content[:300])
+                recursive_error = f"Previous correction attempt returned invalid JSON format. Response preview: {sanitized_content}"
                 
                 return await self._self_correct_and_retry(
                     tool, 
@@ -412,6 +413,31 @@ If you cannot suggest a fix, respond with:
         except Exception as e:
             logger.error(f"Error during self-correction: {e}", exc_info=True)
             return None
+    
+    def _sanitize_content_for_logging(self, content: str) -> str:
+        """
+        Sanitize content before logging to remove potential sensitive information.
+        
+        Args:
+            content: Raw content string
+            
+        Returns:
+            Sanitized content safe for logging
+        """
+        # Common patterns that might contain sensitive data
+        sensitive_patterns = [
+            (r'password["\s:=]+["\']?[\w\S]+["\']?', 'password=***'),
+            (r'api[_-]?key["\s:=]+["\']?[\w\S]+["\']?', 'api_key=***'),
+            (r'secret["\s:=]+["\']?[\w\S]+["\']?', 'secret=***'),
+            (r'token["\s:=]+["\']?[\w\S]+["\']?', 'token=***'),
+            (r'bearer\s+[\w\-\.]+', 'bearer ***'),
+        ]
+        
+        sanitized = content
+        for pattern, replacement in sensitive_patterns:
+            sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+        
+        return sanitized
 
     async def execute_action(self, action: Dict) -> Dict:
         """

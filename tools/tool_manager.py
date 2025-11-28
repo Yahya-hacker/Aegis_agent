@@ -96,9 +96,21 @@ class RealToolManager:
             return []
         
         tool_config = self.INTENSITY_CONFIGS[tool_name]
+        
+        # Validate requested intensity exists, fallback to 'normal' only if it exists
         if intensity not in tool_config:
-            logger.warning(f"Invalid intensity '{intensity}' for {tool_name}, using 'normal'")
-            intensity = 'normal'
+            logger.warning(f"Invalid intensity '{intensity}' for {tool_name}")
+            if 'normal' in tool_config:
+                intensity = 'normal'
+                logger.warning(f"Falling back to 'normal' intensity")
+            else:
+                # Return first available intensity as fallback
+                available = list(tool_config.keys())
+                if available:
+                    intensity = available[0]
+                    logger.warning(f"Falling back to '{intensity}' intensity")
+                else:
+                    return []
         
         return tool_config[intensity].copy()
     
