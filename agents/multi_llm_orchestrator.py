@@ -174,7 +174,13 @@ class MultiLLMOrchestrator:
         """
         # Create a normalized representation of the action
         tool = action.get('tool', '')
-        args = action.get('args', {})
+        args = action.get('args', {}).copy()
+
+        # Normalize args by removing volatile fields that change every time
+        volatile_keys = ['timestamp', 'nonce', 'request_id', 'id', 'random', 'uuid']
+        for key in volatile_keys:
+            if key in args:
+                del args[key]
         
         # Sort args keys for consistent hashing
         normalized = f"{tool}:{json.dumps(args, sort_keys=True)}"
