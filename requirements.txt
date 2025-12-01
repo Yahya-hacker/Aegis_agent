@@ -1,29 +1,30 @@
-# Core dependencies for Multi-LLM Architecture (Together AI)
+# Dépendances principales pour l'architecture Multi-LLM (Together AI)
 aiohttp>=3.9.0
+aiofiles>=23.0.0
 httpx>=0.25.0
 python-dotenv>=1.0.0
 
-# Security testing tools
+# Outils de test de sécurité
 python-nmap>=0.7.1
 beautifulsoup4>=4.12.2
 selenium>=4.15.0
 webdriver-manager>=4.0.0
 playwright>=1.40.0
 
-# UI and utilities
+# Interface utilisateur et utilitaires
 colorama>=0.4.6
 pillow>=10.0.0
 
-# Knowledge graph and advanced features
+# Graphe de connaissances et fonctionnalités avancées
 networkx>=3.0
 json-repair>=0.25.0
 
-# Vector database and embeddings for HTTP replay memory
+# Base de données vectorielle et embeddings pour la mémoire de replay HTTP
 numpy>=1.24.0
 scikit-learn>=1.3.0
 
-# Optional: Local model support (not required for Together AI)
-# Uncomment if you want to run models locally instead of using Together AI
+# Optionnel: Support de modèles locaux (non requis pour Together AI)
+# Décommentez si vous souhaitez exécuter des modèles localement au lieu d'utiliser Together AI
 # torch>=2.1.0
 # transformers>=4.35.0
 # accelerate>=0.24.0

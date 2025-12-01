@@ -45,6 +45,7 @@ venv.bak/
 # Logs
 *.log
 aegis_agent.log
+logs/
 
 # Data and sessions
 data/sessions/
