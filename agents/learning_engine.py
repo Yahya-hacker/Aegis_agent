@@ -14,6 +14,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Constantes de configuration
+MAX_RECENT_RECORDS = 100  # Nombre maximum d'enregistrements récents à conserver
+MAX_RECENT_CHECK = 50  # Nombre d'enregistrements à vérifier pour éviter les actions
+
 
 class AegisLearningEngine:
     """
@@ -185,8 +189,8 @@ class AegisLearningEngine:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                # Garder seulement les échecs récents (100 derniers)
-                failed_attempts = failed_attempts[-100:]
+                # Garder seulement les échecs récents
+                failed_attempts = failed_attempts[-MAX_RECENT_RECORDS:]
                 
                 # Mettre à jour le cache
                 self._cache['failed_attempts'] = failed_attempts
@@ -213,8 +217,8 @@ class AegisLearningEngine:
                 'timestamp': datetime.now().isoformat()
             })
             
-            # Garder seulement les échecs récents (100 derniers)
-            failed_attempts = failed_attempts[-100:]
+            # Garder seulement les échecs récents
+            failed_attempts = failed_attempts[-MAX_RECENT_RECORDS:]
             
             with open(self.failed_attempts_db, 'w') as f:
                 json.dump(failed_attempts, f, indent=2)
@@ -246,8 +250,8 @@ class AegisLearningEngine:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                # Garder seulement les succès récents (100 derniers)
-                successes = successes[-100:]
+                # Garder seulement les succès récents
+                successes = successes[-MAX_RECENT_RECORDS:]
                 
                 # Mettre à jour le cache
                 self._cache['success_patterns'] = successes
@@ -274,8 +278,8 @@ class AegisLearningEngine:
                 'timestamp': datetime.now().isoformat()
             })
             
-            # Garder seulement les succès récents (100 derniers)
-            successes = successes[-100:]
+            # Garder seulement les succès récents
+            successes = successes[-MAX_RECENT_RECORDS:]
             
             with open(self.success_patterns_db, 'w') as f:
                 json.dump(successes, f, indent=2)
@@ -299,7 +303,7 @@ class AegisLearningEngine:
             
             # Compter les échecs récents pour cette combinaison action-cible
             recent_failures = [
-                f for f in failed_attempts[-50:]  # 50 dernières tentatives
+                f for f in failed_attempts[-MAX_RECENT_CHECK:]
                 if f['action'] == action and f['target'] == target
             ]
             
@@ -321,7 +325,7 @@ class AegisLearningEngine:
             
             # Compter les échecs récents pour cette combinaison action-cible
             recent_failures = [
-                f for f in failed_attempts[-50:]  # 50 dernières tentatives
+                f for f in failed_attempts[-MAX_RECENT_CHECK:]
                 if f['action'] == action and f['target'] == target
             ]
             

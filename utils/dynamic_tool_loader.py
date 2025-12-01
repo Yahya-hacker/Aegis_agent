@@ -203,19 +203,14 @@ def get_tool_loader() -> DynamicToolLoader:
     global _tool_loader_instance
     if _tool_loader_instance is None:
         _tool_loader_instance = DynamicToolLoader()
-        # Exécuter la découverte de manière synchrone pour la compatibilité
-        asyncio.get_event_loop().run_until_complete(
-            _tool_loader_instance.discover_available_tools()
-        ) if asyncio.get_event_loop().is_running() is False else None
-        # Si la boucle est déjà en cours d'exécution, la découverte sera faite de manière synchrone
-        if len(_tool_loader_instance.available_tools) == 0 and len(_tool_loader_instance.unavailable_tools) == 0:
-            # Effectuer la découverte de manière synchrone si pas encore fait
-            for tool in _tool_loader_instance.all_tools:
-                binary_name = tool.get('binary_name')
-                if binary_name in ['internal', 'python']:
-                    _tool_loader_instance.available_tools.append(tool)
-                elif shutil.which(binary_name):
-                    _tool_loader_instance.available_tools.append(tool)
-                else:
-                    _tool_loader_instance.unavailable_tools.append(tool)
+        # Effectuer la découverte de manière synchrone
+        # On utilise shutil.which directement au lieu de la version async
+        for tool in _tool_loader_instance.all_tools:
+            binary_name = tool.get('binary_name')
+            if binary_name in ['internal', 'python']:
+                _tool_loader_instance.available_tools.append(tool)
+            elif shutil.which(binary_name):
+                _tool_loader_instance.available_tools.append(tool)
+            else:
+                _tool_loader_instance.unavailable_tools.append(tool)
     return _tool_loader_instance

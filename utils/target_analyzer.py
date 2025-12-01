@@ -104,15 +104,12 @@ class TargetAnalyzer:
             'strict-transport-security', 'x-xss-protection', 'referrer-policy'
         ]
         
+        # Créer un dictionnaire avec les clés en minuscules une seule fois
+        headers_lower = {k.lower(): v for k, v in headers.items()}
+        
         for header in important_headers:
-            # Vérifier les deux formats de casse
-            if header in headers:
-                security_headers[header] = headers[header]
-            elif header.lower() in {k.lower() for k in headers}:
-                for k, v in headers.items():
-                    if k.lower() == header.lower():
-                        security_headers[header] = v
-                        break
+            if header in headers_lower:
+                security_headers[header] = headers_lower[header]
                 
         return security_headers
     

@@ -13,7 +13,8 @@ import asyncio
 from agents.learning_engine import AegisLearningEngine 
 
 # Timeout par défaut pour l'entrée utilisateur (en secondes)
-DEFAULT_INPUT_TIMEOUT = 300  # 5 minutes
+# 60 secondes est un bon équilibre entre laisser le temps de réfléchir et éviter les blocages
+DEFAULT_INPUT_TIMEOUT = 60
 
 
 class AegisFieldTester:
