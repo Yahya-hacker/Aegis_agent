@@ -168,29 +168,6 @@ VISUAL_API_KEY=sk-visual-key             # Separate account for screenshots
 
 ---
 
-## 🔥 God Mode Tool Configuration
-
-Aegis v7.5 includes aggressive "God Mode" configurations for comprehensive testing:
-
-### Nuclei (Vulnerability Scanning)
-```
--bs 10 -c 50 -rate-limit 150 -dast
-```
-- Batch size 10, 50 concurrent threads, 150 req/sec, DAST templates enabled
-
-### Nmap (Port Scanning)
-```
--sS -sV -p- -T4 --min-rate 1000
-```
-- SYN scan, service detection, all 65535 ports, aggressive timing
-
-### SQLMap (SQL Injection)
-```
---batch --random-agent --level=5 --risk=3
-```
-- Maximum detection level, high-risk tests, randomized user agent
-
----
 
 ## 🏗️ Architecture Overview
 
