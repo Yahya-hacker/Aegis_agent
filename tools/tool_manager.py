@@ -1,5 +1,5 @@
 # tools/tool_manager.py
-# --- VERSION ENHANCED - God Mode Tool Configuration ---
+# --- VERSION 8.0 - God Mode Tool Configuration ---
 """
 Real Tool Manager for Aegis AI.
 
@@ -165,17 +165,17 @@ class RealToolManager:
                     await process.wait()
                 except:
                     pass
-                logger.error(f"Outil {tool_name} a dépassé le timeout de {timeout}s")
+                logger.error(f"Tool {tool_name} exceeded timeout of {timeout}s")
                 return {"status": "error", "error": f"Timeout after {timeout}s"}
             
             if process.returncode != 0:
-                logger.error(f"Erreur de {tool_name}: {stderr.decode()}")
+                logger.error(f"Error from {tool_name}: {stderr.decode()}")
                 return {"status": "error", "error": stderr.decode()}
 
             return {"status": "success", "stdout": stdout.decode(), "stderr": stderr.decode()}
             
         except Exception as e:
-            logger.error(f"Échec d'exécution de {tool_name}: {e}", exc_info=True)
+            logger.error(f"Failed to execute {tool_name}: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
         finally:
             self.active_processes -= 1

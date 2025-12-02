@@ -1,7 +1,7 @@
 """
-Chargeur Dynamique d'Outils pour Aegis AI
-Charge les outils depuis le manifeste et construit des prompts dynamiques
-Version V8 - Sécurisé et asynchrone
+Dynamic Tool Loader for Aegis AI
+Loads tools from manifest and builds dynamic prompts
+Version 8.0 - Secure and Asynchronous
 """
 
 import asyncio
@@ -14,47 +14,47 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger(__name__)
 
 class DynamicToolLoader:
-    """Charge et gère les outils depuis kali_tool_manifest.json"""
+    """Loads and manages tools from kali_tool_manifest.json"""
     
     def __init__(self, manifest_path: str = "tools/kali_tool_manifest.json"):
-        """Initialise le chargeur dynamique d'outils"""
+        """Initialize the dynamic tool loader"""
         self.manifest_path = Path(manifest_path)
         self.all_tools: List[Dict] = []
         self.available_tools: List[Dict] = []
         self.unavailable_tools: List[Dict] = []
-        self.tool_map: Dict[str, Dict] = {}  # Mapping tool_name -> définition de l'outil
+        self.tool_map: Dict[str, Dict] = {}  # Mapping tool_name -> tool definition
         self._load_manifest()
     
     def _load_manifest(self):
-        """Charge le manifeste d'outils depuis le fichier JSON"""
+        """Load tool manifest from JSON file"""
         if not self.manifest_path.exists():
-            logger.error(f"Manifeste d'outils non trouvé à {self.manifest_path}")
-            raise FileNotFoundError(f"Manifeste d'outils non trouvé: {self.manifest_path}")
+            logger.error(f"Tool manifest not found at {self.manifest_path}")
+            raise FileNotFoundError(f"Tool manifest not found: {self.manifest_path}")
         
         try:
             with open(self.manifest_path, 'r') as f:
                 data = json.load(f)
                 self.all_tools = data.get('tools', [])
             
-            logger.info(f"✅ Chargé {len(self.all_tools)} outils depuis le manifeste")
+            logger.info(f"✅ Loaded {len(self.all_tools)} tools from manifest")
             
-            # Créer la map des outils
+            # Create tool map
             for tool in self.all_tools:
                 self.tool_map[tool['tool_name']] = tool
                 
         except json.JSONDecodeError as e:
-            logger.error(f"Échec de l'analyse du manifeste d'outils: {e}")
+            logger.error(f"Failed to parse tool manifest: {e}")
             raise
         except Exception as e:
-            logger.error(f"Échec du chargement du manifeste d'outils: {e}")
+            logger.error(f"Failed to load tool manifest: {e}")
             raise
     
     async def discover_available_tools(self) -> tuple:
         """
-        Découvre quels outils sont disponibles sur le système
+        Discover which tools are available on the system
         
-        Retourne:
-            Tuple de (outils_disponibles, outils_indisponibles)
+        Returns:
+            Tuple of (available_tools, unavailable_tools)
         """
         self.available_tools = []
         self.unavailable_tools = []
@@ -63,51 +63,51 @@ class DynamicToolLoader:
             binary_name = tool.get('binary_name')
             tool_name = tool.get('tool_name')
             
-            # Gestion spéciale pour les outils internes/python
+            # Special handling for internal/python tools
             if binary_name in ['internal', 'python']:
                 self.available_tools.append(tool)
                 continue
             
-            # Vérifier si le binaire existe dans le PATH de manière asynchrone
+            # Check if binary exists in PATH asynchronously
             if await self._check_binary_exists(binary_name):
                 self.available_tools.append(tool)
-                logger.info(f"✅ Outil disponible: {tool_name} ({binary_name})")
+                logger.info(f"✅ Tool available: {tool_name} ({binary_name})")
             else:
                 self.unavailable_tools.append(tool)
-                logger.warning(f"⚠️ Outil non disponible: {tool_name} ({binary_name})")
+                logger.warning(f"⚠️ Tool unavailable: {tool_name} ({binary_name})")
         
-        logger.info(f"📊 Découverte terminée: {len(self.available_tools)}/{len(self.all_tools)} outils disponibles")
+        logger.info(f"📊 Discovery complete: {len(self.available_tools)}/{len(self.all_tools)} tools available")
         
         return self.available_tools, self.unavailable_tools
     
     async def _check_binary_exists(self, binary_name: str) -> bool:
-        """Vérifie si un binaire existe dans le PATH de manière sécurisée et non bloquante"""
+        """Check if a binary exists in PATH securely and non-blocking"""
         try:
-            # Utiliser shutil.which au lieu de subprocess avec shell=True pour éviter l'injection de commandes
-            # Envelopper dans asyncio.to_thread pour éviter de bloquer la boucle d'événements
+            # Use shutil.which instead of subprocess with shell=True to avoid command injection
+            # Wrap in asyncio.to_thread to avoid blocking the event loop
             result = await asyncio.to_thread(shutil.which, binary_name)
             return result is not None
         except Exception as e:
-            logger.debug(f"Erreur lors de la vérification du binaire {binary_name}: {e}")
+            logger.debug(f"Error checking binary {binary_name}: {e}")
             return False
     
     def build_dynamic_tool_prompt(self, include_unavailable: bool = False) -> str:
         """
-        Construit un prompt dynamique à partir des outils disponibles
+        Build a dynamic prompt from available tools
         
         Args:
-            include_unavailable: Inclure les outils indisponibles avec un avertissement (défaut: False)
+            include_unavailable: Include unavailable tools with a warning (default: False)
             
-        Retourne:
-            Chaîne formatée décrivant tous les outils disponibles
+        Returns:
+            Formatted string describing all available tools
         """
         tools_to_include = self.available_tools
         if include_unavailable:
             tools_to_include = self.all_tools
         
-        prompt_parts = ["OUTILS DISPONIBLES:"]
+        prompt_parts = ["AVAILABLE TOOLS:"]
         
-        # Regrouper les outils par catégorie
+        # Group tools by category
         categories: Dict[str, List[Dict]] = {}
         for tool in tools_to_include:
             category = tool.get('category', 'other')
@@ -115,7 +115,7 @@ class DynamicToolLoader:
                 categories[category] = []
             categories[category].append(tool)
         
-        # Construire le prompt pour chaque catégorie
+        # Build prompt for each category
         for category, tools in sorted(categories.items()):
             prompt_parts.append(f"\n{category.upper().replace('_', ' ')}:")
             
@@ -123,7 +123,7 @@ class DynamicToolLoader:
                 tool_name = tool['tool_name']
                 description = tool['description']
                 
-                # Construire la description des arguments
+                # Build arguments description
                 args_schema = tool.get('args_schema', {})
                 args_parts = []
                 for arg_name, arg_spec in args_schema.items():
@@ -132,14 +132,14 @@ class DynamicToolLoader:
                     req_marker = "*" if required else ""
                     args_parts.append(f"{arg_name}{req_marker}: {arg_type}")
                 
-                args_desc = ", ".join(args_parts) if args_parts else "aucun"
+                args_desc = ", ".join(args_parts) if args_parts else "none"
                 
-                # Vérifier si l'outil est disponible
+                # Check if tool is available
                 is_available = tool in self.available_tools
-                availability_marker = "" if is_available else " [INDISPONIBLE]"
+                availability_marker = "" if is_available else " [UNAVAILABLE]"
                 
-                # Marquer les outils intrusifs
-                intrusive_marker = " ⚠️ INTRUSIF" if tool.get('intrusive', False) else ""
+                # Mark intrusive tools
+                intrusive_marker = " ⚠️ INTRUSIVE" if tool.get('intrusive', False) else ""
                 
                 prompt_parts.append(
                     f"- {tool_name}: {description} (args: {args_desc}){intrusive_marker}{availability_marker}"
@@ -148,30 +148,30 @@ class DynamicToolLoader:
         return "\n".join(prompt_parts)
     
     def get_tool_info(self, tool_name: str) -> Optional[Dict]:
-        """Obtenir les informations sur un outil spécifique"""
+        """Get information about a specific tool"""
         return self.tool_map.get(tool_name)
     
     def is_tool_intrusive(self, tool_name: str) -> bool:
-        """Vérifier si un outil est intrusif"""
+        """Check if a tool is intrusive"""
         tool = self.get_tool_info(tool_name)
         if tool:
             return tool.get('intrusive', False)
         return False
     
     def get_intrusive_tools(self) -> List[Dict]:
-        """Obtenir la liste de tous les outils intrusifs"""
+        """Get list of all intrusive tools"""
         return [tool for tool in self.available_tools if tool.get('intrusive', False)]
     
     def get_non_intrusive_tools(self) -> List[Dict]:
-        """Obtenir la liste de tous les outils non intrusifs"""
+        """Get list of all non-intrusive tools"""
         return [tool for tool in self.available_tools if not tool.get('intrusive', False)]
     
     def get_tools_by_category(self, category: str) -> List[Dict]:
-        """Obtenir tous les outils d'une catégorie spécifique"""
+        """Get all tools in a specific category"""
         return [tool for tool in self.available_tools if tool.get('category') == category]
     
     def get_statistics(self) -> Dict:
-        """Obtenir les statistiques sur les outils chargés"""
+        """Get statistics about loaded tools"""
         return {
             "total_tools": len(self.all_tools),
             "available_tools": len(self.available_tools),
@@ -182,12 +182,12 @@ class DynamicToolLoader:
         }
 
 
-# Instance singleton
+# Singleton instance
 _tool_loader_instance: Optional[DynamicToolLoader] = None
 
 
 async def get_tool_loader_async() -> DynamicToolLoader:
-    """Obtenir l'instance singleton du chargeur d'outils (version asynchrone)"""
+    """Get singleton instance of tool loader (async version)"""
     global _tool_loader_instance
     if _tool_loader_instance is None:
         _tool_loader_instance = DynamicToolLoader()
@@ -197,14 +197,14 @@ async def get_tool_loader_async() -> DynamicToolLoader:
 
 def get_tool_loader() -> DynamicToolLoader:
     """
-    Obtenir l'instance singleton du chargeur d'outils (version synchrone)
-    Note: Cette version effectue la découverte de manière synchrone pour la compatibilité descendante
+    Get singleton instance of tool loader (synchronous version)
+    Note: This version performs discovery synchronously for backward compatibility
     """
     global _tool_loader_instance
     if _tool_loader_instance is None:
         _tool_loader_instance = DynamicToolLoader()
-        # Effectuer la découverte de manière synchrone
-        # On utilise shutil.which directement au lieu de la version async
+        # Perform discovery synchronously
+        # Use shutil.which directly instead of async version
         for tool in _tool_loader_instance.all_tools:
             binary_name = tool.get('binary_name')
             if binary_name in ['internal', 'python']:

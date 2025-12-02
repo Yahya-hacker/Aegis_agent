@@ -27,7 +27,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 logger = logging.getLogger(__name__)
 
 # Version constant for user agent and compatibility tracking
-AEGIS_VERSION = "7.5"
+AEGIS_VERSION = "8.0"
 
 # Default stealth user agent - configurable via environment variable
 # Use a recent Chrome version to avoid detection

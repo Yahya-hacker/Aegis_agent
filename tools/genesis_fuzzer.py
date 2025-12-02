@@ -1,5 +1,5 @@
 # tools/genesis_fuzzer.py
-# --- VERSION 7.5 - Genesis Protocol Fuzzer with Evolutionary Mutations ---
+# --- VERSION 8.0 - Genesis Protocol Fuzzer with Evolutionary Mutations ---
 """
 The "Genesis" Protocol Fuzzer - Evolutionary Genetic Mutation Engine.
 

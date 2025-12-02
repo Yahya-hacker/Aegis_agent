@@ -1,6 +1,6 @@
 # agents/multi_llm_orchestrator.py
 """
-Multi-LLM Orchestrator for Aegis AI - v7.5
+Multi-LLM Orchestrator for Aegis AI - v8.0
 Manages four specialized LLMs via OpenRouter API with multi-account sharding:
 - Hermes 3 Llama 70B: Strategic planning, triage, and high-level decision making
 - Dolphin 3.0 R1 Mistral 24B: Reasoning and vulnerability analysis

@@ -1,72 +1,72 @@
 # agents/field_tester.py
-# --- VERSION V8 - Mode headless sécurisé avec timeout ---
+# --- VERSION 8.0 - Secure headless mode with timeout ---
 """
-Testeur de terrain Aegis AI
-Gère la vérification manuelle des découvertes avec support headless
+Aegis AI Field Tester
+Handles manual verification of findings with headless support
 """
 
 import json
 import sys
 from typing import Dict, List, Any, Optional
 import asyncio
-# On importe AegisLearningEngine pour le type hinting
+# Import AegisLearningEngine for type hinting
 from agents.learning_engine import AegisLearningEngine 
 
-# Timeout par défaut pour l'entrée utilisateur (en secondes)
-# 60 secondes est un bon équilibre entre laisser le temps de réfléchir et éviter les blocages
+# Default timeout for user input (in seconds)
+# 60 seconds is a good balance between giving time to think and avoiding blocks
 DEFAULT_INPUT_TIMEOUT = 60
 
 
 class AegisFieldTester:
     """
-    Testeur de terrain pour la vérification manuelle des découvertes
-    Supporte les environnements headless (Docker/CI) avec détection automatique
+    Field tester for manual verification of findings
+    Supports headless environments (Docker/CI) with automatic detection
     """
     
     def __init__(self, learning_engine: AegisLearningEngine, input_timeout: int = DEFAULT_INPUT_TIMEOUT):
         """
-        Initialiser le testeur de terrain
+        Initialize the field tester
         
         Args:
-            learning_engine: Instance du moteur d'apprentissage
-            input_timeout: Timeout pour l'entrée utilisateur en secondes
+            learning_engine: Learning engine instance
+            input_timeout: Timeout for user input in seconds
         """
         self.learning_engine = learning_engine
         self.verification_queue: List[Dict] = []
         self.input_timeout = input_timeout
     
     def _is_interactive(self) -> bool:
-        """Vérifier si nous sommes dans un environnement interactif"""
+        """Check if we are in an interactive environment"""
         return sys.stdin.isatty()
         
     async def enter_manual_mode(self, findings: List[Dict]) -> List[Dict]:
         """
-        Entre en mode de test manuel pour la vérification.
-        En mode headless, passe automatiquement en mode auto-vérification.
+        Enters manual test mode for verification.
+        In headless mode, automatically switches to auto-verification mode.
         """
-        # Vérifier si nous sommes en mode headless
+        # Check if we are in headless mode
         if not self._is_interactive():
-            print("\n⚠️  Mode headless détecté (pas de terminal interactif)")
-            print("   Passage en mode auto-vérification...")
+            print("\n⚠️  Headless mode detected (no interactive terminal)")
+            print("   Switching to auto-verification mode...")
             return await self._auto_verify_findings(findings)
         
-        print("\n🔍 ENTRÉE EN MODE DE VÉRIFICATION MANUELLE")
-        print("   Aidez-moi à apprendre en validant les découvertes.\n")
+        print("\n🔍 ENTERING MANUAL VERIFICATION MODE")
+        print("   Help me learn by validating findings.\n")
         
         verified_findings: List[Dict] = []
         
         for finding in findings:
-            print(f"\n🎯 Découverte : {finding.get('type', 'Inconnu')}")
-            print(f"📍 Cible : {finding.get('target', 'Inconnue')}")
-            print(f"📝 Détails : {finding.get('description', 'Pas de description')}")
+            print(f"\n🎯 Finding : {finding.get('type', 'Unknown')}")
+            print(f"📍 Target : {finding.get('target', 'Unknown')}")
+            print(f"📝 Details : {finding.get('description', 'No description')}")
             
             response = await self._get_user_input_with_timeout(
-                "❓ Est-ce une VRAIE vulnérabilité ? (o/n/skip/info): "
+                "❓ Is this a REAL vulnerability? (y/n/skip/info): "
             )
             
             if response is None:
-                # Timeout atteint - passer automatiquement
-                print("⏰ Timeout atteint. Découverte ignorée.")
+                # Timeout reached - skip automatically
+                print("⏰ Timeout reached. Finding ignored.")
                 continue
             
             result = await self._process_user_response(response, finding, verified_findings)
@@ -79,16 +79,16 @@ class AegisFieldTester:
     
     async def _get_user_input_with_timeout(self, prompt: str) -> Optional[str]:
         """
-        Obtenir l'entrée utilisateur avec un timeout
+        Get user input with a timeout
         
         Args:
-            prompt: Le prompt à afficher
+            prompt: The prompt to display
             
-        Retourne:
-            La réponse de l'utilisateur ou None en cas de timeout/erreur
+        Returns:
+            The user response or None in case of timeout/error
         """
         try:
-            # Utiliser asyncio.wait_for avec timeout
+            # Use asyncio.wait_for with timeout
             response = await asyncio.wait_for(
                 asyncio.to_thread(input, prompt),
                 timeout=self.input_timeout
@@ -97,11 +97,11 @@ class AegisFieldTester:
         except asyncio.TimeoutError:
             return None
         except EOFError:
-            # Cela se produit dans les environnements headless
-            print("\n⚠️  EOFError détecté - environnement non interactif")
+            # This happens in headless environments
+            print("\n⚠️  EOFError detected - non-interactive environment")
             return None
         except Exception as e:
-            print(f"\n⚠️  Erreur lors de la lecture de l'entrée: {e}")
+            print(f"\n⚠️  Error reading input: {e}")
             return None
     
     async def _process_user_response(
@@ -111,40 +111,40 @@ class AegisFieldTester:
         verified_findings: List[Dict]
     ) -> str:
         """
-        Traiter la réponse de l'utilisateur
+        Process user response
         
-        Retourne:
-            'continue' pour passer à la découverte suivante
-            'break' pour arrêter la boucle
-            'retry' pour demander une nouvelle entrée
+        Returns:
+            'continue' to move to the next finding
+            'break' to stop the loop
+            'retry' to ask for new input
         """
         while True:
             if response in ['y', 'yes', 'o', 'oui']:
                 finding['verified'] = True
                 finding['false_positive'] = False
                 verified_findings.append(finding)
-                # Apprentissage
+                # Learning
                 self.learning_engine.save_finding(finding, is_false_positive=False)
-                print("✅ Marqué comme VRAIE VULNÉRABILITÉ. Leçon apprise.")
+                print("✅ Marked as TRUE VULNERABILITY. Lesson learned.")
                 return 'continue'
                 
             elif response in ['n', 'no', 'non']:
                 finding['verified'] = False
                 finding['false_positive'] = True
-                # Apprentissage
+                # Learning
                 self.learning_engine.save_finding(finding, is_false_positive=True)
-                print("❌ Marqué comme FAUX POSITIF. Leçon apprise.")
+                print("❌ Marked as FALSE POSITIVE. Lesson learned.")
                 return 'continue'
                 
             elif response == 'skip':
-                print("⏭️  Découverte ignorée.")
+                print("⏭️  Finding ignored.")
                 return 'continue'
                 
             elif response == 'info':
                 self._show_verification_help(finding)
-                # Demander une nouvelle entrée
+                # Ask for new input
                 new_response = await self._get_user_input_with_timeout(
-                    "❓ Est-ce une VRAIE vulnérabilité ? (o/n/skip/info): "
+                    "❓ Is this a REAL vulnerability? (y/n/skip/info): "
                 )
                 if new_response is None:
                     return 'continue'
@@ -152,13 +152,13 @@ class AegisFieldTester:
                 continue
                 
             elif response in ['q', 'quit', 'exit']:
-                print("🚪 Sortie du mode de vérification.")
+                print("🚪 Exiting verification mode.")
                 return 'break'
                 
             else:
-                print("⚠️  Veuillez entrer o, n, skip, info ou q pour quitter")
+                print("⚠️  Please enter y, n, skip, info or q to quit")
                 new_response = await self._get_user_input_with_timeout(
-                    "❓ Est-ce une VRAIE vulnérabilité ? (o/n/skip/info): "
+                    "❓ Is this a REAL vulnerability? (y/n/skip/info): "
                 )
                 if new_response is None:
                     return 'continue'
@@ -166,44 +166,45 @@ class AegisFieldTester:
     
     async def _auto_verify_findings(self, findings: List[Dict]) -> List[Dict]:
         """
-        Mode de vérification automatique pour les environnements headless
-        Marque toutes les découvertes comme nécessitant une vérification ultérieure
+        Automatic verification mode for headless environments
+        Marks all findings as requiring later verification
         """
-        print(f"\n📋 Traitement de {len(findings)} découvertes en mode automatique...")
+        print(f"\n📋 Processing {len(findings)} findings in automatic mode...")
         
         results: List[Dict] = []
         for finding in findings:
-            # En mode automatique, on marque comme "en attente de vérification"
+            # In automatic mode, mark as "pending verification"
             finding['verified'] = False
             finding['auto_processed'] = True
             finding['needs_manual_review'] = True
             results.append(finding)
             
-            print(f"   📝 {finding.get('type', 'Inconnu')}: marqué pour révision ultérieure")
+            print(f"   📝 {finding.get('type', 'Unknown')}: marked for later review")
         
-        print(f"\n✅ {len(results)} découvertes marquées pour révision manuelle ultérieure")
+        print(f"\n✅ {len(results)} findings marked for later manual review")
         return results
     
     def _show_verification_help(self, finding: Dict):
-        """Affiche l'aide pour la vérification."""
+        """Displays verification help."""
         print(f"""
-🔍 AIDE À LA VÉRIFICATION pour {finding.get('type', 'Inconnu')}:
+🔍 VERIFICATION HELP for {finding.get('type', 'Unknown')}:
    
-   Vérifiez les points suivants :
-   - Pouvez-vous reproduire le problème ?
-   - A-t-il un impact réel sur la sécurité ?
-   - Est-il dans le périmètre (scope) ?
-   - Y a-t-il un chemin d'exploitation clair ?
+   Check the following points:
+   - Can you reproduce the problem?
+   - Does it have a real security impact?
+   - Is it in scope?
+   - Is there a clear exploitation path?
    
-   Faux positifs courants :
-   - Contenu statique déclenchant les scanners.
-   - Pages par défaut sans impact réel.
-   - Vulnérabilités théoriques sans exploit pratique.
+   Common false positives:
+   - Static content triggering scanners.
+   - Default pages with no real impact.
+   - Theoretical vulnerabilities without practical exploit.
    
-   Commandes disponibles:
-   - o/oui : Marquer comme vraie vulnérabilité
-   - n/non : Marquer comme faux positif
-   - skip  : Ignorer cette découverte
-   - info  : Afficher cette aide
-   - q     : Quitter le mode de vérification
+   Available commands:
+   - y/yes : Mark as true vulnerability
+   - n/no  : Mark as false positive
+   - skip  : Ignore this finding
+   - info  : Show this help
+   - q     : Quit verification mode
         """)
+

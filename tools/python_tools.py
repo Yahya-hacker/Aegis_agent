@@ -127,7 +127,22 @@ class PythonToolManager:
             Exception: If Chrome binary cannot be found or WebDriver fails to initialize.
         """
         try:
-            service = Service(ChromeDriverManager().install())
+            # FORCE SYSTEM DRIVER as per manual repair instructions
+            # This ensures compatibility with the installed chromium version
+            system_driver = '/usr/bin/chromedriver'
+            if os.path.exists(system_driver):
+                logger.info(f"🔧 Forcing system chromedriver at: {system_driver}")
+                service = Service(system_driver)
+            else:
+                # Fallback if not found (though it should be there)
+                logger.warning(f"⚠️ System driver not found at {system_driver}, falling back to discovery")
+                discovered_driver = shutil.which("chromedriver")
+                if discovered_driver:
+                    service = Service(discovered_driver)
+                else:
+                    logger.info("🔧 System chromedriver not found, using webdriver_manager")
+                    service = Service(ChromeDriverManager().install())
+                
             return webdriver.Chrome(service=service, options=self.selenium_options)
         except Exception as e:
             error_msg = str(e).lower()
@@ -140,7 +155,14 @@ class PythonToolManager:
                 if chrome_binary:
                     self.selenium_options.binary_location = chrome_binary
                     logger.info(f"🔧 Retrying with Chrome binary: {chrome_binary}")
-                    service = Service(ChromeDriverManager().install())
+                    
+                    # Retry with system driver or manager
+                    system_driver = shutil.which("chromedriver")
+                    if system_driver:
+                        service = Service(system_driver)
+                    else:
+                        service = Service(ChromeDriverManager().install())
+                        
                     return webdriver.Chrome(service=service, options=self.selenium_options)
                 else:
                     raise RuntimeError(
@@ -151,7 +173,7 @@ class PythonToolManager:
 
     async def advanced_technology_detection(self, target: str) -> Dict:
         """Advanced technology detection with stealth features + session injection"""
-        logger.info(f"🔬 Détection de technologie pour {target}")
+        logger.info(f"🔬 Technology detection for {target}")
         
         # TASK 4: Apply jitter before request
         await AegisHelpers.apply_jitter()
@@ -181,7 +203,7 @@ class PythonToolManager:
                     if 'x-powered-by' in headers: tech_findings['framework'] = headers['x-powered-by']
                     if 'set-cookie' in headers: tech_findings['cookies'] = headers['set-cookie']
         except Exception as e:
-            logger.warning(f"Analyse des en-têtes HTTP échouée: {e}")
+            logger.warning(f"HTTP header analysis failed: {e}")
         
         try:
             loop = asyncio.get_event_loop()
@@ -202,7 +224,7 @@ class PythonToolManager:
             if detected_js:
                 tech_findings['javascript_libs'] = detected_js
         except Exception as e:
-            logger.warning(f"Analyse Selenium échouée: {e}")
+            logger.warning(f"Selenium analysis failed: {e}")
         
         return {"status": "success", "data": tech_findings}
 
@@ -217,15 +239,15 @@ class PythonToolManager:
             if driver:
                 driver.quit()
 
-    async def nmap_scan(self, target: str, ports: str = "80,443,8080,8443,22,21,3306,5432") -> Dict:
-        # ... (Pas de changement ici, fonction existante) ...
+    async def nmap_scan(self, target: str, ports: str = "80,443,8080,8443,22,21,3306,5432", arguments: str = "-sV -sS -T4") -> Dict:
+        # ... (No change here, existing function) ...
         if not self.nm:
-            return {"status": "error", "error": "Nmap non initialisé"}
+            return {"status": "error", "error": "Nmap not initialized"}
         domain = urlparse(target).netloc if '://' in target else target
-        logger.info(f"🔦 Exécution Nmap (bibliothèque) sur {domain} (Ports: {ports})...")
+        logger.info(f"🔦 Executing Nmap (library) on {domain} (Ports: {ports}) Args: {arguments}...")
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self.nm.scan, domain, ports, '-sV -sS -T4')
+            await loop.run_in_executor(None, self.nm.scan, domain, ports, arguments)
             findings = []
             for host in self.nm.all_hosts():
                 for proto in self.nm[host].all_protocols():
@@ -235,10 +257,10 @@ class PythonToolManager:
                         findings.append({"port": port, "protocol": proto, "state": service.get('state'), "service_name": service.get('name', 'unknown'), "product": service.get('product', ''), "version": service.get('version', '')})
             return {"status": "success", "data": findings}
         except Exception as e:
-            logger.error(f"❌ Scan Nmap échoué: {e}")
+            logger.error(f"❌ Nmap scan failed: {e}")
             return {"status": "error", "error": str(e)}
 
-    # --- NOUVELLES FONCTIONS SOPHISTIQUÉES ---
+    # --- NEW SOPHISTICATED FUNCTIONS ---
     
     def _inject_session_data(self, headers: Dict, cookies: Dict = None) -> tuple:
         """
@@ -272,7 +294,7 @@ class PythonToolManager:
 
     async def fetch_url(self, target_url: str) -> Dict:
         """
-        Récupère une URL spécifique avec stealth features + session injection
+        Fetches a specific URL with stealth features + session injection
         """
         logger.info(f"🔗 Fetching URL: {target_url}")
         

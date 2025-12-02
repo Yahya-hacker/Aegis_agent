@@ -4,5 +4,89 @@
     "target": "test.com",
     "reason": "Test error",
     "timestamp": "2025-11-15T10:29:36.036659"
+  },
+  {
+    "action": "application_spider.crawl_and_map_application",
+    "target": "unknown",
+    "reason": "Unknown tool: application_spider.crawl_and_map_application",
+    "timestamp": "2025-12-02T12:55:21.101603"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "testphp.vulnweb.com/login.php",
+    "reason": "Message: session not created: This version of ChromeDriver only supports Chrome version 114\nCurrent browser version is 142.0.7444.175 with binary path /usr/bin/chromium; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#sessionnotcreatedexception\nStacktrace:\n#0 0x59ecbe1da4e3 <unknown>\n#1 0x59ecbdf09c76 <unknown>\n#2 0x59ecbdf3704a <unknown>\n#3 0x59ecbdf324a1 <unknown>\n#4 0x59ecbdf2f029 <unknown>\n#5 0x59ecbdf6dccc <unknown>\n#6 0x59ecbdf6d47f <unknown>\n#7 0x59ecbdf64de3 <unknown>\n#8 0x59ecbdf3a2dd <unknown>\n#9 0x59ecbdf3b34e <unknown>\n#10 0x59ecbe19a3e4 <unknown>\n#11 0x59ecbe19e3d7 <unknown>\n#12 0x59ecbe1a8b20 <unknown>\n#13 0x59ecbe19f023 <unknown>\n#14 0x59ecbe16d1aa <unknown>\n#15 0x59ecbe1c36b8 <unknown>\n#16 0x59ecbe1c3847 <unknown>\n#17 0x59ecbe1d3243 <unknown>\n#18 0x71278976fb7b <unknown>\n",
+    "timestamp": "2025-12-02T13:04:54.168846"
+  },
+  {
+    "action": "application_spider.crawl_and_map_application",
+    "target": "unknown",
+    "reason": "Outil inconnu : application_spider.crawl_and_map_application",
+    "timestamp": "2025-12-02T14:45:44.463447"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='/login.php']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x5738b26e2172 <unknown>\n#1 0x5738b2146f9b <unknown>\n#2 0x5738b2197ceb <unknown>\n#3 0x5738b2197ec5 <unknown>\n#4 0x5738b21e0fc8 <unknown>\n#5 0x5738b21bca51 <unknown>\n#6 0x5738b21dea36 <unknown>\n#7 0x5738b21bc7d7 <unknown>\n#8 0x5738b218a441 <unknown>\n#9 0x5738b218b225 <unknown>\n#10 0x5738b26aba24 <unknown>\n#11 0x5738b26aeecf <unknown>\n#12 0x5738b26ae96c <unknown>\n#13 0x5738b26af379 <unknown>\n#14 0x5738b269543b <unknown>\n#15 0x5738b26af704 <unknown>\n#16 0x5738b267ec2d <unknown>\n#17 0x5738b26ceaa9 <unknown>\n#18 0x5738b26cec9f <unknown>\n#19 0x5738b26e0b29 <unknown>\n#20 0x7de57e120b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:49:12.950364"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='/login.php']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x611f64f00172 <unknown>\n#1 0x611f64964f9b <unknown>\n#2 0x611f649b5ceb <unknown>\n#3 0x611f649b5ec5 <unknown>\n#4 0x611f649fefc8 <unknown>\n#5 0x611f649daa51 <unknown>\n#6 0x611f649fca36 <unknown>\n#7 0x611f649da7d7 <unknown>\n#8 0x611f649a8441 <unknown>\n#9 0x611f649a9225 <unknown>\n#10 0x611f64ec9a24 <unknown>\n#11 0x611f64eccecf <unknown>\n#12 0x611f64ecc96c <unknown>\n#13 0x611f64ecd379 <unknown>\n#14 0x611f64eb343b <unknown>\n#15 0x611f64ecd704 <unknown>\n#16 0x611f64e9cc2d <unknown>\n#17 0x611f64eecaa9 <unknown>\n#18 0x611f64eecc9f <unknown>\n#19 0x611f64efeb29 <unknown>\n#20 0x79c60d7a0b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:49:57.709987"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x5d337eb98172 <unknown>\n#1 0x5d337e5fcf9b <unknown>\n#2 0x5d337e64dceb <unknown>\n#3 0x5d337e64dec5 <unknown>\n#4 0x5d337e696fc8 <unknown>\n#5 0x5d337e672a51 <unknown>\n#6 0x5d337e694a36 <unknown>\n#7 0x5d337e6727d7 <unknown>\n#8 0x5d337e640441 <unknown>\n#9 0x5d337e641225 <unknown>\n#10 0x5d337eb61a24 <unknown>\n#11 0x5d337eb64ecf <unknown>\n#12 0x5d337eb6496c <unknown>\n#13 0x5d337eb65379 <unknown>\n#14 0x5d337eb4b43b <unknown>\n#15 0x5d337eb65704 <unknown>\n#16 0x5d337eb34c2d <unknown>\n#17 0x5d337eb84aa9 <unknown>\n#18 0x5d337eb84c9f <unknown>\n#19 0x5d337eb96b29 <unknown>\n#20 0x702edd741b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:51:37.341541"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x576455202172 <unknown>\n#1 0x576454c66f9b <unknown>\n#2 0x576454cb7ceb <unknown>\n#3 0x576454cb7ec5 <unknown>\n#4 0x576454d00fc8 <unknown>\n#5 0x576454cdca51 <unknown>\n#6 0x576454cfea36 <unknown>\n#7 0x576454cdc7d7 <unknown>\n#8 0x576454caa441 <unknown>\n#9 0x576454cab225 <unknown>\n#10 0x5764551cba24 <unknown>\n#11 0x5764551ceecf <unknown>\n#12 0x5764551ce96c <unknown>\n#13 0x5764551cf379 <unknown>\n#14 0x5764551b543b <unknown>\n#15 0x5764551cf704 <unknown>\n#16 0x57645519ec2d <unknown>\n#17 0x5764551eeaa9 <unknown>\n#18 0x5764551eec9f <unknown>\n#19 0x576455200b29 <unknown>\n#20 0x71f1b81b0b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:53:23.523217"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x62b5dadde172 <unknown>\n#1 0x62b5da842f9b <unknown>\n#2 0x62b5da893ceb <unknown>\n#3 0x62b5da893ec5 <unknown>\n#4 0x62b5da8dcfc8 <unknown>\n#5 0x62b5da8b8a51 <unknown>\n#6 0x62b5da8daa36 <unknown>\n#7 0x62b5da8b87d7 <unknown>\n#8 0x62b5da886441 <unknown>\n#9 0x62b5da887225 <unknown>\n#10 0x62b5dada7a24 <unknown>\n#11 0x62b5dadaaecf <unknown>\n#12 0x62b5dadaa96c <unknown>\n#13 0x62b5dadab379 <unknown>\n#14 0x62b5dad9143b <unknown>\n#15 0x62b5dadab704 <unknown>\n#16 0x62b5dad7ac2d <unknown>\n#17 0x62b5dadcaaa9 <unknown>\n#18 0x62b5dadcac9f <unknown>\n#19 0x62b5daddcb29 <unknown>\n#20 0x72f111fe0b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:55:34.598398"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "'dict' object has no attribute 'startswith'",
+    "timestamp": "2025-12-02T14:56:53.902362"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/userinfo.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x5ed92e874172 <unknown>\n#1 0x5ed92e2d8f9b <unknown>\n#2 0x5ed92e329ceb <unknown>\n#3 0x5ed92e329ec5 <unknown>\n#4 0x5ed92e372fc8 <unknown>\n#5 0x5ed92e34ea51 <unknown>\n#6 0x5ed92e370a36 <unknown>\n#7 0x5ed92e34e7d7 <unknown>\n#8 0x5ed92e31c441 <unknown>\n#9 0x5ed92e31d225 <unknown>\n#10 0x5ed92e83da24 <unknown>\n#11 0x5ed92e840ecf <unknown>\n#12 0x5ed92e84096c <unknown>\n#13 0x5ed92e841379 <unknown>\n#14 0x5ed92e82743b <unknown>\n#15 0x5ed92e841704 <unknown>\n#16 0x5ed92e810c2d <unknown>\n#17 0x5ed92e860aa9 <unknown>\n#18 0x5ed92e860c9f <unknown>\n#19 0x5ed92e872b29 <unknown>\n#20 0x7f302fe22b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:57:55.104635"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x5b64151bf172 <unknown>\n#1 0x5b6414c23f9b <unknown>\n#2 0x5b6414c74ceb <unknown>\n#3 0x5b6414c74ec5 <unknown>\n#4 0x5b6414cbdfc8 <unknown>\n#5 0x5b6414c99a51 <unknown>\n#6 0x5b6414cbba36 <unknown>\n#7 0x5b6414c997d7 <unknown>\n#8 0x5b6414c67441 <unknown>\n#9 0x5b6414c68225 <unknown>\n#10 0x5b6415188a24 <unknown>\n#11 0x5b641518becf <unknown>\n#12 0x5b641518b96c <unknown>\n#13 0x5b641518c379 <unknown>\n#14 0x5b641517243b <unknown>\n#15 0x5b641518c704 <unknown>\n#16 0x5b641515bc2d <unknown>\n#17 0x5b64151abaa9 <unknown>\n#18 0x5b64151abc9f <unknown>\n#19 0x5b64151bdb29 <unknown>\n#20 0x7cd570431b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:58:31.678258"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x5c8191a6f172 <unknown>\n#1 0x5c81914d3f9b <unknown>\n#2 0x5c8191524ceb <unknown>\n#3 0x5c8191524ec5 <unknown>\n#4 0x5c819156dfc8 <unknown>\n#5 0x5c8191549a51 <unknown>\n#6 0x5c819156ba36 <unknown>\n#7 0x5c81915497d7 <unknown>\n#8 0x5c8191517441 <unknown>\n#9 0x5c8191518225 <unknown>\n#10 0x5c8191a38a24 <unknown>\n#11 0x5c8191a3becf <unknown>\n#12 0x5c8191a3b96c <unknown>\n#13 0x5c8191a3c379 <unknown>\n#14 0x5c8191a2243b <unknown>\n#15 0x5c8191a3c704 <unknown>\n#16 0x5c8191a0bc2d <unknown>\n#17 0x5c8191a5baa9 <unknown>\n#18 0x5c8191a5bc9f <unknown>\n#19 0x5c8191a6db29 <unknown>\n#20 0x75af1d7f5b7b <unknown>\n",
+    "timestamp": "2025-12-02T14:59:20.831040"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x60d9b10d3172 <unknown>\n#1 0x60d9b0b37f9b <unknown>\n#2 0x60d9b0b88ceb <unknown>\n#3 0x60d9b0b88ec5 <unknown>\n#4 0x60d9b0bd1fc8 <unknown>\n#5 0x60d9b0bada51 <unknown>\n#6 0x60d9b0bcfa36 <unknown>\n#7 0x60d9b0bad7d7 <unknown>\n#8 0x60d9b0b7b441 <unknown>\n#9 0x60d9b0b7c225 <unknown>\n#10 0x60d9b109ca24 <unknown>\n#11 0x60d9b109fecf <unknown>\n#12 0x60d9b109f96c <unknown>\n#13 0x60d9b10a0379 <unknown>\n#14 0x60d9b108643b <unknown>\n#15 0x60d9b10a0704 <unknown>\n#16 0x60d9b106fc2d <unknown>\n#17 0x60d9b10bfaa9 <unknown>\n#18 0x60d9b10bfc9f <unknown>\n#19 0x60d9b10d1b29 <unknown>\n#20 0x7b45786d4b7b <unknown>\n",
+    "timestamp": "2025-12-02T15:01:31.412503"
+  },
+  {
+    "action": "test_form_payload",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "reason": "Message: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"[id=\"form[action='http://testphp.vulnweb.com/userinfo.php'][method='post']\"]\"}\n  (Session info: chrome=142.0.7444.175); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#nosuchelementexception\nStacktrace:\n#0 0x615857de4172 <unknown>\n#1 0x615857848f9b <unknown>\n#2 0x615857899ceb <unknown>\n#3 0x615857899ec5 <unknown>\n#4 0x6158578e2fc8 <unknown>\n#5 0x6158578bea51 <unknown>\n#6 0x6158578e0a36 <unknown>\n#7 0x6158578be7d7 <unknown>\n#8 0x61585788c441 <unknown>\n#9 0x61585788d225 <unknown>\n#10 0x615857dada24 <unknown>\n#11 0x615857db0ecf <unknown>\n#12 0x615857db096c <unknown>\n#13 0x615857db1379 <unknown>\n#14 0x615857d9743b <unknown>\n#15 0x615857db1704 <unknown>\n#16 0x615857d80c2d <unknown>\n#17 0x615857dd0aa9 <unknown>\n#18 0x615857dd0c9f <unknown>\n#19 0x615857de2b29 <unknown>\n#20 0x7f12ecf27b7b <unknown>\n",
+    "timestamp": "2025-12-02T15:02:24.470906"
   }
 ]

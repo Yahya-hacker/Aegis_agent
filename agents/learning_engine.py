@@ -1,6 +1,6 @@
 """
-Moteur d'apprentissage Aegis AI
-Version V8 - E/S asynchrone avec contrôle de concurrence et mise en cache
+Aegis AI Learning Engine
+Version V8 - Async I/O with concurrency control and caching
 """
 
 import asyncio
@@ -14,33 +14,33 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Constantes de configuration
-MAX_RECENT_RECORDS = 100  # Nombre maximum d'enregistrements récents à conserver
-MAX_RECENT_CHECK = 50  # Nombre d'enregistrements à vérifier pour éviter les actions
+# Configuration constants
+MAX_RECENT_RECORDS = 100  # Maximum number of recent records to keep
+MAX_RECENT_CHECK = 50  # Number of records to check to avoid actions
 
 
 class AegisLearningEngine:
     """
-    Moteur d'apprentissage amélioré avec apprentissage adaptatif et reconnaissance de patterns
-    Inclut un contrôle de concurrence et des E/S non bloquantes
+    Enhanced learning engine with adaptive learning and pattern recognition
+    Includes concurrency control and non-blocking I/O
     """
     def __init__(self):
         self.knowledge_base = "data/knowledge_base.json"
         self.false_positive_db = "data/false_positives.json"
         self.pattern_recognition: Dict[str, Any] = {}
-        self.failed_attempts_db = "data/failed_attempts.json"  # Suivi des échecs
-        self.success_patterns_db = "data/success_patterns.json"  # Suivi des succès
+        self.failed_attempts_db = "data/failed_attempts.json"  # Failure tracking
+        self.success_patterns_db = "data/success_patterns.json"  # Success tracking
         self.patterns_file = "data/patterns.json"
         
-        # Verrous pour éviter les conditions de concurrence
+        # Locks to avoid race conditions
         self._write_lock = asyncio.Lock()
         
-        # Cache en mémoire pour éviter les lectures répétées
+        # In-memory cache to avoid repeated reads
         self._cache: Dict[str, Any] = {}
         self._cache_loaded = False
     
     async def _ensure_cache_loaded(self) -> None:
-        """S'assurer que le cache est chargé depuis le disque"""
+        """Ensure cache is loaded from disk"""
         if self._cache_loaded:
             return
         
@@ -48,7 +48,7 @@ class AegisLearningEngine:
             if self._cache_loaded:
                 return
             
-            # Charger toutes les données en mémoire
+            # Load all data into memory
             self._cache['historical'] = await self._load_json_async(
                 self.knowledge_base, 
                 {"vulnerabilities": {}, "techniques": {}, "target_patterns": {}}
@@ -63,10 +63,10 @@ class AegisLearningEngine:
                 self.patterns_file, {}
             )
             self._cache_loaded = True
-            logger.info("✅ Cache du moteur d'apprentissage chargé")
+            logger.info("✅ Learning engine cache loaded")
     
     async def _load_json_async(self, filepath: str, default: Any = None) -> Any:
-        """Charger un fichier JSON de manière asynchrone"""
+        """Load JSON file asynchronously"""
         try:
             path = Path(filepath)
             if not path.exists():
@@ -76,25 +76,25 @@ class AegisLearningEngine:
                 content = await f.read()
                 return json.loads(content)
         except (json.JSONDecodeError, Exception) as e:
-            logger.debug(f"Impossible de charger {filepath}: {e}")
+            logger.debug(f"Unable to load {filepath}: {e}")
             return default if default is not None else {}
     
     async def _save_json_async(self, filepath: str, data: Any) -> None:
-        """Sauvegarder un fichier JSON de manière asynchrone"""
+        """Save JSON file asynchronously"""
         try:
-            # S'assurer que le répertoire existe
+            # Ensure directory exists
             path = Path(filepath)
             path.parent.mkdir(parents=True, exist_ok=True)
             
             async with aiofiles.open(filepath, 'w') as f:
                 await f.write(json.dumps(data, indent=2))
         except Exception as e:
-            logger.error(f"Erreur lors de la sauvegarde de {filepath}: {e}")
+            logger.error(f"Error saving {filepath}: {e}")
     
     def load_historical_data(self) -> Dict[str, Any]:
         """
-        Charger les données historiques de test (version synchrone pour compatibilité)
-        Note: Utiliser load_historical_data_async pour les nouvelles implémentations
+        Load historical test data (synchronous version for compatibility)
+        Note: Use load_historical_data_async for new implementations
         """
         try:
             with open(self.knowledge_base, 'r') as f:
@@ -103,12 +103,12 @@ class AegisLearningEngine:
             return {"vulnerabilities": {}, "techniques": {}, "target_patterns": {}}
     
     async def load_historical_data_async(self) -> Dict[str, Any]:
-        """Charger les données historiques de test de manière asynchrone"""
+        """Load historical test data asynchronously"""
         await self._ensure_cache_loaded()
         return self._cache.get('historical', {"vulnerabilities": {}, "techniques": {}, "target_patterns": {}})
     
     async def save_finding_async(self, finding: Dict, is_false_positive: bool = False) -> None:
-        """Sauvegarder les découvertes et apprendre des résultats avec un suivi amélioré"""
+        """Save findings and learn from results with improved tracking"""
         await self._ensure_cache_loaded()
         
         async with self._write_lock:
@@ -124,24 +124,24 @@ class AegisLearningEngine:
                 
                 historical_data['vulnerabilities'][vuln_type].append(finding)
                 
-                # Mettre à jour le cache
+                # Update cache
                 self._cache['historical'] = historical_data
                 
-                # Sauvegarder sur le disque de manière asynchrone
+                # Save to disk asynchronously
                 await self._save_json_async(self.knowledge_base, historical_data)
                 
-                # Mettre à jour la reconnaissance de patterns immédiatement
+                # Update pattern recognition immediately
                 await self.analyze_patterns_async()
                 
-                logger.info(f"✅ Découverte sauvegardée: {vuln_type} (faux_positif={is_false_positive})")
+                logger.info(f"✅ Finding saved: {vuln_type} (false_positive={is_false_positive})")
             
             except Exception as e:
-                logger.error(f"Erreur lors de la sauvegarde de la découverte: {e}", exc_info=True)
+                logger.error(f"Error saving finding: {e}", exc_info=True)
     
     def save_finding(self, finding: Dict, is_false_positive: bool = False):
         """
-        Sauvegarder les découvertes (version synchrone pour compatibilité)
-        Note: Utiliser save_finding_async pour les nouvelles implémentations
+        Save findings (synchronous version for compatibility)
+        Note: Use save_finding_async for new implementations
         """
         try:
             historical_data = self.load_historical_data()
@@ -155,26 +155,26 @@ class AegisLearningEngine:
             
             historical_data['vulnerabilities'][vuln_type].append(finding)
             
-            # Sauvegarder dans la base de connaissances
+            # Save to knowledge base
             with open(self.knowledge_base, 'w') as f:
                 json.dump(historical_data, f, indent=2)
             
-            # Mettre à jour la reconnaissance de patterns immédiatement
+            # Update pattern recognition immediately
             self.analyze_patterns()
             
-            logger.info(f"✅ Découverte sauvegardée: {vuln_type} (faux_positif={is_false_positive})")
+            logger.info(f"✅ Finding saved: {vuln_type} (false_positive={is_false_positive})")
         
         except Exception as e:
-            logger.error(f"Erreur lors de la sauvegarde de la découverte: {e}", exc_info=True)
+            logger.error(f"Error saving finding: {e}", exc_info=True)
     
     async def record_failed_attempt_async(self, action: str, target: str, reason: str) -> None:
         """
-        Enregistrer les tentatives échouées pour éviter de répéter des actions inefficaces
+        Record failed attempts to avoid repeating ineffective actions
         
         Args:
-            action: L'action qui a échoué (ex: 'subdomain_enumeration')
-            target: La cible de l'action
-            reason: Pourquoi elle a échoué
+            action: The action that failed (e.g., 'subdomain_enumeration')
+            target: The target of the action
+            reason: Why it failed
         """
         await self._ensure_cache_loaded()
         
@@ -189,23 +189,23 @@ class AegisLearningEngine:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                # Garder seulement les échecs récents
+                # Keep only recent failures
                 failed_attempts = failed_attempts[-MAX_RECENT_RECORDS:]
                 
-                # Mettre à jour le cache
+                # Update cache
                 self._cache['failed_attempts'] = failed_attempts
                 
-                # Sauvegarder sur le disque
+                # Save to disk
                 await self._save_json_async(self.failed_attempts_db, failed_attempts)
                 
-                logger.info(f"Tentative échouée enregistrée: {action} sur {target}")
+                logger.info(f"Failed attempt recorded: {action} on {target}")
             
             except Exception as e:
-                logger.error(f"Erreur lors de l'enregistrement de la tentative échouée: {e}")
+                logger.error(f"Error recording failed attempt: {e}")
     
     def record_failed_attempt(self, action: str, target: str, reason: str):
         """
-        Enregistrer les tentatives échouées (version synchrone pour compatibilité)
+        Record failed attempts (synchronous version for compatibility)
         """
         try:
             failed_attempts = self._load_json_safe(self.failed_attempts_db, default=[])
@@ -217,25 +217,25 @@ class AegisLearningEngine:
                 'timestamp': datetime.now().isoformat()
             })
             
-            # Garder seulement les échecs récents
+            # Keep only recent failures
             failed_attempts = failed_attempts[-MAX_RECENT_RECORDS:]
             
             with open(self.failed_attempts_db, 'w') as f:
                 json.dump(failed_attempts, f, indent=2)
             
-            logger.info(f"Tentative échouée enregistrée: {action} sur {target}")
+            logger.info(f"Failed attempt recorded: {action} on {target}")
         
         except Exception as e:
-            logger.error(f"Erreur lors de l'enregistrement de la tentative échouée: {e}")
+            logger.error(f"Error recording failed attempt: {e}")
     
     async def record_successful_action_async(self, action: str, target: str, result_summary: str) -> None:
         """
-        Enregistrer les actions réussies pour identifier les patterns
+        Record successful actions to identify patterns
         
         Args:
-            action: L'action qui a réussi
-            target: La cible de l'action
-            result_summary: Résumé des résultats
+            action: The action that succeeded
+            target: The target of the action
+            result_summary: Summary of results
         """
         await self._ensure_cache_loaded()
         
@@ -250,23 +250,23 @@ class AegisLearningEngine:
                     'timestamp': datetime.now().isoformat()
                 })
                 
-                # Garder seulement les succès récents
+                # Keep only recent successes
                 successes = successes[-MAX_RECENT_RECORDS:]
                 
-                # Mettre à jour le cache
+                # Update cache
                 self._cache['success_patterns'] = successes
                 
-                # Sauvegarder sur le disque
+                # Save to disk
                 await self._save_json_async(self.success_patterns_db, successes)
                 
-                logger.info(f"Action réussie enregistrée: {action} sur {target}")
+                logger.info(f"Successful action recorded: {action} on {target}")
             
             except Exception as e:
-                logger.error(f"Erreur lors de l'enregistrement de l'action réussie: {e}")
+                logger.error(f"Error recording successful action: {e}")
     
     def record_successful_action(self, action: str, target: str, result_summary: str):
         """
-        Enregistrer les actions réussies (version synchrone pour compatibilité)
+        Record successful actions (synchronous version for compatibility)
         """
         try:
             successes = self._load_json_safe(self.success_patterns_db, default=[])
@@ -278,88 +278,88 @@ class AegisLearningEngine:
                 'timestamp': datetime.now().isoformat()
             })
             
-            # Garder seulement les succès récents
+            # Keep only recent successes
             successes = successes[-MAX_RECENT_RECORDS:]
             
             with open(self.success_patterns_db, 'w') as f:
                 json.dump(successes, f, indent=2)
             
-            logger.info(f"Action réussie enregistrée: {action} sur {target}")
+            logger.info(f"Successful action recorded: {action} on {target}")
         
         except Exception as e:
-            logger.error(f"Erreur lors de l'enregistrement de l'action réussie: {e}")
+            logger.error(f"Error recording successful action: {e}")
     
     async def should_avoid_action_async(self, action: str, target: str) -> Tuple[bool, str]:
         """
-        Vérifier si une action doit être évitée en fonction des échecs passés
+        Check if an action should be avoided based on past failures
         
-        Retourne:
-            Tuple de (doit_éviter: bool, raison: str)
+        Returns:
+            Tuple of (should_avoid: bool, reason: str)
         """
         await self._ensure_cache_loaded()
         
         try:
             failed_attempts = self._cache.get('failed_attempts', [])
             
-            # Compter les échecs récents pour cette combinaison action-cible
+            # Count recent failures for this action-target combination
             recent_failures = [
                 f for f in failed_attempts[-MAX_RECENT_CHECK:]
                 if f['action'] == action and f['target'] == target
             ]
             
             if len(recent_failures) >= 3:
-                return True, f"L'action {action} a échoué {len(recent_failures)} fois sur {target}"
+                return True, f"Action {action} failed {len(recent_failures)} times on {target}"
             
             return False, ""
         
         except Exception as e:
-            logger.error(f"Erreur lors de la vérification des tentatives échouées: {e}")
+            logger.error(f"Error checking failed attempts: {e}")
             return False, ""
     
     def should_avoid_action(self, action: str, target: str) -> Tuple[bool, str]:
         """
-        Vérifier si une action doit être évitée (version synchrone pour compatibilité)
+        Check if an action should be avoided (synchronous version for compatibility)
         """
         try:
             failed_attempts = self._load_json_safe(self.failed_attempts_db, default=[])
             
-            # Compter les échecs récents pour cette combinaison action-cible
+            # Count recent failures for this action-target combination
             recent_failures = [
                 f for f in failed_attempts[-MAX_RECENT_CHECK:]
                 if f['action'] == action and f['target'] == target
             ]
             
             if len(recent_failures) >= 3:
-                return True, f"L'action {action} a échoué {len(recent_failures)} fois sur {target}"
+                return True, f"Action {action} failed {len(recent_failures)} times on {target}"
             
             return False, ""
         
         except Exception as e:
-            logger.error(f"Erreur lors de la vérification des tentatives échouées: {e}")
+            logger.error(f"Error checking failed attempts: {e}")
             return False, ""
     
     def _load_json_safe(self, filepath: str, default: Any = None) -> Any:
-        """Charger un fichier JSON de manière sécurisée avec gestion des erreurs"""
+        """Load JSON file safely with error handling"""
         try:
             with open(filepath, 'r') as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.debug(f"Impossible de charger {filepath}: {e}")
+            logger.debug(f"Unable to load {filepath}: {e}")
             return default if default is not None else {}
     
     async def analyze_patterns_async(self) -> None:
-        """Analyser les patterns dans les découvertes réussies avec intelligence améliorée"""
+        """Analyze patterns in successful findings with improved intelligence"""
         await self._ensure_cache_loaded()
         
         try:
             data = self._cache.get('historical', {"vulnerabilities": {}})
             
             for vuln_type, findings in data.get('vulnerabilities', {}).items():
-                # Analyser seulement les vrais positifs
+                # Analyze only true positives
                 true_positives = [f for f in findings if not f.get('false_positive', True)]
                 
                 if true_positives:
-                    # Extraire les patterns communs
+                    # Extract common patterns
                     common_techniques: Counter = Counter()
                     common_payloads: Counter = Counter()
                     common_targets: Counter = Counter()
@@ -368,10 +368,10 @@ class AegisLearningEngine:
                         common_techniques[finding.get('technique', 'unknown')] += 1
                         common_payloads[finding.get('payload', 'unknown')] += 1
                         
-                        # Extraire les caractéristiques de la cible
+                        # Extract target characteristics
                         target = finding.get('target', '')
                         if target:
-                            # Extraire les patterns domaine/chemin
+                            # Extract domain/path patterns
                             if '/' in target:
                                 path = target.split('/', 3)[-1] if target.count('/') >= 3 else ''
                                 if path:
@@ -385,28 +385,28 @@ class AegisLearningEngine:
                         'false_positive_rate': len([f for f in findings if f.get('false_positive', False)]) / len(findings) if findings else 0
                     }
             
-            # Mettre à jour le cache
+            # Update cache
             self._cache['patterns'] = self.pattern_recognition
             
-            # Sauvegarder les patterns
+            # Save patterns
             await self._save_json_async(self.patterns_file, self.pattern_recognition)
             
-            logger.info(f"✅ Patterns analysés pour {len(self.pattern_recognition)} types de vulnérabilités")
+            logger.info(f"✅ Patterns analyzed for {len(self.pattern_recognition)} vulnerability types")
         
         except Exception as e:
-            logger.error(f"Erreur lors de l'analyse des patterns: {e}", exc_info=True)
+            logger.error(f"Error analyzing patterns: {e}", exc_info=True)
     
     def analyze_patterns(self):
-        """Analyser les patterns (version synchrone pour compatibilité)"""
+        """Analyze patterns (synchronous version for compatibility)"""
         try:
             data = self.load_historical_data()
             
             for vuln_type, findings in data['vulnerabilities'].items():
-                # Analyser seulement les vrais positifs
+                # Analyze only true positives
                 true_positives = [f for f in findings if not f.get('false_positive', True)]
                 
                 if true_positives:
-                    # Extraire les patterns communs
+                    # Extract common patterns
                     common_techniques: Counter = Counter()
                     common_payloads: Counter = Counter()
                     common_targets: Counter = Counter()
@@ -415,10 +415,10 @@ class AegisLearningEngine:
                         common_techniques[finding.get('technique', 'unknown')] += 1
                         common_payloads[finding.get('payload', 'unknown')] += 1
                         
-                        # Extraire les caractéristiques de la cible
+                        # Extract target characteristics
                         target = finding.get('target', '')
                         if target:
-                            # Extraire les patterns domaine/chemin
+                            # Extract domain/path patterns
                             if '/' in target:
                                 path = target.split('/', 3)[-1] if target.count('/') >= 3 else ''
                                 if path:
@@ -432,140 +432,140 @@ class AegisLearningEngine:
                         'false_positive_rate': len([f for f in findings if f.get('false_positive', False)]) / len(findings) if findings else 0
                     }
             
-            # Sauvegarder les patterns
+            # Save patterns
             with open(self.patterns_file, 'w') as f:
                 json.dump(self.pattern_recognition, f, indent=2)
             
-            logger.info(f"✅ Patterns analysés pour {len(self.pattern_recognition)} types de vulnérabilités")
+            logger.info(f"✅ Patterns analyzed for {len(self.pattern_recognition)} vulnerability types")
         
         except Exception as e:
-            logger.error(f"Erreur lors de l'analyse des patterns: {e}", exc_info=True)
+            logger.error(f"Error analyzing patterns: {e}", exc_info=True)
     
     async def load_learned_patterns_async(self) -> str:
-        """Charger les patterns appris et retourner une chaîne formatée pour le contexte IA"""
+        """Load learned patterns and return a formatted string for AI context"""
         await self._ensure_cache_loaded()
         
         try:
             patterns = self._cache.get('patterns', {})
             
             if not patterns:
-                return "Aucun pattern appris disponible pour le moment."
+                return "No learned patterns available at the moment."
             
-            # Formater les patterns pour la consommation par l'IA avec des détails améliorés
-            formatted = ["PATTERNS APPRIS DES MISSIONS PRÉCÉDENTES:"]
+            # Format patterns for AI consumption with improved details
+            formatted = ["PATTERNS LEARNED FROM PREVIOUS MISSIONS:"]
             
             for vuln_type, data in patterns.items():
                 formatted.append(f"\n{vuln_type}:")
-                formatted.append(f"  Total de découvertes réussies: {data.get('total_findings', 0)}")
-                formatted.append(f"  Taux de faux positifs: {data.get('false_positive_rate', 0):.1%}")
+                formatted.append(f"  Total successful findings: {data.get('total_findings', 0)}")
+                formatted.append(f"  False positive rate: {data.get('false_positive_rate', 0):.1%}")
                 
                 if 'most_effective_techniques' in data:
-                    formatted.append("  Techniques les plus efficaces:")
+                    formatted.append("  Most effective techniques:")
                     for technique, count in data['most_effective_techniques']:
                         if technique != 'unknown':
-                            formatted.append(f"    - {technique} (nombre de succès: {count})")
+                            formatted.append(f"    - {technique} (success count: {count})")
                 
                 if 'successful_payloads' in data:
-                    formatted.append("  Payloads réussis:")
-                    for payload, count in data['successful_payloads'][:5]:  # Top 5 seulement
+                    formatted.append("  Successful payloads:")
+                    for payload, count in data['successful_payloads'][:5]:  # Top 5 only
                         if payload != 'unknown':
                             formatted.append(f"    - {payload}")
                 
                 if 'common_vulnerable_paths' in data:
-                    formatted.append("  Chemins vulnérables communs:")
+                    formatted.append("  Common vulnerable paths:")
                     for path, count in data['common_vulnerable_paths']:
                         if path:
-                            formatted.append(f"    - /{path} (trouvé {count} fois)")
+                            formatted.append(f"    - /{path} (found {count} times)")
             
-            # Ajouter les insights des actions réussies
+            # Add insights from successful actions
             try:
                 successes = self._cache.get('success_patterns', [])
                 if successes:
-                    formatted.append("\nACTIONS RÉCENTES RÉUSSIES:")
+                    formatted.append("\nRECENT SUCCESSFUL ACTIONS:")
                     action_counts = Counter(s['action'] for s in successes[-20:])
                     for action, count in action_counts.most_common(5):
-                        formatted.append(f"  - {action}: {count} utilisations réussies")
+                        formatted.append(f"  - {action}: {count} successful uses")
             except Exception:
                 pass
             
-            # Ajouter les avertissements sur les tentatives échouées
+            # Add warnings about failed attempts
             try:
                 failed = self._cache.get('failed_attempts', [])
                 if failed:
-                    formatted.append("\nAVERTISSEMENTS - ÉVITER CES PATTERNS:")
+                    formatted.append("\nWARNINGS - AVOID THESE PATTERNS:")
                     action_failures = Counter(f['action'] for f in failed[-20:])
                     for action, count in action_failures.most_common(3):
-                        formatted.append(f"  - {action} a échoué {count} fois récemment")
+                        formatted.append(f"  - {action} failed {count} times recently")
             except Exception:
                 pass
             
             return "\n".join(formatted)
             
         except Exception as e:
-            logger.error(f"Erreur lors du chargement des patterns: {e}", exc_info=True)
-            return f"Erreur lors du chargement des patterns: {str(e)}"
+            logger.error(f"Error loading patterns: {e}", exc_info=True)
+            return f"Error loading patterns: {str(e)}"
     
     def load_learned_patterns(self) -> str:
-        """Charger les patterns appris (version synchrone pour compatibilité)"""
+        """Load learned patterns (synchronous version for compatibility)"""
         try:
             with open(self.patterns_file, 'r') as f:
                 patterns = json.load(f)
             
             if not patterns:
-                return "Aucun pattern appris disponible pour le moment."
+                return "No learned patterns available at the moment."
             
-            # Formater les patterns pour la consommation par l'IA avec des détails améliorés
-            formatted = ["PATTERNS APPRIS DES MISSIONS PRÉCÉDENTES:"]
+            # Format patterns for AI consumption with improved details
+            formatted = ["PATTERNS LEARNED FROM PREVIOUS MISSIONS:"]
             
             for vuln_type, data in patterns.items():
                 formatted.append(f"\n{vuln_type}:")
-                formatted.append(f"  Total de découvertes réussies: {data.get('total_findings', 0)}")
-                formatted.append(f"  Taux de faux positifs: {data.get('false_positive_rate', 0):.1%}")
+                formatted.append(f"  Total successful findings: {data.get('total_findings', 0)}")
+                formatted.append(f"  False positive rate: {data.get('false_positive_rate', 0):.1%}")
                 
                 if 'most_effective_techniques' in data:
-                    formatted.append("  Techniques les plus efficaces:")
+                    formatted.append("  Most effective techniques:")
                     for technique, count in data['most_effective_techniques']:
                         if technique != 'unknown':
-                            formatted.append(f"    - {technique} (nombre de succès: {count})")
+                            formatted.append(f"    - {technique} (success count: {count})")
                 
                 if 'successful_payloads' in data:
-                    formatted.append("  Payloads réussis:")
-                    for payload, count in data['successful_payloads'][:5]:  # Top 5 seulement
+                    formatted.append("  Successful payloads:")
+                    for payload, count in data['successful_payloads'][:5]:  # Top 5 only
                         if payload != 'unknown':
                             formatted.append(f"    - {payload}")
                 
                 if 'common_vulnerable_paths' in data:
-                    formatted.append("  Chemins vulnérables communs:")
+                    formatted.append("  Common vulnerable paths:")
                     for path, count in data['common_vulnerable_paths']:
                         if path:
-                            formatted.append(f"    - /{path} (trouvé {count} fois)")
+                            formatted.append(f"    - /{path} (found {count} times)")
             
-            # Ajouter les insights des actions réussies
+            # Add insights from successful actions
             try:
                 successes = self._load_json_safe(self.success_patterns_db, default=[])
                 if successes:
-                    formatted.append("\nACTIONS RÉCENTES RÉUSSIES:")
+                    formatted.append("\nRECENT SUCCESSFUL ACTIONS:")
                     action_counts = Counter(s['action'] for s in successes[-20:])
                     for action, count in action_counts.most_common(5):
-                        formatted.append(f"  - {action}: {count} utilisations réussies")
+                        formatted.append(f"  - {action}: {count} successful uses")
             except Exception:
                 pass
             
-            # Ajouter les avertissements sur les tentatives échouées
+            # Add warnings about failed attempts
             try:
                 failed = self._load_json_safe(self.failed_attempts_db, default=[])
                 if failed:
-                    formatted.append("\nAVERTISSEMENTS - ÉVITER CES PATTERNS:")
+                    formatted.append("\nWARNINGS - AVOID THESE PATTERNS:")
                     action_failures = Counter(f['action'] for f in failed[-20:])
                     for action, count in action_failures.most_common(3):
-                        formatted.append(f"  - {action} a échoué {count} fois récemment")
+                        formatted.append(f"  - {action} failed {count} times recently")
             except Exception:
                 pass
             
             return "\n".join(formatted)
             
         except FileNotFoundError:
-            return "Aucun pattern appris disponible pour le moment."
+            return "No learned patterns available at the moment."
         except Exception as e:
-            logger.error(f"Erreur lors du chargement des patterns: {e}", exc_info=True)
-            return f"Erreur lors du chargement des patterns: {str(e)}"
+            logger.error(f"Error loading patterns: {e}", exc_info=True)
+            return f"Error loading patterns: {str(e)}"

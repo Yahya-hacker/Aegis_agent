@@ -159,9 +159,13 @@ If you cannot suggest a fix, respond with:
                 
                 if corrected_args is not None:
                     logger.info(f"✅ Corrected arguments: {corrected_args}")
+                    print(f"\n🔧 Self-Correction Applied: {tool}")
+                    print(f"   Original Error: {error_message}")
+                    print(f"   New Arguments: {json.dumps(corrected_args, indent=2)}")
                     return corrected_args
                 else:
                     logger.warning(f"❌ Coder LLM could not suggest a fix")
+                    print(f"\n❌ Self-Correction Failed for {tool}")
                     return None
             
             logger.warning("Could not parse correction JSON")
@@ -271,11 +275,11 @@ If you cannot suggest a fix, respond with:
             Result dictionary
         """
         try:
-            # Outils de Reconnaissance
+            # Reconnaissance Tools
             if tool == "subdomain_enumeration":
                 domain = args.get("domain")
                 if not domain: 
-                    return {"status": "error", "error": "Domaine manquant"}
+                    return {"status": "error", "error": "Missing domain"}
                 if not self._validate_domain(domain):
                     return {"status": "error", "error": f"Invalid domain format: {domain}"}
                 
@@ -291,7 +295,7 @@ If you cannot suggest a fix, respond with:
             elif tool == "port_scanning":
                 target = args.get("target")
                 if not target: 
-                    return {"status": "error", "error": "Cible manquante"}
+                    return {"status": "error", "error": "Missing target"}
                 if not self._validate_target(target):
                     return {"status": "error", "error": f"Invalid target format: {target}"}
                 
@@ -306,10 +310,16 @@ If you cannot suggest a fix, respond with:
             elif tool == "nmap_scan":
                 target = args.get("target")
                 ports = args.get("ports", "80,443,8080,8443")
-                if not target: return {"status": "error", "error": "Cible manquante"}
+                arguments = args.get("arguments", "-sV -sS -T4")
+                
+                # Support for explicit stealth mode
+                if args.get("stealth", False):
+                    arguments = "-sV -sS -T2" # Slower, stealthier
+                    
+                if not target: return {"status": "error", "error": "Missing target"}
                 
                 # TASK 2: Execute and record in database
-                result = await self.python_tools.nmap_scan(target, ports)
+                result = await self.python_tools.nmap_scan(target, ports, arguments)
                 if result.get("status") == "success":
                     data = result.get("data", [])
                     scan_result = f"Scanned {len(data)} ports" if isinstance(data, list) else "Completed"
@@ -318,7 +328,7 @@ If you cannot suggest a fix, respond with:
 
             elif tool == "url_discovery":
                 domain = args.get("domain")
-                if not domain: return {"status": "error", "error": "Domaine manquant"}
+                if not domain: return {"status": "error", "error": "Missing domain"}
                 
                 # TASK 2: Execute and record in database
                 result = await self.real_tools.url_discovery(domain)
@@ -331,7 +341,7 @@ If you cannot suggest a fix, respond with:
             elif tool == "tech_detection":
                 target = args.get("target")
                 if not target: 
-                    return {"status": "error", "error": "Cible manquante"}
+                    return {"status": "error", "error": "Missing target"}
                 if not self._validate_target(target):
                     return {"status": "error", "error": f"Invalid target format: {target}"}
                 if '://' not in target: 
@@ -345,11 +355,11 @@ If you cannot suggest a fix, respond with:
                     self.db.mark_scanned(target, "tech_detection", "Technology detection completed")
                 return result
             
-            # Outils d'Attaque et d'Analyse Logique (NOUVEAU)
+            # Attack and Logic Analysis Tools (NEW)
             elif tool == "vulnerability_scan":
                 target_url = args.get("target")
                 if not target_url: 
-                    return {"status": "error", "error": "Cible URL manquante"}
+                    return {"status": "error", "error": "Missing URL target"}
                 if '://' not in target_url: 
                     target_url = f"http://{target_url}"
                 if not self._validate_url(target_url):
@@ -389,7 +399,7 @@ If you cannot suggest a fix, respond with:
 
             elif tool == "run_sqlmap":
                 target_url = args.get("target")
-                if not target_url: return {"status": "error", "error": "Cible URL manquante"}
+                if not target_url: return {"status": "error", "error": "Missing URL target"}
                 
                 # TASK 2: Execute and record findings
                 result = await self.real_tools.run_sqlmap(target_url)
@@ -429,22 +439,22 @@ If you cannot suggest a fix, respond with:
 
             elif tool == "discover_interactables":
                 target_url = args.get("target")
-                if not target_url: return {"status": "error", "error": "Cible URL manquante"}
+                if not target_url: return {"status": "error", "error": "Missing URL target"}
                 if '://' not in target_url: target_url = f"http://{target_url}"
                 return await self.python_tools.discover_interactables(target_url)
 
             elif tool == "test_form_payload":
                 target_url = args.get("target")
-                form_id = args.get("form_identifier") # ex: "login-form" ou "//form[1]"
+                form_id = args.get("form_identifier") # ex: "login-form" or "//form[1]"
                 payloads = args.get("input_payloads") # ex: {"user": "admin", "pass": "' or 1=1--"}
                 if not all([target_url, form_id, payloads]):
-                    return {"status": "error", "error": "Arguments manquants pour test_form_payload"}
+                    return {"status": "error", "error": "Missing arguments for test_form_payload"}
                 if '://' not in target_url: target_url = f"http://{target_url}"
                 return await self.python_tools.test_form_payload(target_url, form_id, payloads)
                 
             elif tool == "fetch_url":
                 target_url = args.get("target")
-                if not target_url: return {"status": "error", "error": "Cible URL manquante"}
+                if not target_url: return {"status": "error", "error": "Missing URL target"}
                 return await self.python_tools.fetch_url(target_url)
             
             # Session Management Tool (TASK 1)
@@ -452,7 +462,7 @@ If you cannot suggest a fix, respond with:
                 action = args.get("action")
                 credentials = args.get("credentials", {})
                 if not action:
-                    return {"status": "error", "error": "Action manquante (login/logout)"}
+                    return {"status": "error", "error": "Missing action (login/logout)"}
                 return await self.python_tools.manage_session(action, credentials)
             
             # Multi-Session Management for Privilege Escalation Testing
@@ -462,9 +472,9 @@ If you cannot suggest a fix, respond with:
                 credentials = args.get("credentials", {})
                 
                 if not action:
-                    return {"status": "error", "error": "Action manquante (login/logout/list)"}
+                    return {"status": "error", "error": "Missing action (login/logout/list)"}
                 if not session_name and action != "list":
-                    return {"status": "error", "error": "Session name manquant (e.g., 'Session_Admin', 'Session_User')"}
+                    return {"status": "error", "error": "Missing session name (e.g., 'Session_Admin', 'Session_User')"}
                 
                 return await self.python_tools.manage_multi_session(action, session_name, credentials)
             
@@ -473,9 +483,9 @@ If you cannot suggest a fix, respond with:
                 session_name = args.get("session_name")
                 
                 if not original_request:
-                    return {"status": "error", "error": "Original request data manquant"}
+                    return {"status": "error", "error": "Missing original request data"}
                 if not session_name:
-                    return {"status": "error", "error": "Session name manquant"}
+                    return {"status": "error", "error": "Missing session name"}
                 
                 return await self.python_tools.replay_request_with_session(original_request, session_name)
             
@@ -488,7 +498,7 @@ If you cannot suggest a fix, respond with:
                 evidence = args.get("evidence", "")
                 
                 if not all([finding_type, url, severity]):
-                    return {"status": "error", "error": "Arguments manquants (type, url, severity requis)"}
+                    return {"status": "error", "error": "Missing arguments (type, url, severity required)"}
                 
                 finding_id = self.db.add_finding(finding_type, url, severity, description, evidence)
                 if finding_id > 0:
@@ -506,7 +516,7 @@ If you cannot suggest a fix, respond with:
                 target = args.get("target")
                 scan_type = args.get("scan_type")
                 if not target:
-                    return {"status": "error", "error": "Target manquant"}
+                    return {"status": "error", "error": "Missing target"}
                 
                 is_scanned = self.db.is_scanned(target, scan_type)
                 return {"status": "success", "data": {"target": target, "scan_type": scan_type, "is_scanned": is_scanned}}
@@ -517,7 +527,7 @@ If you cannot suggest a fix, respond with:
                 result = args.get("result", "")
                 
                 if not all([target, scan_type]):
-                    return {"status": "error", "error": "Arguments manquants (target, scan_type requis)"}
+                    return {"status": "error", "error": "Missing arguments (target, scan_type required)"}
                 
                 success = self.db.mark_scanned(target, scan_type, result)
                 if success:
@@ -535,7 +545,7 @@ If you cannot suggest a fix, respond with:
                 full_page = args.get("full_page", False)
                 
                 if not target_url:
-                    return {"status": "error", "error": "URL manquante"}
+                    return {"status": "error", "error": "Missing URL"}
                 
                 if '://' not in target_url:
                     target_url = f"http://{target_url}"
@@ -558,10 +568,10 @@ If you cannot suggest a fix, respond with:
                 element_id = args.get("element_id")
                 
                 if not target_url:
-                    return {"status": "error", "error": "URL manquante"}
+                    return {"status": "error", "error": "Missing URL"}
                 
                 if element_id is None:
-                    return {"status": "error", "error": "element_id manquant"}
+                    return {"status": "error", "error": "Missing element_id"}
                 
                 if '://' not in target_url:
                     target_url = f"http://{target_url}"
@@ -1011,12 +1021,13 @@ Respond with ONLY the Python code, no explanation:
             # Write the script to a temporary file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 # Inject input data as a variable
+                escaped_input = input_data.replace('"', '\\"')
                 full_script = f'''
 import json
 import sys
 
 # Input data from tool
-INPUT_DATA = """{input_data.replace('"', '\\"')}"""
+INPUT_DATA = """{escaped_input}"""
 
 {python_code}
 '''

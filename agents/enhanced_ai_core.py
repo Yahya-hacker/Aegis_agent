@@ -1,5 +1,5 @@
 # agents/enhanced_ai_core.py
-# --- VERSION 7.5 - OpenRouter Multi-LLM Enhanced with Environment-based Configuration ---
+# --- VERSION 8.0 - OpenRouter Multi-LLM Enhanced with Environment-based Configuration ---
 
 import asyncio
 import json
@@ -824,7 +824,7 @@ class CortexMemory:
 
 class EnhancedAegisAI:
     """
-    Enhanced AI Core v7.5 - Powered by Four Specialized LLMs via OpenRouter
+    Enhanced AI Core v8.0 - Powered by Four Specialized LLMs via OpenRouter
     
     This class orchestrates four LLMs from OpenRouter API, all configurable via environment:
     1. Strategic Model (default: Hermes 3 Llama 70B) - Strategic planning, triage, and decision-making
@@ -1229,6 +1229,13 @@ DATABASE STATUS (Avoid Duplicate Work):
         
         system_prompt = f"""You are an advanced autonomous penetration testing agent with sophisticated reasoning capabilities.
 Your task is to decide the next action based on mission rules, observations, and learned patterns.
+
+CRITICAL WORKFLOW INSTRUCTIONS:
+1. **CUSTOMIZED PLANNING**: Do NOT run tools sequentially without a specific reason. Customize your plan based on the target's structure.
+2. **RULE ADHERENCE**: Strictly follow BBP rules. If "No DoS" is specified, use stealthy tool options.
+3. **STOP & REASON**: If you struggle or hit a dead end, STOP, reason about the problem, and propose a new approach. Do not blindly retry.
+4. **VISUAL FIRST**: For web targets, prioritize visual analysis to understand the application structure before launching scans.
+5. **SELECTIVE TOOLING**: Only run tools if there is a clear reason based on previous findings. Avoid unnecessary noise.
 
 MISSION RULES:
 {bbp_rules}

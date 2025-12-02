@@ -4,5 +4,35 @@
     "target": "test.com",
     "result_summary": "Success",
     "timestamp": "2025-11-15T10:29:36.036533"
+  },
+  {
+    "action": "run_sqlmap",
+    "target": "testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2025-12-02T13:03:31.933289"
+  },
+  {
+    "action": "fetch_url",
+    "target": "https://testphp.com/login",
+    "result_summary": "data received",
+    "timestamp": "2025-12-02T13:27:29.347293"
+  },
+  {
+    "action": "discover_interactables",
+    "target": "testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2025-12-02T14:48:11.251246"
+  },
+  {
+    "action": "capture_screenshot_som",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2025-12-02T14:57:20.331112"
+  },
+  {
+    "action": "discover_interactables",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2025-12-02T15:00:30.359427"
   }
 ]

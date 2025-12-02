@@ -1,6 +1,6 @@
 """
-Analyse de cible et collecte de renseignements
-Version V8 - Gestion de session persistante avec nettoyage approprié
+Target analysis and intelligence gathering
+Version 8.0 - Persistent session management with proper cleanup
 """
 
 import aiohttp
@@ -11,44 +11,44 @@ from urllib.parse import urlparse
 
 class TargetAnalyzer:
     """
-    Analyseur de cible avec gestion de session aiohttp persistante
-    Supporte le protocole de gestionnaire de contexte asynchrone pour un nettoyage propre
+    Target analyzer with persistent aiohttp session management
+    Supports async context manager protocol for clean cleanup
     """
     
     def __init__(self, session: Optional[aiohttp.ClientSession] = None):
         """
-        Initialiser l'analyseur de cible
+        Initialize the target analyzer
         
         Args:
-            session: Session aiohttp existante à utiliser. Si None, une nouvelle sera créée.
+            session: Existing aiohttp session to use. If None, a new one will be created.
         """
         self._session = session
-        self._owns_session = session is None  # Suivre si nous possédons la session
+        self._owns_session = session is None  # Track if we own the session
     
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Obtenir ou créer la session aiohttp"""
+        """Get or create aiohttp session"""
         if self._session is None:
             self._session = aiohttp.ClientSession()
         return self._session
     
     async def close(self) -> None:
-        """Fermer la session si nous la possédons"""
+        """Close the session if we own it"""
         if self._session is not None and self._owns_session:
             await self._session.close()
             self._session = None
     
     async def __aenter__(self) -> 'TargetAnalyzer':
-        """Support du gestionnaire de contexte asynchrone"""
+        """Async context manager support"""
         await self._get_session()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Support du gestionnaire de contexte asynchrone - nettoyage"""
+        """Async context manager support - cleanup"""
         await self.close()
         
     async def analyze_target(self, target_url: str) -> Dict[str, Any]:
-        """Analyse complète de la cible"""
-        print(f"🔍 Analyse de la cible: {target_url}")
+        """Complete target analysis"""
+        print(f"🔍 Analyzing target: {target_url}")
         
         analysis: Dict[str, Any] = {
             "target": target_url,
@@ -63,21 +63,21 @@ class TargetAnalyzer:
         try:
             session = await self._get_session()
             
-            # Analyser la cible principale
+            # Analyze main target
             main_analysis = await self._analyze_url(session, target_url)
             analysis.update(main_analysis)
             
-            # Vérifier les endpoints communs
+            # Check common endpoints
             common_endpoints = await self._check_common_endpoints(session, target_url)
             analysis["accessible_endpoints"] = common_endpoints
                 
         except Exception as e:
-            analysis["error"] = f"Échec de l'analyse: {str(e)}"
+            analysis["error"] = f"Analysis failed: {str(e)}"
             
         return analysis
     
     async def _analyze_url(self, session: aiohttp.ClientSession, url: str) -> Dict[str, Any]:
-        """Analyser une seule URL"""
+        """Analyze a single URL"""
         try:
             timeout = aiohttp.ClientTimeout(total=10)
             async with session.get(url, timeout=timeout, ssl=False) as response:
@@ -94,17 +94,17 @@ class TargetAnalyzer:
                 return analysis
                 
         except Exception as e:
-            return {"error": f"Échec de l'analyse de {url}: {str(e)}"}
+            return {"error": f"Failed to analyze {url}: {str(e)}"}
     
     def _extract_security_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
-        """Extraire les en-têtes liés à la sécurité"""
+        """Extract security-related headers"""
         security_headers: Dict[str, str] = {}
         important_headers = [
             'content-security-policy', 'x-frame-options', 'x-content-type-options',
             'strict-transport-security', 'x-xss-protection', 'referrer-policy'
         ]
         
-        # Créer un dictionnaire avec les clés en minuscules une seule fois
+        # Create dictionary with lowercase keys once
         headers_lower = {k.lower(): v for k, v in headers.items()}
         
         for header in important_headers:
@@ -114,10 +114,10 @@ class TargetAnalyzer:
         return security_headers
     
     def _extract_server_info(self, headers: Dict[str, str]) -> Dict[str, str]:
-        """Extraire les informations du serveur à partir des en-têtes"""
+        """Extract server information from headers"""
         server_info: Dict[str, str] = {}
         
-        # Vérifier de manière insensible à la casse
+        # Check case-insensitively
         headers_lower = {k.lower(): v for k, v in headers.items()}
         
         if 'server' in headers_lower:
@@ -130,13 +130,13 @@ class TargetAnalyzer:
         return server_info
     
     async def _detect_technologies(self, headers: Dict[str, str], url: str) -> List[str]:
-        """Détecter les technologies utilisées par la cible"""
+        """Detect technologies used by the target"""
         technologies: List[str] = []
         
-        # Créer une version minuscule des en-têtes
+        # Create lowercase version of headers
         headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
         
-        # Détecter à partir des en-têtes
+        # Detect from headers
         server = headers_lower.get('server', '')
         powered_by = headers_lower.get('x-powered-by', '')
         
@@ -151,7 +151,7 @@ class TargetAnalyzer:
         if 'asp.net' in powered_by:
             technologies.append('ASP.NET')
             
-        # Détecter à partir des patterns d'URL
+        # Detect from URL patterns
         url_lower = url.lower()
         if '.php' in url_lower:
             technologies.append('PHP')
@@ -160,10 +160,10 @@ class TargetAnalyzer:
         if '.jsp' in url_lower:
             technologies.append('JSP')
             
-        return list(set(technologies))  # Supprimer les doublons
+        return list(set(technologies))  # Remove duplicates
     
     async def _check_common_endpoints(self, session: aiohttp.ClientSession, base_url: str) -> List[Dict[str, Any]]:
-        """Vérifier les endpoints communs accessibles"""
+        """Check accessible common endpoints"""
         common_paths = [
             '/admin', '/login', '/dashboard', '/api', '/robots.txt',
             '/.git', '/backup', '/config', '/phpinfo.php', '/test'

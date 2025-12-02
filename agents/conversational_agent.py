@@ -1,12 +1,12 @@
 # agents/conversational_agent.py
-# --- VERSION MODIFIÉE ET CORRIGÉE ---
+# --- MODIFIED AND CORRECTED VERSION ---
 
 import asyncio
 import re
 import json
 from typing import Dict, List, Any
 import logging
-from agents.field_tester import AegisFieldTester # <-- IMPORT AJOUTÉ
+from agents.field_tester import AegisFieldTester # <-- IMPORT ADDED
 from agents.learning_engine import AegisLearningEngine
 from utils.reasoning_display import get_reasoning_display
 
@@ -14,20 +14,20 @@ logger = logging.getLogger(__name__)
 
 class AegisConversation:
     """
-    Interface de conversation et orchestrateur de la BOUCLE D'AGENT AUTONOME.
+    Conversation interface and AUTONOMOUS AGENT LOOP orchestrator.
     """
     
     def __init__(self, ai_core):
         self.ai_core = ai_core
-        self.agent_memory = [] # Mémoire pour la boucle d'agent
-        self.global_findings = [] # Stocke toutes les trouvailles
+        self.agent_memory = [] # Memory for agent loop
+        self.global_findings = [] # Stores all findings
         # Initialize learning engine if not already present
         learning_engine = getattr(ai_core, 'learning_engine', None) or AegisLearningEngine()
-        self.field_tester = AegisFieldTester(learning_engine) # <-- MODULE AJOUTÉ avec learning_engine
+        self.field_tester = AegisFieldTester(learning_engine) # <-- MODULE ADDED with learning_engine
         self.reasoning_display = get_reasoning_display(verbose=True)
     
     async def start(self):
-        """Démarre l'interface de conversation."""
+        """Starts the conversation interface."""
         self._print_welcome()
         
         # Conversation history for triage_mission
@@ -69,12 +69,12 @@ class AegisConversation:
                         rules = triage_result.get("rules", "")
                         
                         if not target:
-                            print("❌ Erreur: Cible non extraite par le triage.")
+                            print("❌ Error: Target not extracted by triage.")
                             continue
                         
-                        print(f"\n✅ Mission prête à démarrer!")
-                        print(f"   Cible: {target}")
-                        print(f"   Règles: {rules[:100]}...")
+                        print(f"\n✅ Mission ready to start!")
+                        print(f"   Target: {target}")
+                        print(f"   Rules: {rules[:100]}...")
                         
                         # Start the autonomous loop with extracted information
                         await self.run_autonomous_loop_with_triage(target, rules)
@@ -83,8 +83,8 @@ class AegisConversation:
                         conversation_history = []
                         
                     elif triage_result.get("response_type") == "error":
-                        error_msg = triage_result.get("text", "Erreur inconnue")
-                        print(f"❌ Erreur de triage: {error_msg}")
+                        error_msg = triage_result.get("text", "Unknown error")
+                        print(f"❌ Triage error: {error_msg}")
                         
                         # Add error to conversation history
                         conversation_history.append({
@@ -92,24 +92,24 @@ class AegisConversation:
                             "content": f"Error: {error_msg}"
                         })
                     else:
-                        print(f"⚠️ Type de réponse inattendu: {triage_result.get('response_type')}")
+                        print(f"⚠️ Unexpected response type: {triage_result.get('response_type')}")
                     
             except KeyboardInterrupt:
                 await self._handle_exit()
                 break
             except Exception as e:
-                logger.error(f"Erreur de conversation : {e}", exc_info=True)
-                print(f"❌ Erreur critique: {e}")
+                logger.error(f"Conversation error : {e}", exc_info=True)
+                print(f"❌ Critical error: {e}")
     
     async def _get_user_input(self) -> str:
         try:
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, lambda: input("\n🧑‍💻 VOUS: ").strip())
+            return await loop.run_in_executor(None, lambda: input("\n🧑‍💻 YOU: ").strip())
         except (EOFError, KeyboardInterrupt):
             raise
 
     def _extract_target(self, text: str) -> str:
-        """Extrait le domaine cible."""
+        """Extracts the target domain."""
         url_pattern = r'https?://([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
         matches = re.findall(url_pattern, text)
         if matches:
@@ -118,37 +118,101 @@ class AegisConversation:
 
     async def run_autonomous_loop_with_triage(self, target: str, rules: str):
         """
-        C'EST LA BOUCLE D'AGENT PRINCIPALE (refactored to use triage_mission).
-        Penser -> Proposer -> Approuver -> Agir -> Observer
+        THIS IS THE MAIN AGENT LOOP (refactored to use triage_mission).
+        Think -> Propose -> Approve -> Act -> Observe
         
         Args:
             target: Target extracted by triage_mission
             rules: Rules/scope extracted by triage_mission
         """
-        print(f"\n🤖 Aegis AI démarre la mission autonome pour {target}...")
+        print(f"\n🤖 Aegis AI starting autonomous mission for {target}...")
         
-        # --- DÉBUT DE LA BOUCLE D'AGENT ---
+        # --- START OF AGENT LOOP ---
         
         bbp_rules = f"""
-        - CIBLE PRINCIPALE : {target}
-        - RÈGLES BBP OFFICIELLES :
+        - MAIN TARGET : {target}
+        - OFFICIAL BBP RULES :
         {rules}
         """
         
-        print(f"📜 Règles chargées pour {target}.")
+        print(f"📜 Rules loaded for {target}.")
         
         from agents.scanner import AegisScanner
         scanner = AegisScanner(self.ai_core)
         
-        # Initialise la mémoire de l'agent
+        # Initializes agent memory
         self.agent_memory = [
-            {"type": "mission", "content": f"La mission est de scanner {target} en respectant les règles."},
+            {"type": "mission", "content": f"The mission is to scan {target} while respecting the rules."},
         ]
         self.global_findings = []
+
+        # --- PHASE 0: VISUAL RECONNAISSANCE & INITIAL PLANNING ---
+        print("\n" + "="*70)
+        print("👁️ PHASE 0: VISUAL RECONNAISSANCE & INITIAL PLANNING")
+        print("="*70)
         
-        for step_count in range(20): # Limite à 20 étapes
+        # 1. Take Screenshot & Analyze
+        print("📸 Screenshot capture and structural analysis...")
+        self.reasoning_display.show_thought(
+            "Performing initial visual reconnaissance to understand target structure",
+            thought_type="observation"
+        )
+        
+        # Create a visual recon action
+        visual_action = {
+            "tool": "capture_screenshot_som",
+            "args": {
+                "url": target,
+                "full_page": False
+            }
+        }
+        
+        visual_result = await scanner.execute_action(visual_action)
+        
+        if visual_result.get("status") == "success":
+            print("✅ Visual analysis completed.")
+            # We don't print the full base64 or mapping, just a summary
+            element_count = len(visual_result.get("element_mapping", {}))
+            print(f"   • {element_count} interactive elements identified")
+            
+            # Add to memory
+            self.agent_memory.append({
+                "type": "observation", 
+                "content": f"Initial Visual Analysis of {target}: Found {element_count} interactive elements. Screenshot captured."
+            })
+            
+            # 2. Generate Customized Plan
+            print("📝 Generating customized plan...")
+            self.reasoning_display.show_thought(
+                "Generating customized mission plan based on visual analysis and rules",
+                thought_type="planning"
+            )
+            
+            # Inject a specific instruction for the first step to force planning
+            self.agent_memory.append({
+                "type": "system_instruction",
+                "content": f"""
+                BASED ON THE VISUAL ANALYSIS OF {target} AND BBP RULES:
+                1. ANALYZE the application structure (e.g., Login page, Dashboard, E-commerce).
+                2. GENERATE a customized execution plan.
+                3. DO NOT run tools sequentially without reason.
+                4. IF BBP rules say "No DoS", use stealthy options.
+                5. IF you struggle, STOP, reason, and change approach.
+                
+                YOUR FIRST ACTION MUST BE TO OUTPUT THE PLAN.
+                """
+            })
+            
+        else:
+            print(f"⚠️ Initial visual analysis failed: {visual_result.get('error')}")
+            self.agent_memory.append({
+                "type": "observation",
+                "content": f"Initial visual recon failed: {visual_result.get('error')}. Proceeding with standard recon."
+            })
+        
+        for step_count in range(20): # Limit to 20 steps
             print("\n" + "="*70)
-            print(f"🧠 ÉTAPE D'AGENT {step_count + 1}/20")
+            print(f"🧠 AGENT STEP {step_count + 1}/20")
             
             # Show step start in reasoning display
             self.reasoning_display.show_thought(
@@ -162,8 +226,8 @@ class AegisConversation:
                 }
             )
             
-            # 1. PENSER: L'IA décide de la prochaine action
-            print("🧠 Aegis AI réfléchit...")
+            # 1. THINK: AI decides next action
+            print("🧠 Aegis AI is thinking...")
             self.reasoning_display.show_thought(
                 "Agent is analyzing current state and determining next action",
                 thought_type="analysis"
@@ -171,7 +235,7 @@ class AegisConversation:
             
             action = await self.ai_core.get_next_action_async(bbp_rules, self.agent_memory)
             
-            print(f"🤖 PROPOSITION IA : {action}")
+            print(f"🤖 AI PROPOSAL : {action}")
             
             # PHASE 4 TASK 8: Check for tool installation confirmation requests
             if isinstance(action, dict) and action.get("confirmation_required"):
@@ -219,24 +283,24 @@ class AegisConversation:
                         })
                         continue
             
-            # 2. GÉRER LES ACTIONS SYSTÈME
+            # 2. HANDLE SYSTEM ACTIONS
             tool = action.get("tool")
             args = action.get("args", {})
             
             if tool == "finish_mission":
-                print(f"🛡️ MISSION TERMINÉE : {args.get('reason')}")
+                print(f"🛡️ MISSION COMPLETED : {args.get('reason')}")
                 break
                 
             if tool == "ask_user_for_approval":
-                print(f"💡 REQUÊTE IA : {args.get('message')}")
-                # Tombe directement dans l'approbation humaine
+                print(f"💡 AI REQUEST : {args.get('message')}")
+                # Falls directly into human approval
             
             if tool == "system" or not tool:
-                print(f"⚠️ Alerte IA : {action.get('message', 'Action non valide')}")
-                self.agent_memory.append({"type": "observation", "content": "J'ai généré une action invalide. Je dois réessayer."})
+                print(f"⚠️ AI Alert : {action.get('message', 'Invalid action')}")
+                self.agent_memory.append({"type": "observation", "content": "I generated an invalid action. I must retry."})
                 continue 
 
-            # 3. APPROBATION HUMAINE (Human-in-the-Loop) with TASK 4: Semi-Autonomous Mode
+            # 3. HUMAN APPROVAL (Human-in-the-Loop) with TASK 4: Semi-Autonomous Mode
             # Check if tool is intrusive
             from utils.dynamic_tool_loader import get_tool_loader
             tool_loader = get_tool_loader()
@@ -244,24 +308,24 @@ class AegisConversation:
             
             # TASK 4: Auto-approve non-intrusive tools
             if not is_intrusive:
-                print(f"✅ Action auto-approuvée (Reconnaissance non-intrusive)")
+                print(f"✅ Action auto-approved (Non-intrusive reconnaissance)")
                 response = 'o'  # Auto-approve
             else:
                 # Intrusive tool: ask for approval
-                print(f"⚠️ ATTENTION: Action INTRUSIVE détectée!")
+                print(f"⚠️ WARNING: INTRUSIVE Action detected!")
                 try:
                     loop = asyncio.get_event_loop()
-                    response = await loop.run_in_executor(None, lambda: input("❓ Approuvez-vous cette action ? (o/n/q) : ").lower().strip())
+                    response = await loop.run_in_executor(None, lambda: input("❓ Do you approve this action? (y/n/q) : ").lower().strip())
                 except EOFError:
                     break
             
             if response in ['q', 'quit', 'exit']:
-                print("🛑 Mission arrêtée par l'utilisateur.")
+                print("🛑 Mission stopped by user.")
                 break
                 
             if response in ['o', 'oui', 'y', 'yes', '']:
-                # 4. AGIR: Exécuter l'action
-                print(f"🚀 Exécution : {tool}...")
+                # 4. ACT: Execute action
+                print(f"🚀 Execution : {tool}...")
                 
                 self.reasoning_display.show_thought(
                     f"Executing approved action: {tool}",
@@ -288,11 +352,11 @@ class AegisConversation:
                     except Exception as e:
                         logger.warning(f"Failed to extract facts: {e}")
                 
-                # 5. OBSERVER: Ajouter le résultat à la mémoire
-                print(f"📝 Résultat : {result.get('status', 'error')}")
+                # 5. OBSERVE: Add result to memory
+                print(f"📝 Result : {result.get('status', 'error')}")
                 
                 if result.get("status") == "success":
-                    data = result.get("data", "Aucune donnée retournée.")
+                    data = result.get("data", "No data returned.")
                     
                     # Record successful action for learning
                     if learning_engine:
@@ -326,8 +390,8 @@ class AegisConversation:
                     self.agent_memory.append({"type": "observation", "content": observation})
                     
                 else:
-                    # Dire à l'IA qu'il y a eu une erreur
-                    error_msg = result.get('error', 'Erreur inconnue')
+                    # Tell AI there was an error
+                    error_msg = result.get('error', 'Unknown error')
                     
                     # Record failed attempt for learning
                     if learning_engine:
@@ -340,10 +404,10 @@ class AegisConversation:
                         metadata={"action": tool, "error": error_msg}
                     )
                     
-                    self.agent_memory.append({"type": "observation", "content": f"Action {tool} ÉCHOUÉE. Erreur: {error_msg}. Je dois essayer autre chose."})
+                    self.agent_memory.append({"type": "observation", "content": f"Action {tool} FAILED. Error: {error_msg}. I must try something else."})
                     
             else:
-                print("❌ Action annulée par l'utilisateur.")
+                print("❌ Action cancelled by user.")
                 
                 self.reasoning_display.show_thought(
                     f"User rejected the proposed action: {tool}",
@@ -448,20 +512,20 @@ Agent completed {step_count} autonomous steps
 
     def _print_welcome(self):
         print("""
-🛡️  AEGIS AI - AGENT AUTONOME DE PENTEST (v7.0 - Multi-LLM)
+🛡️  AEGIS AI - AUTONOMOUS PENTEST AGENT (v8.0 - Multi-LLM)
 =============================================================
-🤖 Cerveaux Multi-LLM via OpenRouter API:
-   • Hermes 3 Llama 70B:     Planification stratégique et triage
-   • Dolphin 3.0 Mistral 24B: Analyse vulnérabilités et exploitation
-   • Qwen 2.5 72B:           Analyse code et génération de payloads
-🛠️  Mode:   Semi-Autonome (Recon auto-approuvée, Exploitation sur approbation)
-🔥 Cap.:   Session authentifiée, Base de données stratégique, Auto-apprentissage
+🤖 Multi-LLM Brains via OpenRouter API:
+   • Hermes 3 Llama 70B:     Strategic planning and triage
+   • Dolphin 3.0 Mistral 24B: Vulnerability analysis and exploitation
+   • Qwen 2.5 72B:           Code analysis and payload generation
+🛠️  Mode:   Semi-Autonomous (Auto-approved Recon, Exploitation on approval)
+🔥 Cap.:   Authenticated Session, Strategic Database, Self-Learning
 
-Exemples de commandes:
+Example commands:
 • "scan example.com"
 • "bug bounty konghq.com"
 
-Type 'help' pour commandes ou 'quit' pour sortir.
+Type 'help' for commands or 'quit' to exit.
         """)
     
     def _print_help(self):
