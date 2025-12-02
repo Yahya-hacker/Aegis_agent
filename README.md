@@ -14,10 +14,10 @@
 
 Aegis v9.0 introduces a **unified single-LLM architecture** that simplifies operations while maintaining powerful capabilities:
 
-| Component | Model | Purpose |
-|-----------|-------|---------|
-| **Main LLM** | DeepSeek R1 | ALL tasks: planning, vulnerability analysis, code analysis, payload generation, reasoning |
-| **Visual LLM** | Qwen 2.5 VL | Screenshot/image analysis only |
+| Component | Model Identifier | Purpose |
+|-----------|-----------------|---------|
+| **Main LLM** | `deepseek/deepseek-r1` | ALL tasks: planning, vulnerability analysis, code analysis, payload generation, reasoning |
+| **Visual LLM** | `qwen/qwen2.5-vl-32b-instruct:free` | Screenshot/image analysis only |
 
 **Benefits of Unified Architecture:**
 - 🧠 **Consistent Reasoning** — Single context across all task types

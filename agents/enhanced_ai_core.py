@@ -18,9 +18,9 @@ from utils.database_manager import get_database
 logger = logging.getLogger(__name__)
 
 # VERSION 9.0 - Single LLM Architecture
-# Uses UnifiedLLMOrchestrator with one main LLM (DeepSeek R1) for all tasks
-# Visual LLM (Qwen 2.5 VL) is only used for image/screenshot analysis
-# All models configurable via .env file
+# Uses UnifiedLLMOrchestrator with one main LLM (default: deepseek/deepseek-r1) for all tasks
+# Visual LLM (qwen/qwen2.5-vl-32b-instruct) is only used for image/screenshot analysis
+# All models configurable via .env file (MAIN_MODEL, VISUAL_MODEL)
 
 
 async def parse_json_robust(content: str, orchestrator: Optional[UnifiedLLMOrchestrator] = None, context: str = "") -> Optional[Dict]:
@@ -826,12 +826,12 @@ class CortexMemory:
 
 class EnhancedAegisAI:
     """
-    Enhanced AI Core v9.0 - Unified Single-LLM Architecture with DeepSeek R1
+    Enhanced AI Core v9.0 - Unified Single-LLM Architecture
     
     This class uses a SINGLE main LLM for ALL tasks:
-    - Main Model (default: DeepSeek R1) - Handles everything: strategic planning, 
+    - Main Model (default: deepseek/deepseek-r1) - Handles everything: strategic planning, 
       vulnerability analysis, code analysis, payload generation, reasoning, and decision-making
-    - Visual Model (default: Qwen 2.5 VL) - Only for image/screenshot analysis
+    - Visual Model (default: qwen/qwen2.5-vl-32b-instruct:free) - Only for image/screenshot analysis
     
     This replaces the previous multi-LLM architecture for:
     - Simpler operation and reasoning consistency
@@ -839,8 +839,8 @@ class EnhancedAegisAI:
     - Unified context across all task types
     
     All models configurable via .env file:
-    - MAIN_MODEL or DEEPSEEK_MODEL: The unified LLM for all tasks
-    - VISUAL_MODEL: The visual LLM for image analysis
+    - MAIN_MODEL or DEEPSEEK_MODEL: The unified LLM for all tasks (e.g., deepseek/deepseek-r1)
+    - VISUAL_MODEL: The visual LLM for image analysis (e.g., qwen/qwen2.5-vl-32b-instruct:free)
     
     System prompts are also configurable via .env file.
     """
@@ -1749,9 +1749,13 @@ Respond with a detailed analysis covering all three perspectives."""
             
             content = response['content']
             
+            # Note: In unified mode, all fields contain the same comprehensive analysis.
+            # The redundant fields (strategic_assessment, vulnerability_analysis, technical_recommendations)
+            # are kept for backward compatibility with code that expects the multi-LLM response format.
+            # Use 'comprehensive_assessment' for the full unified analysis.
             return {
                 "comprehensive_assessment": content,
-                "strategic_assessment": content,  # For backward compatibility
+                "strategic_assessment": content,
                 "vulnerability_analysis": content,
                 "technical_recommendations": content,
                 "model_used": response['role']

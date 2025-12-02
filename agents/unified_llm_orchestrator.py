@@ -68,7 +68,7 @@ class UnifiedLLMOrchestrator:
         self.reasoning_display = get_reasoning_display(verbose=True)
         self.max_retries = 3
         self.retry_delay = 2
-        self.request_timeout = 120  # Increased for DeepSeek R1's reasoning
+        self.request_timeout = 120  # Set higher for complex reasoning tasks
         
         # Persistent session for API connection
         self._session: Optional[aiohttp.ClientSession] = None
@@ -76,7 +76,7 @@ class UnifiedLLMOrchestrator:
         
         # Load default generation parameters
         self.default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
-        self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "8192"))  # Increased for complex reasoning
+        self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "8192"))  # Higher for complex reasoning tasks
         
         # Usage tracking
         self._initialize_usage_tracker()
