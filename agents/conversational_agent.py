@@ -201,7 +201,7 @@ class AegisConversation:
                 return command_text
             else:
                 # No UI commands, wait briefly and check again or fall through to terminal
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)  # Reduced for more responsive UI interaction
         
         # Fall back to terminal input
         try:

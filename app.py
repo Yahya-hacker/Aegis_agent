@@ -101,17 +101,17 @@ def extract_thought_content(text: str) -> Tuple[Optional[str], str]:
         thought_content.append(f"**DeepSeek Reasoning:**\n{think_match.group(1).strip()}")
         remaining_text = re.sub(r'<think>.*?</think>', '', remaining_text, flags=re.DOTALL).strip()
     
-    # Extract [PLANNING] sections
-    planning_match = re.search(r'\[PLANNING\](.*?)(?:\[|$)', text, re.DOTALL)
+    # Extract [PLANNING] sections - use positive lookahead to avoid consuming next bracket
+    planning_match = re.search(r'\[PLANNING\](.*?)(?=\[|$)', text, re.DOTALL)
     if planning_match:
         thought_content.append(f"**Planning:**\n{planning_match.group(1).strip()}")
-        remaining_text = re.sub(r'\[PLANNING\].*?(?:\[|$)', '', remaining_text, flags=re.DOTALL).strip()
+        remaining_text = re.sub(r'\[PLANNING\].*?(?=\[|$)', '', remaining_text, flags=re.DOTALL).strip()
     
-    # Extract [ANALYSIS] sections
-    analysis_match = re.search(r'\[ANALYSIS\](.*?)(?:\[|$)', text, re.DOTALL)
+    # Extract [ANALYSIS] sections - use positive lookahead to avoid consuming next bracket
+    analysis_match = re.search(r'\[ANALYSIS\](.*?)(?=\[|$)', text, re.DOTALL)
     if analysis_match:
         thought_content.append(f"**Analysis:**\n{analysis_match.group(1).strip()}")
-        remaining_text = re.sub(r'\[ANALYSIS\].*?(?:\[|$)', '', remaining_text, flags=re.DOTALL).strip()
+        remaining_text = re.sub(r'\[ANALYSIS\].*?(?=\[|$)', '', remaining_text, flags=re.DOTALL).strip()
     
     if thought_content:
         return "\n\n".join(thought_content), remaining_text
@@ -205,7 +205,7 @@ def parse_logs(log_file: Path) -> List[Dict[str, Any]]:
                 event_type = "result"
             elif "✅ Response received from" in message:
                 event_type = "llm_response"
-            elif "🧠 Aegis AI is thinking" in message or "🧠" in message:
+            elif "🧠 Aegis AI is thinking" in message or "🧠 " in message:
                 event_type = "thinking"
             elif "🛡️ MISSION COMPLETED" in message:
                 event_type = "mission_complete"
