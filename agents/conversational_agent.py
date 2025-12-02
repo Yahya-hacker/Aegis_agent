@@ -1,10 +1,12 @@
 # agents/conversational_agent.py
 # --- MODIFIED AND CORRECTED VERSION ---
+# --- ENHANCED WITH UI COMMAND QUEUE SUPPORT ---
 
 import asyncio
 import re
 import json
-from typing import Dict, List, Any
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 import logging
 from agents.field_tester import AegisFieldTester # <-- IMPORT ADDED
 from agents.learning_engine import AegisLearningEngine
@@ -12,9 +14,78 @@ from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
 
+# Path to the command queue file for UI-agent communication
+COMMAND_QUEUE_PATH = Path("data/command_queue.json")
+
+
+def load_pending_command() -> Optional[Dict[str, Any]]:
+    """
+    Load the oldest pending command from the command queue.
+    
+    Returns:
+        The oldest pending command dict, or None if no pending commands
+    """
+    if not COMMAND_QUEUE_PATH.exists():
+        return None
+    
+    try:
+        with open(COMMAND_QUEUE_PATH, 'r') as f:
+            data = json.load(f)
+        
+        commands = data.get('commands', [])
+        
+        # Find the first pending command
+        for cmd in commands:
+            if cmd.get('status') == 'pending':
+                return cmd
+        
+        return None
+    except (json.JSONDecodeError, IOError) as e:
+        logger.warning(f"Failed to load command queue: {e}")
+        return None
+
+
+def mark_command_processed(command_id: int, status: str = 'processed') -> bool:
+    """
+    Mark a command as processed in the queue.
+    
+    Args:
+        command_id: The ID of the command to mark
+        status: The new status ('processed', 'error', etc.)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not COMMAND_QUEUE_PATH.exists():
+        return False
+    
+    try:
+        with open(COMMAND_QUEUE_PATH, 'r') as f:
+            data = json.load(f)
+        
+        commands = data.get('commands', [])
+        
+        # Find and update the command
+        for cmd in commands:
+            if cmd.get('id') == command_id:
+                cmd['status'] = status
+                break
+        
+        # Save updated queue
+        with open(COMMAND_QUEUE_PATH, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        return True
+    except (json.JSONDecodeError, IOError) as e:
+        logger.warning(f"Failed to update command queue: {e}")
+        return False
+
+
 class AegisConversation:
     """
     Conversation interface and AUTONOMOUS AGENT LOOP orchestrator.
+    
+    Supports both terminal input and UI-based command queue for two-way interaction.
     """
     
     def __init__(self, ai_core):
@@ -25,6 +96,7 @@ class AegisConversation:
         learning_engine = getattr(ai_core, 'learning_engine', None) or AegisLearningEngine()
         self.field_tester = AegisFieldTester(learning_engine) # <-- MODULE ADDED with learning_engine
         self.reasoning_display = get_reasoning_display(verbose=True)
+        self.use_ui_queue = False  # Flag to enable/disable UI queue polling
     
     async def start(self):
         """Starts the conversation interface."""
@@ -42,6 +114,11 @@ class AegisConversation:
                     break
                 elif user_input.lower() in ['help', '?']:
                     self._print_help()
+                elif user_input.lower() == 'ui':
+                    # Enable UI queue mode
+                    self.use_ui_queue = True
+                    print("📱 UI mode enabled. Commands will be read from the Streamlit dashboard.")
+                    print("   Run: streamlit run app.py")
                 else:
                     # Add user input to conversation history
                     conversation_history.append({
@@ -102,11 +179,59 @@ class AegisConversation:
                 print(f"❌ Critical error: {e}")
     
     async def _get_user_input(self) -> str:
+        """
+        Get user input from terminal or UI command queue.
+        
+        If UI mode is enabled, checks the command queue first.
+        Falls back to terminal input if no UI commands are pending.
+        """
+        # Check for UI commands first if UI mode is enabled
+        if self.use_ui_queue:
+            pending_cmd = load_pending_command()
+            if pending_cmd:
+                command_text = pending_cmd.get('command', '')
+                command_id = pending_cmd.get('id')
+                
+                # Mark as processed
+                mark_command_processed(command_id, 'processing')
+                
+                print(f"\n📱 [UI Command]: {command_text}")
+                logger.info(f"Received UI command: {command_text}")
+                
+                return command_text
+            else:
+                # No UI commands, wait briefly and check again or fall through to terminal
+                await asyncio.sleep(0.1)  # Reduced for more responsive UI interaction
+        
+        # Fall back to terminal input
         try:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, lambda: input("\n🧑‍💻 YOU: ").strip())
         except (EOFError, KeyboardInterrupt):
             raise
+
+    async def _check_ui_command(self) -> Optional[str]:
+        """
+        Check for a pending UI command during the autonomous loop.
+        
+        This allows users to send commands from the UI while the agent is running.
+        
+        Returns:
+            Command string if found, None otherwise
+        """
+        pending_cmd = load_pending_command()
+        if pending_cmd:
+            command_text = pending_cmd.get('command', '')
+            command_id = pending_cmd.get('id')
+            
+            # Mark as processed
+            mark_command_processed(command_id, 'processing')
+            
+            print(f"\n📱 [UI Command received]: {command_text}")
+            logger.info(f"Received UI command during mission: {command_text}")
+            
+            return command_text
+        return None
 
     def _extract_target(self, text: str) -> str:
         """Extracts the target domain."""
@@ -213,6 +338,47 @@ class AegisConversation:
         for step_count in range(20): # Limit to 20 steps
             print("\n" + "="*70)
             print(f"🧠 AGENT STEP {step_count + 1}/20")
+            
+            # CHECK FOR UI COMMANDS at each step
+            # This allows users to send commands from the Streamlit dashboard during the mission
+            ui_command = await self._check_ui_command()
+            if ui_command:
+                # Handle special UI commands
+                ui_cmd_lower = ui_command.lower().strip()
+                
+                if ui_cmd_lower in ['stop', 'quit', 'exit', 'abort']:
+                    print(f"🛑 Mission stopped by UI command: {ui_command}")
+                    self.agent_memory.append({
+                        "type": "user_command",
+                        "content": f"User requested stop via UI: {ui_command}"
+                    })
+                    break
+                
+                elif ui_cmd_lower.startswith('inject:'):
+                    # Allow injecting context/instructions into agent memory
+                    injected_content = ui_command[7:].strip()
+                    print(f"💉 Injecting user instruction: {injected_content}")
+                    self.agent_memory.append({
+                        "type": "user_instruction",
+                        "content": f"USER INSTRUCTION: {injected_content}"
+                    })
+                    
+                elif ui_cmd_lower.startswith('focus:'):
+                    # Allow focusing on specific vulnerability or area
+                    focus_target = ui_command[6:].strip()
+                    print(f"🎯 Focusing on: {focus_target}")
+                    self.agent_memory.append({
+                        "type": "user_instruction",
+                        "content": f"PRIORITY: User wants to focus on {focus_target}. Adjust your strategy accordingly."
+                    })
+                    
+                else:
+                    # Generic user feedback/command
+                    print(f"📝 User feedback received: {ui_command}")
+                    self.agent_memory.append({
+                        "type": "user_feedback",
+                        "content": f"User says: {ui_command}"
+                    })
             
             # Show step start in reasoning display
             self.reasoning_display.show_thought(
@@ -520,10 +686,12 @@ Agent completed {step_count} autonomous steps
    • Qwen 2.5 72B:           Code analysis and payload generation
 🛠️  Mode:   Semi-Autonomous (Auto-approved Recon, Exploitation on approval)
 🔥 Cap.:   Authenticated Session, Strategic Database, Self-Learning
+📱 UI:     Streamlit Dashboard (type 'ui' to enable UI command mode)
 
 Example commands:
 • "scan example.com"
 • "bug bounty konghq.com"
+• "ui" - Enable UI command mode (reads from Streamlit dashboard)
 
 Type 'help' for commands or 'quit' to exit.
         """)
@@ -537,6 +705,16 @@ AUTONOMOUS SCAN:
   -> Lance la boucle d'agent autonome. L'agent vous demandera
      de coller les règles BBP, puis proposera des actions
      étape par étape pour votre approbation.
+
+UI MODE:
+• "ui"
+  -> Enable UI command mode. Commands will be read from the
+     Streamlit dashboard (run: streamlit run app.py)
+
+UI COMMANDS (during mission):
+• "stop" / "quit" / "abort" - Stop the current mission
+• "inject: <instruction>" - Inject a user instruction into agent memory
+• "focus: <target>" - Focus the agent on a specific vulnerability/area
 
 QUICK ACTIONS:
 • "help" - Affiche ce message

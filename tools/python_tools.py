@@ -24,7 +24,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
+# NOTE: ChromeDriverManager removed to force usage of system chromedriver
+# This fixes version mismatch issues (e.g., ChromeDriver 114 vs Chrome 142)
 import nmap
 from typing import Dict, List, Any, Optional, Tuple
 from urllib.parse import urlparse
@@ -117,32 +118,36 @@ class PythonToolManager:
         """
         Initialize and return a Selenium Chrome WebDriver.
         
-        Implements self-healing: if WebDriver fails to find Chrome binary,
-        searches standard Linux paths before falling back to default.
+        Uses the system-installed chromedriver to ensure compatibility with
+        the installed Chrome/Chromium version. Does NOT use webdriver_manager
+        to avoid version mismatch issues.
         
         Returns:
             webdriver.Chrome: Configured Chrome WebDriver instance.
             
         Raises:
-            Exception: If Chrome binary cannot be found or WebDriver fails to initialize.
+            RuntimeError: If chromedriver or Chrome binary cannot be found.
         """
-        try:
-            # FORCE SYSTEM DRIVER as per manual repair instructions
-            # This ensures compatibility with the installed chromium version
-            system_driver = '/usr/bin/chromedriver'
-            if os.path.exists(system_driver):
-                logger.info(f"🔧 Forcing system chromedriver at: {system_driver}")
-                service = Service(system_driver)
+        # FORCE SYSTEM DRIVER ONLY - No webdriver_manager to avoid version mismatch
+        # This fixes: SessionNotCreatedException: This version of ChromeDriver only supports Chrome version 114
+        system_driver = '/usr/bin/chromedriver'
+        
+        if os.path.exists(system_driver) and os.access(system_driver, os.X_OK):
+            logger.info(f"🔧 Using system chromedriver at: {system_driver}")
+            service = Service(system_driver)
+        else:
+            # Try to discover chromedriver in PATH
+            discovered_driver = shutil.which("chromedriver")
+            if discovered_driver:
+                logger.info(f"🔧 Using discovered chromedriver at: {discovered_driver}")
+                service = Service(discovered_driver)
             else:
-                # Fallback if not found (though it should be there)
-                logger.warning(f"⚠️ System driver not found at {system_driver}, falling back to discovery")
-                discovered_driver = shutil.which("chromedriver")
-                if discovered_driver:
-                    service = Service(discovered_driver)
-                else:
-                    logger.info("🔧 System chromedriver not found, using webdriver_manager")
-                    service = Service(ChromeDriverManager().install())
-                
+                raise RuntimeError(
+                    "ChromeDriver not found at /usr/bin/chromedriver or in PATH. "
+                    "Please install chromedriver: apt install chromium-chromedriver"
+                )
+        
+        try:
             return webdriver.Chrome(service=service, options=self.selenium_options)
         except Exception as e:
             error_msg = str(e).lower()
@@ -155,14 +160,6 @@ class PythonToolManager:
                 if chrome_binary:
                     self.selenium_options.binary_location = chrome_binary
                     logger.info(f"🔧 Retrying with Chrome binary: {chrome_binary}")
-                    
-                    # Retry with system driver or manager
-                    system_driver = shutil.which("chromedriver")
-                    if system_driver:
-                        service = Service(system_driver)
-                    else:
-                        service = Service(ChromeDriverManager().install())
-                        
                     return webdriver.Chrome(service=service, options=self.selenium_options)
                 else:
                     raise RuntimeError(
