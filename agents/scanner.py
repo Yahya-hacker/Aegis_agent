@@ -1,5 +1,5 @@
 # agents/scanner.py
-# --- VERSION 8.0 - Full-Spectrum CTF & Red Team Operations ---
+# --- VERSION 9.0 - Full-Spectrum CTF & Red Team Operations (Unified LLM) ---
 
 import asyncio
 import json
@@ -33,7 +33,9 @@ class AegisScanner:
     """
     Executes granular actions decided by the AI brain.
     
-    v8.0 adds full-spectrum CTF and Red Team capabilities:
+    v9.0 - Updated for unified single-LLM architecture
+    
+    Features:
     - Cryptography (crypto_engine)
     - Reverse Engineering (reverse_engine)
     - Digital Forensics (forensics_lab)
@@ -131,9 +133,9 @@ If you cannot suggest a fix, respond with:
 """
         
         try:
-            # Call the Coder LLM for error correction
+            # Call the main LLM for error correction (unified architecture)
             response = await self.ai_core.orchestrator.call_llm(
-                'coder',
+                'main',  # Use main LLM in unified mode
                 [
                     {"role": "system", "content": "You are an expert in debugging security tools and command syntax."},
                     {"role": "user", "content": correction_prompt}
@@ -144,7 +146,7 @@ If you cannot suggest a fix, respond with:
             
             content = response.get('content', '')
             
-            # Use robust JSON parser from enhanced_ai_core instead of brittle regex+json.loads
+            # Use robust JSON parser from enhanced_ai_core
             correction = await parse_json_robust(
                 content,
                 orchestrator=self.ai_core.orchestrator,
@@ -164,7 +166,7 @@ If you cannot suggest a fix, respond with:
                     print(f"   New Arguments: {json.dumps(corrected_args, indent=2)}")
                     return corrected_args
                 else:
-                    logger.warning(f"❌ Coder LLM could not suggest a fix")
+                    logger.warning(f"❌ LLM could not suggest a fix")
                     print(f"\n❌ Self-Correction Failed for {tool}")
                     return None
             
@@ -957,9 +959,9 @@ Respond with ONLY the Python code, no explanation:
 ```"""
 
         try:
-            # Call the Coder LLM
+            # Call the main LLM (unified architecture)
             response = await self.ai_core.orchestrator.call_llm(
-                'coder',
+                'main',  # Use main LLM in unified mode
                 [
                     {"role": "system", "content": "You are an expert Python security programmer. Write clean, efficient code."},
                     {"role": "user", "content": fallback_prompt}
@@ -985,7 +987,7 @@ Respond with ONLY the Python code, no explanation:
                     "data": exec_result.get("output"),
                     "fallback_used": True,
                     "original_tool": tool_name,
-                    "message": f"Used Coder LLM fallback for {tool_name}"
+                    "message": f"Used LLM fallback for {tool_name}"
                 }
             else:
                 return {

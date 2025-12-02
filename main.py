@@ -54,11 +54,11 @@ async def main():
         print(f"❌ Error: Ensure your files are in the 'agents' folder.")
         sys.exit(1)
 
-    print("🚀 Starting Aegis AI Autonomous Agent with Multi-LLM...")
-    print("📋 Configured LLMs:")
-    print("   • Llama 70B: Strategic planning and triage")
-    print("   • Mixtral 8x7B: Vulnerability analysis and exploitation")
-    print("   • Qwen-coder: Code analysis and payload generation")
+    print("🚀 Starting Aegis AI Autonomous Agent with Unified LLM Architecture...")
+    print("📋 LLM Configuration (v9.0 - Single LLM Mode):")
+    print("   • Main LLM (DeepSeek R1): Strategic planning, vulnerability analysis, code analysis, reasoning")
+    print("   • Visual LLM: Screenshot and image analysis only")
+    print("   ℹ️  Configure via MAIN_MODEL or DEEPSEEK_MODEL environment variable")
 
     # Run dependency checks
     from utils.dependency_check import check_dependencies
@@ -66,7 +66,7 @@ async def main():
         print("❌ Startup cancelled due to missing dependencies.")
         sys.exit(1)
     
-    # TASK 3: Initialize dynamic tool loader
+    # Initialize dynamic tool loader
     print("\n🔧 Initializing dynamic tool arsenal...")
     tool_loader = await get_tool_loader_async()
     stats = tool_loader.get_statistics()

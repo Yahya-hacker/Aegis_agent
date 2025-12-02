@@ -678,15 +678,21 @@ Agent completed {step_count} autonomous steps
 
     def _print_welcome(self):
         print("""
-🛡️  AEGIS AI - AUTONOMOUS PENTEST AGENT (v8.0 - Multi-LLM)
+🛡️  AEGIS AI - AUTONOMOUS PENTEST AGENT (v9.0 - Unified LLM)
 =============================================================
-🤖 Multi-LLM Brains via OpenRouter API:
-   • Hermes 3 Llama 70B:     Strategic planning and triage
-   • Dolphin 3.0 Mistral 24B: Vulnerability analysis and exploitation
-   • Qwen 2.5 72B:           Code analysis and payload generation
+🤖 Unified Intelligence (Single LLM Architecture):
+   • Main LLM (DeepSeek R1):  ALL tasks - planning, analysis, 
+                               exploitation, code generation
+   • Visual LLM (Qwen VL):    Screenshot & image analysis only
+
 🛠️  Mode:   Semi-Autonomous (Auto-approved Recon, Exploitation on approval)
 🔥 Cap.:   Authenticated Session, Strategic Database, Self-Learning
 📱 UI:     Streamlit Dashboard (type 'ui' to enable UI command mode)
+
+This unified architecture provides:
+• Consistent reasoning across all task types
+• Simplified API management
+• Better context retention
 
 Example commands:
 • "scan example.com"

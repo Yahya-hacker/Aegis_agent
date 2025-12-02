@@ -1,5 +1,5 @@
 # agents/enhanced_ai_core.py
-# --- VERSION 8.0 - OpenRouter Multi-LLM Enhanced with Environment-based Configuration ---
+# --- VERSION 9.0 - Unified Single-LLM Architecture with DeepSeek R1 ---
 
 import asyncio
 import json
@@ -11,17 +11,19 @@ from pathlib import Path
 import networkx as nx
 from json_repair import repair_json
 from agents.learning_engine import AegisLearningEngine
-from agents.multi_llm_orchestrator import MultiLLMOrchestrator
+from agents.unified_llm_orchestrator import UnifiedLLMOrchestrator
 from utils.reasoning_display import get_reasoning_display
 from utils.database_manager import get_database
 
 logger = logging.getLogger(__name__)
 
-# NO HARDCODED MODELS - All models are loaded from environment variables in MultiLLMOrchestrator
-# This ensures easy model switching via .env file without touching code
+# VERSION 9.0 - Single LLM Architecture
+# Uses UnifiedLLMOrchestrator with one main LLM (DeepSeek R1) for all tasks
+# Visual LLM (Qwen 2.5 VL) is only used for image/screenshot analysis
+# All models configurable via .env file
 
 
-async def parse_json_robust(content: str, orchestrator: Optional[MultiLLMOrchestrator] = None, context: str = "") -> Optional[Dict]:
+async def parse_json_robust(content: str, orchestrator: Optional[UnifiedLLMOrchestrator] = None, context: str = "") -> Optional[Dict]:
     """
     Robustly parse JSON from LLM response with fallback strategies and auto-healing.
     
@@ -824,29 +826,30 @@ class CortexMemory:
 
 class EnhancedAegisAI:
     """
-    Enhanced AI Core v8.0 - Powered by Four Specialized LLMs via OpenRouter
+    Enhanced AI Core v9.0 - Unified Single-LLM Architecture with DeepSeek R1
     
-    This class orchestrates four LLMs from OpenRouter API, all configurable via environment:
-    1. Strategic Model (default: Hermes 3 Llama 70B) - Strategic planning, triage, and decision-making
-    2. Reasoning Model (default: Dolphin 3.0 R1 Mistral 24B) - Reasoning and vulnerability analysis  
-    3. Code Model (default: Qwen 2.5 72B) - Code analysis and payload generation
-    4. Visual Model (default: Qwen 2.5 VL 32B) - Visual analysis and UI reconnaissance
+    This class uses a SINGLE main LLM for ALL tasks:
+    - Main Model (default: DeepSeek R1) - Handles everything: strategic planning, 
+      vulnerability analysis, code analysis, payload generation, reasoning, and decision-making
+    - Visual Model (default: Qwen 2.5 VL) - Only for image/screenshot analysis
     
-    All models can be easily changed via .env file without modifying Python code.
-    Temperature and max_tokens are also configurable via environment variables.
+    This replaces the previous multi-LLM architecture for:
+    - Simpler operation and reasoning consistency
+    - Reduced API complexity
+    - Unified context across all task types
     
-    System prompts are also fully configurable via .env file:
-    - TRIAGE_SYSTEM_PROMPT: System prompt for mission triage
-    - NEXT_ACTION_SYSTEM_PROMPT: System prompt for next action decisions
-    - CODE_ANALYSIS_SYSTEM_PROMPT: System prompt for code analysis
-    - PAYLOAD_GEN_SYSTEM_PROMPT: System prompt for payload generation
-    - VERIFICATION_SYSTEM_PROMPT: System prompt for finding verification
-    - TRIAGE_FINDING_SYSTEM_PROMPT: System prompt for vulnerability triage
-    - FACT_EXTRACTION_SYSTEM_PROMPT: System prompt for fact extraction
+    All models configurable via .env file:
+    - MAIN_MODEL or DEEPSEEK_MODEL: The unified LLM for all tasks
+    - VISUAL_MODEL: The visual LLM for image analysis
+    
+    System prompts are also configurable via .env file.
     """
     
     # Default system prompts - can be overridden via .env file
-    DEFAULT_TRIAGE_SYSTEM_PROMPT = """You are Aegis AI, a cybersecurity mission planner. Your goal is to gather ALL necessary information before launching a mission.
+    DEFAULT_TRIAGE_SYSTEM_PROMPT = """You are Aegis AI, an advanced autonomous cybersecurity agent powered by a single unified intelligence.
+You handle ALL aspects of penetration testing: planning, analysis, exploitation, and code generation.
+
+Your goal is to gather ALL necessary information before launching a mission.
 
 Required information:
 1. **TARGET** (e.g., "example.com", "192.168.1.1", or a file like "image.png")
@@ -875,47 +878,60 @@ If information is missing, respond with:
 }
 ```"""
 
-    DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT = """You are an expert code analyst specialized in security vulnerabilities.
+    DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT = """You are Aegis AI, an advanced unified security intelligence agent.
+You are analyzing code for security vulnerabilities.
+
 Analyze the provided code and identify:
-1. Security vulnerabilities
-2. Potential exploits
+1. Security vulnerabilities (with CWE references where applicable)
+2. Potential exploits and attack vectors
 3. Weaknesses in implementation
-4. Recommended fixes
+4. Recommended fixes with code examples
 
-Provide detailed analysis with severity ratings."""
+Provide detailed analysis with severity ratings (Critical, High, Medium, Low, Info)."""
 
-    DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT = """You are an expert payload engineer for penetration testing.
+    DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT = """You are Aegis AI, an advanced unified security intelligence agent.
+You are generating payloads for penetration testing.
+
 Generate safe, educational payloads for vulnerability testing.
 Always include:
 1. The payload code/string
-2. How to use it
-3. Expected result
-4. Safety considerations"""
+2. Step-by-step instructions for use
+3. Expected result and how to verify
+4. Safety considerations and scope warnings"""
 
-    DEFAULT_VERIFICATION_SYSTEM_PROMPT = """You are a Senior Security Engineer reviewing a junior researcher's vulnerability report.
-Your role is to act as a "Devil's Advocate" and critically assess whether this is a legitimate finding or a false positive."""
+    DEFAULT_VERIFICATION_SYSTEM_PROMPT = """You are Aegis AI acting as a Senior Security Engineer.
+Your role is to critically assess whether a vulnerability finding is legitimate or a false positive.
+Apply "Devil's Advocate" thinking to avoid hallucinations and false claims."""
 
-    DEFAULT_TRIAGE_FINDING_SYSTEM_PROMPT = """You are an expert security analyst performing vulnerability triage.
-Re-assess vulnerability's TRUE PRIORITY considering real-world exploitability and business impact."""
+    DEFAULT_TRIAGE_FINDING_SYSTEM_PROMPT = """You are Aegis AI performing vulnerability triage.
+Re-assess vulnerability's TRUE PRIORITY considering:
+- Real-world exploitability
+- Business impact in this specific context
+- Likelihood of successful exploitation
+- Effort required vs potential gain"""
 
-    DEFAULT_FACT_EXTRACTION_SYSTEM_PROMPT = """You are analyzing the output of a security testing tool to extract key information.
-Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, and RELATIONSHIPS."""
+    DEFAULT_FACT_EXTRACTION_SYSTEM_PROMPT = """You are Aegis AI analyzing security tool output.
+Extract and categorize information into:
+- VERIFIED FACTS: Confirmed discoveries
+- PENDING GOALS: New objectives to investigate
+- DISCARDED VECTORS: Attack paths that failed
+- RELATIONSHIPS: Connections between entities"""
     
     def __init__(self, learning_engine: AegisLearningEngine = None):
-        self.orchestrator = MultiLLMOrchestrator()
+        # Use the Unified LLM Orchestrator (single LLM + visual)
+        self.orchestrator = UnifiedLLMOrchestrator()
         self.learning_engine = learning_engine or AegisLearningEngine()
         self.learned_patterns = ""
         self.is_initialized = False
         self.reasoning_display = get_reasoning_display(verbose=True)
-        self.conversation_history = []  # Added for memory management
-        self.dynamic_tool_prompt = ""  # TASK 3: Dynamic tool prompt
-        self.max_history_size = 10  # Maximum conversation history to keep
-        self.context_summary = None  # Summary of older context
-        self.db = get_database()  # TASK 2: Mission database integration
-        self.blackboard = MissionBlackboard()  # Mission blackboard memory
+        self.conversation_history = []
+        self.dynamic_tool_prompt = ""
+        self.max_history_size = 10
+        self.context_summary = None
+        self.db = get_database()
+        self.blackboard = MissionBlackboard()
         
         # Load configurable system prompts from environment
-        # NO HARDCODED PROMPTS - All configurable via .env
         self.system_prompts = {
             'triage': os.getenv('TRIAGE_SYSTEM_PROMPT', self.DEFAULT_TRIAGE_SYSTEM_PROMPT),
             'code_analysis': os.getenv('CODE_ANALYSIS_SYSTEM_PROMPT', self.DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT),
@@ -925,24 +941,24 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
             'fact_extraction': os.getenv('FACT_EXTRACTION_SYSTEM_PROMPT', self.DEFAULT_FACT_EXTRACTION_SYSTEM_PROMPT),
         }
         
-        # Load next_action system prompt (can be multi-line, stored in file or env)
         self.next_action_system_prompt_template = os.getenv('NEXT_ACTION_SYSTEM_PROMPT', None)
         
-        logger.info("📝 System prompts loaded from environment (configurable via .env)")
+        logger.info("📝 Unified AI Core initialized (Single LLM Mode)")
+        logger.info("   System prompts loaded from environment")
         
-        # PHASE 2: Business logic mapper for application-specific testing
+        # Business logic mapper for application-specific testing
         from utils.business_logic_mapper import get_business_logic_mapper
         self.logic_mapper = get_business_logic_mapper()
     
     async def initialize(self):
-        """Initialize the enhanced AI core with all LLMs"""
+        """Initialize the enhanced AI core with the unified LLM"""
         try:
-            logger.info("🚀 Initializing Enhanced Aegis AI with Multi-LLM support...")
+            logger.info("🚀 Initializing Aegis AI with Unified Single-LLM Architecture...")
             
-            # Initialize the orchestrator
+            # Initialize the unified orchestrator
             await self.orchestrator.initialize()
             
-            # TASK 3: Load dynamic tool prompt
+            # Load dynamic tool prompt
             from utils.dynamic_tool_loader import get_tool_loader
             tool_loader = get_tool_loader()
             self.dynamic_tool_prompt = tool_loader.build_dynamic_tool_prompt()
@@ -962,7 +978,7 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
                     self.learned_patterns = ""
             
             self.is_initialized = True
-            logger.info("✅ Enhanced AI Core ready with multi-LLM support.")
+            logger.info("✅ Unified AI Core ready (Single LLM + Visual)")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize Enhanced AI Core: {e}", exc_info=True)
@@ -1084,11 +1100,11 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
         
         return pruned_memory
     
-    # --- LEVEL 1: STRATEGIC TRIAGE (using Llama 70B) ---
+    # --- MISSION TRIAGE (using unified LLM) ---
     async def triage_mission(self, conversation_history: List[Dict]) -> Dict:
         """
         Analyzes conversation and determines if mission is ready
-        Uses Llama 70B for strategic planning and decision-making
+        Uses the unified LLM for strategic planning and decision-making
         """
         if not self.is_initialized:
             return {"response_type": "error", "text": "AI not initialized."}
@@ -1164,11 +1180,11 @@ Analyze this conversation and determine if we have all information (target and r
                 "text": f"Error analyzing mission: {str(e)}"
             }
     
-    # --- LEVEL 2: AUTONOMOUS AGENT (using Mixtral 8x7B) ---
+    # --- AUTONOMOUS AGENT (using unified LLM) ---
     def get_next_action(self, bbp_rules: str, agent_memory: List[Dict]) -> Dict:
         """
         Decides the next action based on BBP rules and agent memory
-        Uses Mixtral 8x7B for vulnerability analysis and exploitation planning
+        Uses the unified LLM for analysis and exploitation planning
         
         Note: This is synchronous to maintain compatibility with existing code.
         If called from an async context, use get_next_action_async() instead.
@@ -1179,15 +1195,12 @@ Analyze this conversation and determine if we have all information (target and r
             loop = None
             
         if loop and loop.is_running():
-            # We are in an async context, we cannot use asyncio.run()
-            # The caller should have used get_next_action_async()
             raise RuntimeError("get_next_action() called from a running event loop. Use await get_next_action_async() instead.")
             
-        # Run async function in sync context
         return asyncio.run(self.get_next_action_async(bbp_rules, agent_memory))
     
     async def get_next_action_async(self, bbp_rules: str, agent_memory: List[Dict]) -> Dict:
-        """Async implementation of get_next_action"""
+        """Async implementation of get_next_action using unified LLM"""
         if not self.is_initialized:
             return {"tool": "system", "message": "AI not initialized"}
         
@@ -1509,16 +1522,14 @@ Based on this context, what should be the next action? Respond with JSON only.""
                 "message": f"Error: {str(e)}"
             }
     
-    # --- LEVEL 3: CODE ANALYSIS (using Qwen-coder) ---
+    # --- CODE ANALYSIS (using unified LLM) ---
     async def analyze_code(self, code: str, context: str = "") -> Dict[str, Any]:
         """
-        Analyzes code for vulnerabilities
-        Uses Qwen-coder for deep code analysis
+        Analyzes code for vulnerabilities using the unified LLM
         """
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        # Use configurable system prompt from .env or default
         system_prompt = self.system_prompts.get('code_analysis', self.DEFAULT_CODE_ANALYSIS_SYSTEM_PROMPT)
 
         user_message = f"""Context: {context}
@@ -1546,7 +1557,7 @@ Provide a comprehensive security analysis."""
             logger.error(f"Error analyzing code: {e}", exc_info=True)
             return {"error": str(e)}
     
-    # --- LEVEL 4: PAYLOAD GENERATION (using Qwen-coder) ---
+    # --- PAYLOAD GENERATION (using unified LLM) ---
     async def generate_payload(
         self,
         vulnerability_type: str,
@@ -1554,15 +1565,13 @@ Provide a comprehensive security analysis."""
         constraints: List[str] = None
     ) -> Dict[str, Any]:
         """
-        Generates exploit payloads for a specific vulnerability
-        Uses Qwen-coder for technical payload engineering
+        Generates exploit payloads for a specific vulnerability using the unified LLM
         """
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
         constraints_text = "\n".join(constraints) if constraints else "No specific constraints"
         
-        # Use configurable system prompt from .env or default
         system_prompt = self.system_prompts.get('payload_generation', self.DEFAULT_PAYLOAD_GEN_SYSTEM_PROMPT)
 
         user_message = f"""Generate a payload for:
@@ -1588,7 +1597,8 @@ Provide multiple payload variants if applicable."""
             logger.error(f"Error generating payload: {e}", exc_info=True)
             return {"error": str(e)}
     
-    # --- SPECIALIZED MODEL CALLS (using explicit model constants) ---
+    # --- UNIFIED MODEL CALLS ---
+    # In single-LLM mode, all specialized calls go to the main LLM
     
     async def call_code_specialist(
         self,
@@ -1598,14 +1608,14 @@ Provide multiple payload variants if applicable."""
         max_tokens: int = None
     ) -> Dict[str, Any]:
         """
-        Call the code specialist model explicitly.
-        Model is determined by CODE_MODEL environment variable.
+        Call the unified LLM for code analysis tasks.
+        In single-LLM mode, this uses the main model.
         
         Args:
             prompt: The code analysis or generation prompt
             context: Additional context
-            temperature: Sampling temperature (uses default from env if None)
-            max_tokens: Maximum tokens to generate (uses default from env if None)
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
             
         Returns:
             Response dictionary
@@ -1613,18 +1623,18 @@ Provide multiple payload variants if applicable."""
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        system_prompt = f"""You are an expert code analyst and payload engineer for penetration testing.
+        system_prompt = f"""You are Aegis AI, a unified security intelligence agent.
+You are performing code analysis for penetration testing.
 {context}"""
         
         try:
-            # Call the coder LLM directly
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
             
             response = await self.orchestrator.call_llm(
-                'coder',
+                'main',  # Use main LLM in unified mode
                 messages,
                 temperature=temperature,
                 max_tokens=max_tokens
@@ -1637,7 +1647,7 @@ Provide multiple payload variants if applicable."""
             }
             
         except Exception as e:
-            logger.error(f"Error calling code specialist: {e}", exc_info=True)
+            logger.error(f"Error in code analysis: {e}", exc_info=True)
             return {"error": str(e)}
     
     async def call_reasoning_specialist(
@@ -1648,14 +1658,14 @@ Provide multiple payload variants if applicable."""
         max_tokens: int = None
     ) -> Dict[str, Any]:
         """
-        Call the reasoning specialist model explicitly.
-        Model is determined by REASONING_MODEL environment variable.
+        Call the unified LLM for reasoning/analysis tasks.
+        In single-LLM mode, this uses the main model.
         
         Args:
             prompt: The reasoning or analysis prompt
             context: Additional context
-            temperature: Sampling temperature (uses default from env if None)
-            max_tokens: Maximum tokens to generate (uses default from env if None)
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
             
         Returns:
             Response dictionary
@@ -1663,18 +1673,18 @@ Provide multiple payload variants if applicable."""
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
-        system_prompt = f"""You are an expert reasoning and vulnerability analysis specialist.
+        system_prompt = f"""You are Aegis AI, a unified security intelligence agent.
+You are performing vulnerability analysis and reasoning.
 {context}"""
         
         try:
-            # Call the vulnerability/reasoning LLM directly
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
             
             response = await self.orchestrator.call_llm(
-                'vulnerability',
+                'main',  # Use main LLM in unified mode
                 messages,
                 temperature=temperature,
                 max_tokens=max_tokens
@@ -1687,45 +1697,68 @@ Provide multiple payload variants if applicable."""
             }
             
         except Exception as e:
-            logger.error(f"Error calling reasoning specialist: {e}", exc_info=True)
+            logger.error(f"Error in reasoning analysis: {e}", exc_info=True)
             return {"error": str(e)}
     
-    # --- COLLABORATIVE ANALYSIS ---
+    # --- COMPREHENSIVE ANALYSIS ---
     async def collaborative_vulnerability_assessment(
         self,
         target: str,
         findings: List[Dict]
     ) -> Dict[str, Any]:
         """
-        Performs collaborative analysis using all three LLMs
-        Each provides its specialized perspective
+        Performs comprehensive vulnerability assessment using the unified LLM.
+        In single-LLM mode, this provides all perspectives in one analysis.
         """
         if not self.is_initialized:
             return {"error": "AI not initialized"}
         
         findings_summary = json.dumps(findings, indent=2)
-        context = f"Target: {target}\nFindings: {findings_summary}"
         
-        strategic_q = f"Based on these findings, what should be our strategic priorities and overall risk assessment?"
-        vulnerability_q = f"Analyze these vulnerabilities: which are most critical and what exploitation paths exist?"
-        coding_q = f"For the technical findings, what payloads or exploits should we develop to validate them?"
-        
+        # In unified mode, we ask for comprehensive analysis in a single prompt
+        comprehensive_prompt = f"""Analyze the following security findings for target: {target}
+
+FINDINGS:
+{findings_summary}
+
+Provide a comprehensive assessment covering:
+
+1. STRATEGIC ASSESSMENT:
+   - Overall risk level and business impact
+   - Priority order for remediation
+   - Key strategic recommendations
+
+2. VULNERABILITY ANALYSIS:
+   - Which vulnerabilities are most critical
+   - Exploitation paths and attack chains
+   - Likelihood of successful exploitation
+
+3. TECHNICAL RECOMMENDATIONS:
+   - Suggested payloads or exploits for validation
+   - Proof-of-concept approaches
+   - Technical remediation steps
+
+Respond with a detailed analysis covering all three perspectives."""
+
         try:
-            results = await self.orchestrator.collaborative_analysis(
-                context=context,
-                strategic_question=strategic_q,
-                vulnerability_question=vulnerability_q,
-                coding_question=coding_q
+            response = await self.orchestrator.execute_task(
+                task_type='vulnerability_analysis',
+                system_prompt="You are Aegis AI, a unified security intelligence providing comprehensive vulnerability assessment.",
+                user_message=comprehensive_prompt
             )
             
+            content = response['content']
+            
             return {
-                "strategic_assessment": results['strategic']['content'],
-                "vulnerability_analysis": results['vulnerability']['content'],
-                "technical_recommendations": results['coder']['content']
+                "comprehensive_assessment": content,
+                "strategic_assessment": content,  # For backward compatibility
+                "vulnerability_analysis": content,
+                "technical_recommendations": content,
+                "model_used": response['role']
             }
             
         except Exception as e:
-            logger.error(f"Error in collaborative assessment: {e}", exc_info=True)
+            logger.error(f"Error in comprehensive assessment: {e}", exc_info=True)
             return {"error": str(e)}
     
     # --- AI-ENHANCED TRIAGE ---
@@ -1735,10 +1768,10 @@ Provide multiple payload variants if applicable."""
         mission_context: str
     ) -> Dict[str, Any]:
         """
-        AI-enhanced triage using the Reasoning LLM to re-assess vulnerability priority
+        AI-enhanced triage using the unified LLM to re-assess vulnerability priority.
         
         This method takes a vulnerability finding and mission context, then uses the
-        Reasoning specialist to provide an AI-enhanced assessment of true priority,
+        unified LLM to provide an AI-enhanced assessment of true priority,
         exploitability, and business impact.
         
         Args:
