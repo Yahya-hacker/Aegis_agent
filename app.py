@@ -68,6 +68,44 @@ def send_command(text: str) -> bool:
         return False
 
 
+def format_timestamp(timestamp: str) -> str:
+    """
+    Format a log timestamp for display.
+    
+    Extracts just the time portion from a full log timestamp.
+    
+    Args:
+        timestamp: Full timestamp string (e.g., "2024-01-01 12:34:56,789")
+        
+    Returns:
+        Formatted time string (e.g., "12:34:56")
+    """
+    try:
+        if " " in timestamp:
+            time_part = timestamp.split(" ")[1]
+            if "," in time_part:
+                return time_part.split(",")[0]
+            return time_part
+        return timestamp
+    except (IndexError, AttributeError):
+        return timestamp
+
+
+def sanitize_key(key: str) -> str:
+    """
+    Sanitize a string to be used as a Streamlit widget key.
+    
+    Replaces characters that are not allowed in Streamlit keys.
+    
+    Args:
+        key: The original key string
+        
+    Returns:
+        Sanitized key string safe for Streamlit widgets
+    """
+    return key.replace(":", "_").replace(" ", "_").replace(",", "_")
+
+
 # --- ADVANCED LOG PARSING ---
 def parse_logs_advanced(log_file: Path) -> List[Dict[str, Any]]:
     """
@@ -187,7 +225,8 @@ with chat_container:
     
     # Display only last 50 events for performance
     for event in events[-50:]:
-        ts = event["timestamp"].split(" ")[1].split(",")[0] if " " in event["timestamp"] else event["timestamp"]
+        ts = format_timestamp(event["timestamp"])
+        key_suffix = sanitize_key(event["timestamp"])
         
         if event["type"] == "thought":
             with st.expander(f"🧠 DeepSeek Reasoning ({ts})", expanded=False):
@@ -215,11 +254,11 @@ with chat_container:
                 st.warning(f"**APPROVAL REQUEST:** {event['message']}")
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("✅ AUTHORIZE", key=f"yes_{ts}"):
+                    if st.button("✅ AUTHORIZE", key=f"yes_{key_suffix}"):
                         send_command("yes")
                         st.rerun()
                 with col2:
-                    if st.button("❌ DENY", key=f"no_{ts}"):
+                    if st.button("❌ DENY", key=f"no_{key_suffix}"):
                         send_command("no")
                         st.rerun()
 
