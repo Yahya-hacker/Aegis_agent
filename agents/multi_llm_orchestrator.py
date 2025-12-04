@@ -13,6 +13,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import time
 import aiohttp
 from pathlib import Path
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 ERROR_MSG_TRUNCATE_LENGTH = 100  # Characters to include in error classification
 HIGH_TOKEN_USAGE_THRESHOLD = 0.75  # Warn when using >75% of max_tokens
 RECURRING_ERROR_THRESHOLD = 3  # Number of occurrences before flagging as recurring
+CONTENT_PREVIEW_LENGTH = 200  # Characters to include in content preview for logging
 
 class LLMConfig:
     """Configuration for each specialized LLM"""
@@ -607,6 +609,16 @@ DO NOT propose the same action again. Think creatively about alternative approac
                             raise RuntimeError("API response missing 'choices'")
                         
                         content = result['choices'][0]['message']['content']
+                        
+                        # Extract and log the full reasoning for UI parsing
+                        think_match = re.search(r'<think>(.*?)</think>', content, re.DOTALL)
+                        if think_match:
+                            thought = think_match.group(1).strip()
+                            # Use special marker [DEEP_THOUGHT] for UI parser
+                            logger.info(f"[DEEP_THOUGHT] {thought}")
+                        else:
+                            # If no think tag but content exists, log a preview
+                            logger.info(f"[DEEP_THOUGHT] (No <think> tag detected) {content[:CONTENT_PREVIEW_LENGTH]}...")
                         
                         if not content or len(content.strip()) == 0:
                             logger.warning("API returned empty content")
