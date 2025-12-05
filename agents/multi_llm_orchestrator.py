@@ -1,11 +1,14 @@
 # agents/multi_llm_orchestrator.py
 """
-Multi-LLM Orchestrator for Aegis AI - v8.0
+Multi-LLM Orchestrator for Aegis AI - v8.0 Full-Spectrum Architecture
 Manages four specialized LLMs via OpenRouter API with multi-account sharding:
-- Hermes 3 Llama 70B: Strategic planning, triage, and high-level decision making
-- Dolphin 3.0 R1 Mistral 24B: Reasoning and vulnerability analysis
-- Qwen 2.5 72B: Code analysis, payload generation, and technical implementation
-- Qwen 2.5 VL 32B: Visual analysis and UI reconnaissance
+- DeepSeek R1: Strategic planning, triage, and reasoning (Strategic + Vulnerability roles)
+- Qwen 2.5 72B: Code analysis, payload generation, and technical implementation (Coder role)
+- Qwen 2.5 VL 72B: Visual analysis and UI reconnaissance (Visual role)
+
+Context-Aware Routing:
+- Binary/Pwn context -> Prioritize Coder LLM
+- Crypto/Forensics context -> Prioritize Reasoning LLM (DeepSeek)
 """
 
 import asyncio
@@ -75,15 +78,18 @@ class MultiLLMOrchestrator:
         self.loop_occurrence_threshold = 2  # Trigger if same action appears N times in window
         
         # Load model names from environment variables with fallback defaults
-        # These defaults match the recommended models, but can be changed easily via .env
+        # Aegis v8.0 Full-Spectrum Architecture defaults:
+        # - Strategic/Vulnerability: DeepSeek R1 for deep reasoning
+        # - Coder: Qwen 2.5 72B for code generation
+        # - Visual: Qwen 2.5 VL 72B for visual analysis
         strategic_model = os.getenv(
             "STRATEGIC_MODEL",
-            os.getenv("ORCHESTRATOR_MODEL", "nousresearch/hermes-3-llama-3.1-70b")
+            os.getenv("ORCHESTRATOR_MODEL", "deepseek/deepseek-r1")
         )
         
         reasoning_model = os.getenv(
             "REASONING_MODEL",
-            "cognitivecomputations/dolphin3.0-r1-mistral-24b"
+            "deepseek/deepseek-r1"
         )
         
         code_model = os.getenv(
@@ -93,8 +99,11 @@ class MultiLLMOrchestrator:
         
         visual_model = os.getenv(
             "VISUAL_MODEL",
-            "qwen/qwen2.5-vl-32b-instruct:free"
+            "qwen/qwen2.5-vl-72b-instruct"
         )
+        
+        # Domain context for context-aware routing
+        self._domain_context: Optional[str] = None
         
         # Define the four specialized LLMs with environment-configured models
         # NO HARDCODED MODEL NAMES - All loaded from environment!
@@ -453,26 +462,33 @@ DO NOT propose the same action again. Think creatively about alternative approac
         
         selected = task_mapping.get(task_type, 'strategic')
         
-        # Domain context overrides for specific scenarios
-        if domain_context:
-            if domain_context == "Binary" and task_type in ['next_action', 'exploit_planning', 'vulnerability_analysis']:
+        # Use instance domain context if not explicitly provided
+        effective_context = domain_context or self._domain_context
+        
+        # Domain context overrides for specific scenarios (Aegis v8.0 Full-Spectrum Architecture)
+        if effective_context:
+            # Normalize "Pwn" to "Binary" for routing
+            if effective_context == "Pwn":
+                effective_context = "Binary"
+            
+            if effective_context == "Binary" and task_type in ['next_action', 'exploit_planning', 'vulnerability_analysis']:
                 # Binary exploitation benefits from the Coder LLM for writing exploits
                 selected = 'coder'
                 logger.info(f"🎯 Domain override: Binary context → prioritizing Coder LLM")
-            elif domain_context == "Crypto" and task_type in ['next_action', 'vulnerability_analysis']:
+            elif effective_context == "Crypto" and task_type in ['next_action', 'vulnerability_analysis']:
                 # Cryptographic challenges benefit from the Reasoning LLM
                 selected = 'vulnerability'
                 logger.info(f"🎯 Domain override: Crypto context → prioritizing Reasoning LLM")
-            elif domain_context == "Network" and task_type in ['next_action']:
+            elif effective_context == "Network" and task_type in ['next_action']:
                 # Network analysis benefits from the Reasoning LLM
                 selected = 'vulnerability'
                 logger.info(f"🎯 Domain override: Network context → prioritizing Reasoning LLM")
-            elif domain_context == "Forensics" and task_type in ['next_action']:
+            elif effective_context == "Forensics" and task_type in ['next_action']:
                 # Forensics benefits from the Reasoning LLM for evidence analysis
                 selected = 'vulnerability'
                 logger.info(f"🎯 Domain override: Forensics context → prioritizing Reasoning LLM")
         
-        logger.info(f"🎯 Task '{task_type}' (domain={domain_context or 'None'}) → LLM: {self.llms[selected].role}")
+        logger.info(f"🎯 Task '{task_type}' (domain={effective_context or 'None'}) → LLM: {self.llms[selected].role}")
         
         # Show reasoning about LLM selection
         self.reasoning_display.show_thought(
@@ -480,7 +496,7 @@ DO NOT propose the same action again. Think creatively about alternative approac
             thought_type="decision",
             metadata={
                 "task_type": task_type,
-                "domain_context": domain_context,
+                "domain_context": effective_context,
                 "selected_llm": selected,
                 "model": self.llms[selected].model_name,
                 "specialization": self.llms[selected].specialization
@@ -488,6 +504,73 @@ DO NOT propose the same action again. Think creatively about alternative approac
         )
         
         return selected
+    
+    def set_domain_context(self, context: str) -> None:
+        """
+        Set the domain context for context-aware LLM routing.
+        
+        This method implements the Aegis v8.0 Full-Spectrum Architecture
+        domain context routing:
+        - "Binary" or "Pwn" -> Prioritize Coder LLM (Qwen)
+        - "Crypto" or "Forensics" -> Prioritize Reasoning LLM (DeepSeek)
+        - Other contexts use default task-based routing
+        
+        Args:
+            context: Domain context string. Valid values:
+                - "Web": Web application testing
+                - "Binary": Binary exploitation/reverse engineering
+                - "Pwn": Binary exploitation (alias for Binary)
+                - "Network": Network analysis
+                - "Crypto": Cryptography challenges
+                - "Forensics": Digital forensics
+                - "General": No specific domain
+        """
+        valid_contexts = ["Web", "Binary", "Pwn", "Network", "Crypto", "Forensics", "General"]
+        
+        if context not in valid_contexts:
+            logger.warning(f"⚠️ Invalid domain context '{context}', using 'General'")
+            context = "General"
+        
+        # Normalize "Pwn" to "Binary" for consistent routing
+        if context == "Pwn":
+            context = "Binary"
+            logger.info("🎯 Domain context 'Pwn' normalized to 'Binary'")
+        
+        old_context = self._domain_context
+        self._domain_context = context
+        
+        # Log the context change with routing implications
+        routing_info = {
+            "Binary": "Prioritizing Coder LLM (Qwen) for exploit scripts",
+            "Crypto": "Prioritizing Reasoning LLM (DeepSeek) for mathematical analysis",
+            "Forensics": "Prioritizing Reasoning LLM (DeepSeek) for evidence analysis",
+            "Network": "Prioritizing Reasoning LLM (DeepSeek) for protocol analysis",
+            "Web": "Balanced routing based on task type",
+            "General": "Default task-based routing"
+        }
+        
+        logger.info(f"🎯 Domain context set: {old_context or 'None'} → {context}")
+        logger.info(f"   Routing: {routing_info.get(context, 'Default routing')}")
+        
+        # Show reasoning about domain context change
+        self.reasoning_display.show_thought(
+            f"Domain context updated to '{context}'",
+            thought_type="decision",
+            metadata={
+                "old_context": old_context,
+                "new_context": context,
+                "routing_strategy": routing_info.get(context, "default")
+            }
+        )
+    
+    def get_domain_context(self) -> Optional[str]:
+        """
+        Get the current domain context.
+        
+        Returns:
+            Current domain context string, or None if not set
+        """
+        return self._domain_context
     
     async def call_llm(
         self, 

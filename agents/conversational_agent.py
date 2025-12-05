@@ -479,6 +479,8 @@ class AegisConversation:
             else:
                 # Intrusive tool: ask for approval
                 print(f"⚠️ WARNING: INTRUSIVE Action detected!")
+                # UI-parseable log line for Human-in-the-Loop approval buttons
+                logger.info(f"[APPROVAL_REQUEST] tool={tool} args={json.dumps(args)} intrusive=true")
                 try:
                     loop = asyncio.get_event_loop()
                     response = await loop.run_in_executor(None, lambda: input("❓ Do you approve this action? (y/n/q) : ").lower().strip())
@@ -487,9 +489,12 @@ class AegisConversation:
             
             if response in ['q', 'quit', 'exit']:
                 print("🛑 Mission stopped by user.")
+                logger.info(f"[APPROVAL_RESPONSE] tool={tool} response=quit")
                 break
                 
             if response in ['o', 'oui', 'y', 'yes', '']:
+                # Log approval for UI parsing
+                logger.info(f"[APPROVAL_RESPONSE] tool={tool} response=approved")
                 # 4. ACT: Execute action
                 print(f"🚀 Execution : {tool}...")
                 
@@ -573,6 +578,8 @@ class AegisConversation:
                     self.agent_memory.append({"type": "observation", "content": f"Action {tool} FAILED. Error: {error_msg}. I must try something else."})
                     
             else:
+                # Log denial for UI parsing
+                logger.info(f"[APPROVAL_RESPONSE] tool={tool} response=denied")
                 print("❌ Action cancelled by user.")
                 
                 self.reasoning_display.show_thought(

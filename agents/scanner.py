@@ -14,6 +14,7 @@ from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
 from tools.visual_recon import get_visual_recon_tool
 from tools.tool_installer import get_tool_installer
+from tools.genesis_fuzzer import get_genesis_fuzzer
 from utils.database_manager import get_database
 from utils.impact_quantifier import get_impact_quantifier
 from agents.enhanced_ai_core import parse_json_robust
@@ -57,6 +58,9 @@ class AegisScanner:
         self.forensics_lab = get_forensics_lab()
         self.pwn_exploiter = get_pwn_exploiter()
         self.network_sentry = get_network_sentry()
+        
+        # Initialize Genesis Fuzzer for zero-day discovery
+        self.genesis_fuzzer = get_genesis_fuzzer()
         
         logger.info("🛡️ AegisScanner v8.0 initialized with CTF capabilities")
     
@@ -841,6 +845,47 @@ If you cannot suggest a fix, respond with:
                     lambda: self.network_sentry.follow_tcp_stream(filepath, stream_number),
                     filepath
                 )
+            
+            # --- GENESIS FUZZER (Zero-Day Discovery) ---
+            elif tool == "fuzz_endpoint":
+                target_url = args.get("url")
+                method = args.get("method", "POST")
+                base_payload = args.get("base_payload", {})
+                grammar = args.get("grammar")
+                
+                if not target_url:
+                    return {"status": "error", "error": "url argument required"}
+                
+                if '://' not in target_url:
+                    target_url = f"http://{target_url}"
+                
+                if not self._validate_url(target_url):
+                    return {"status": "error", "error": f"Invalid URL format: {target_url}"}
+                
+                logger.info(f"🧬 Genesis Fuzzer: Initiating evolutionary mutation attack on {target_url}")
+                
+                result = await self.genesis_fuzzer.fuzz_endpoint(
+                    url=target_url,
+                    method=method,
+                    grammar=grammar,
+                    base_payload=base_payload
+                )
+                
+                # Record in database if anomalies found
+                all_anomalies = result.get("all_anomalies", [])
+                if all_anomalies:
+                    self.db.mark_scanned(target_url, "fuzz_endpoint", f"Found {len(all_anomalies)} anomalies")
+                    for anomaly in all_anomalies[:5]:  # Record top 5 anomalies
+                        severity = "high" if anomaly.get("severity", 0) > 50 else "medium"
+                        self.db.add_finding(
+                            "Fuzzing Anomaly",
+                            target_url,
+                            severity,
+                            f"Genesis detected anomaly: {anomaly.get('reasons', ['Unknown'])[:2]}",
+                            json.dumps(anomaly.get("payload", {}))[:500]
+                        )
+                
+                return {"status": "success", "data": result}
 
             else:
                 logger.warning(f"Outil inconnu demandé par l'IA : {tool}")
