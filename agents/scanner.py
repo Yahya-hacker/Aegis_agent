@@ -876,7 +876,16 @@ If you cannot suggest a fix, respond with:
                 if all_anomalies:
                     self.db.mark_scanned(target_url, "fuzz_endpoint", f"Found {len(all_anomalies)} anomalies")
                     for anomaly in all_anomalies[:5]:  # Record top 5 anomalies
-                        severity = "high" if anomaly.get("severity", 0) > 50 else "medium"
+                        # Safely handle severity which may be int, str, or None
+                        severity_value = anomaly.get("severity", 0)
+                        if isinstance(severity_value, str):
+                            try:
+                                severity_value = int(severity_value)
+                            except (ValueError, TypeError):
+                                severity_value = 0
+                        elif not isinstance(severity_value, (int, float)):
+                            severity_value = 0
+                        severity = "high" if severity_value > 50 else "medium"
                         self.db.add_finding(
                             "Fuzzing Anomaly",
                             target_url,
