@@ -42,16 +42,40 @@ export AEGIS_SELF_HEALING=true
 
 ### NEW: Domain-Context Aware LLM Selection
 
-The multi-LLM orchestrator now adapts based on the operation domain:
+The multi-LLM orchestrator now **automatically detects and adapts** based on the operation domain:
 
-- **Binary Context** → Prioritizes **Coder LLM** (Qwen) for writing exploit scripts
-- **Crypto Context** → Prioritizes **Reasoning LLM** (DeepSeek) for mathematical analysis
-- **Network Context** → Prioritizes **Reasoning LLM** for protocol analysis
+| Domain Context | LLM Priority | Use Case | Auto-Detected Keywords |
+|----------------|--------------|----------|------------------------|
+| **Binary / Pwn** | Coder LLM (Qwen) | Exploit scripts, ROP chains | `binary`, `pwn`, `elf`, `rop`, `buffer overflow` |
+| **Crypto** | Reasoning LLM (DeepSeek) | Mathematical analysis, cipher breaking | `crypto`, `cipher`, `hash`, `encryption`, `rsa` |
+| **Forensics** | Reasoning LLM (DeepSeek) | Evidence analysis, metadata extraction | `forensic`, `steganography`, `metadata`, `exif` |
+| **Network** | Reasoning LLM (DeepSeek) | Protocol analysis, PCAP parsing | `network`, `pcap`, `packet`, `tcp`, `dns` |
+| **Web** | Balanced routing | Web vulnerabilities | `http`, `https`, `www`, `api`, `xss`, `sqli` |
+
+#### Automatic Domain Detection
+
+When you start a mission, Aegis automatically analyzes the target and rules to set the optimal domain context:
 
 ```python
-# Set domain context for optimized LLM selection
-ai_core.blackboard.set_domain_context("Binary")  # For pwn challenges
-ai_core.blackboard.set_domain_context("Crypto")  # For crypto challenges
+# Auto-detection happens at mission start
+# Example: Target = "challenge.pwn.me", Rules = "binary exploitation challenge"
+# → Domain context auto-set to "Binary"
+# → Coder LLM (Qwen) prioritized for exploit development
+
+# Example: Target = "crypto_challenge.zip", Rules = "decrypt the message"
+# → Domain context auto-set to "Crypto"
+# → Reasoning LLM (DeepSeek) prioritized for mathematical analysis
+```
+
+#### Manual Override
+
+You can also manually set domain context for specialized scenarios:
+
+```python
+# Manual domain context setting
+ai_core.orchestrator.set_domain_context("Binary")     # For pwn challenges
+ai_core.blackboard.set_domain_context("Crypto")       # For crypto challenges
+ai_core.orchestrator.set_domain_context("Forensics")  # For forensics challenges
 ```
 
 ### CTF Strategy Guide
@@ -256,25 +280,80 @@ apt install sqlmap  # or pip install sqlmap
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Environment Variables (v8.0 Full-Spectrum Architecture)
+
+All components are fully configurable via `.env` file - **NO hardcoded values**:
 
 ```bash
-# API Keys (required)
-OPENROUTER_API_KEY=your_main_key       # Master key (fallback)
-STRATEGIC_API_KEY=optional_separate    # Strategic planning
-REASONING_API_KEY=optional_separate    # Vulnerability analysis
-CODE_API_KEY=optional_separate         # Payload generation
-VISUAL_API_KEY=optional_separate       # Screenshot analysis
+# =============================================================================
+# API KEYS
+# =============================================================================
+# Master API key - used as fallback for all roles if specific keys not set
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 
-# Model Selection (all configurable)
-STRATEGIC_MODEL=nousresearch/hermes-3-llama-3.1-70b
-REASONING_MODEL=cognitivecomputations/dolphin3.0-r1-mistral-24b
+# Optional: Role-specific API keys for granular cost control and rate limits
+# If not set, falls back to OPENROUTER_API_KEY
+STRATEGIC_API_KEY=         # Strategic planning LLM
+REASONING_API_KEY=         # Vulnerability analysis LLM
+CODE_API_KEY=              # Payload generation LLM
+VISUAL_API_KEY=            # Screenshot analysis LLM
+
+# =============================================================================
+# MODEL CONFIGURATION (v8.0 Defaults)
+# =============================================================================
+# All models can be swapped without code changes via this file
+
+# Strategic Model - for mission planning, triage, decision-making
+# Default: DeepSeek R1 for deep reasoning
+STRATEGIC_MODEL=deepseek/deepseek-r1
+
+# Reasoning Model - for vulnerability analysis, exploit planning
+# Default: DeepSeek R1 for deep reasoning
+REASONING_MODEL=deepseek/deepseek-r1
+
+# Code Model - for code analysis, payload generation, binary exploitation
+# Default: Qwen 2.5 72B for technical implementation
 CODE_MODEL=qwen/qwen-2.5-72b-instruct
-VISUAL_MODEL=qwen/qwen2.5-vl-32b-instruct:free
 
-# Generation Parameters
+# Visual Model - for screenshot analysis, UI reconnaissance
+# Default: Qwen 2.5 VL 72B for multimodal analysis
+VISUAL_MODEL=qwen/qwen2.5-vl-72b-instruct
+
+# =============================================================================
+# GENERATION PARAMETERS
+# =============================================================================
+# Default temperature for all LLM calls (0.0 to 1.0)
 DEFAULT_TEMPERATURE=0.7
+
+# Default maximum tokens for LLM responses
 DEFAULT_MAX_TOKENS=4096
+
+# =============================================================================
+# DOMAIN CONTEXT (Auto-Detected)
+# =============================================================================
+# The agent automatically detects the domain context from target and rules:
+# - "Binary" or "Pwn" → Prioritizes Coder LLM (Qwen) for exploit scripts
+# - "Crypto" or "Forensics" → Prioritizes Reasoning LLM (DeepSeek) for analysis
+# - "Network" → Prioritizes Reasoning LLM for protocol analysis
+# - "Web" → Balanced routing based on task type
+#
+# You can also manually set domain context in code:
+# ai_core.orchestrator.set_domain_context("Binary")
+# ai_core.blackboard.set_domain_context("Binary")
+```
+
+### System Prompts (Advanced Configuration)
+
+Override default system prompts for specialized use cases:
+
+```bash
+# Optional: Custom system prompts (multi-line supported via .env)
+TRIAGE_SYSTEM_PROMPT=Your custom triage prompt
+CODE_ANALYSIS_SYSTEM_PROMPT=Your custom code analysis prompt
+PAYLOAD_GEN_SYSTEM_PROMPT=Your custom payload generation prompt
+VERIFICATION_SYSTEM_PROMPT=Your custom verification prompt
+TRIAGE_FINDING_SYSTEM_PROMPT=Your custom triage finding prompt
+FACT_EXTRACTION_SYSTEM_PROMPT=Your custom fact extraction prompt
 ```
 
 ---
