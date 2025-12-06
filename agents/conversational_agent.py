@@ -98,6 +98,61 @@ class AegisConversation:
         self.reasoning_display = get_reasoning_display(verbose=True)
         self.use_ui_queue = False  # Flag to enable/disable UI queue polling
     
+    def _detect_domain_context(self, target: str, rules: str) -> str:
+        """
+        Auto-detect domain context from target and rules.
+        
+        This implements the Aegis v8.0 Full-Spectrum Architecture domain context routing:
+        - "Binary" or "Pwn" -> Prioritize Coder LLM (Qwen)
+        - "Crypto" or "Forensics" -> Prioritize Reasoning LLM (DeepSeek)
+        - "Network" -> Network analysis
+        - "Web" -> Web application testing
+        
+        Args:
+            target: Target string (URL, binary path, file, etc.)
+            rules: Mission rules and context
+            
+        Returns:
+            Domain context string: "Web", "Binary", "Network", "Crypto", "Forensics", or "General"
+        """
+        target_lower = target.lower()
+        rules_lower = rules.lower()
+        combined = f"{target_lower} {rules_lower}"
+        
+        # Binary/Pwn context detection
+        binary_keywords = ['binary', 'pwn', 'exploit', 'rop', 'buffer overflow', 'bof', 
+                          'shellcode', 'reverse engineering', 'elf', 'executable', '.bin']
+        if any(keyword in combined for keyword in binary_keywords):
+            return "Binary"
+        
+        # Crypto context detection
+        crypto_keywords = ['crypto', 'cipher', 'hash', 'encryption', 'decrypt', 'encode', 
+                          'base64', 'rsa', 'aes', 'cipher', 'cryptography']
+        if any(keyword in combined for keyword in crypto_keywords):
+            return "Crypto"
+        
+        # Forensics context detection
+        forensics_keywords = ['forensic', 'steganography', 'metadata', 'exif', 'binwalk',
+                             'image analysis', 'hidden data', 'embedded', 'volatility',
+                             'memory dump', 'disk image', '.pcap', '.pcapng']
+        if any(keyword in combined for keyword in forensics_keywords):
+            return "Forensics"
+        
+        # Network context detection
+        network_keywords = ['network', 'pcap', 'packet', 'wireshark', 'tshark', 'sniff',
+                           'tcp', 'udp', 'dns', 'traffic analysis']
+        if any(keyword in combined for keyword in network_keywords):
+            return "Network"
+        
+        # Web context detection (URLs, web-related keywords)
+        web_keywords = ['http', 'https', 'www', 'web', 'api', 'rest', 'graphql', 
+                       'xss', 'sqli', 'csrf', 'idor', 'ssti', 'lfi', 'rfi']
+        if any(keyword in combined for keyword in web_keywords) or '://' in target_lower:
+            return "Web"
+        
+        # Default to General if no specific context detected
+        return "General"
+    
     async def start(self):
         """Starts the conversation interface."""
         self._print_welcome()
@@ -251,6 +306,17 @@ class AegisConversation:
             rules: Rules/scope extracted by triage_mission
         """
         print(f"\n🤖 Aegis AI starting autonomous mission for {target}...")
+        
+        # --- DOMAIN CONTEXT DETECTION (v8.0 Full-Spectrum Architecture) ---
+        # Auto-detect domain context from target and rules for intelligent LLM routing
+        domain_context = self._detect_domain_context(target, rules)
+        
+        # Set domain context in both orchestrator and blackboard
+        self.ai_core.orchestrator.set_domain_context(domain_context)
+        self.ai_core.blackboard.set_domain_context(domain_context)
+        
+        logger.info(f"🎯 Domain context detected and set: {domain_context}")
+        print(f"🎯 Domain context: {domain_context}")
         
         # --- START OF AGENT LOOP ---
         
@@ -458,7 +524,10 @@ class AegisConversation:
                 break
                 
             if tool == "ask_user_for_approval":
-                print(f"💡 AI REQUEST : {args.get('message')}")
+                approval_message = args.get('message', 'AI requesting approval')
+                print(f"💡 AI REQUEST : {approval_message}")
+                # Log with special marker for UI parser to show approval buttons
+                logger.info(f"[APPROVAL_REQUEST] {approval_message}")
                 # Falls directly into human approval
             
             if tool == "system" or not tool:
