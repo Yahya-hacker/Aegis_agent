@@ -115,40 +115,30 @@ class AegisConversation:
         Returns:
             Domain context string: "Web", "Binary", "Network", "Crypto", "Forensics", or "General"
         """
+        # Domain detection keywords (in priority order)
+        # Note: Network keywords are checked before Forensics to handle .pcap/.pcapng overlap
+        DOMAIN_KEYWORDS = {
+            'Binary': ['binary', 'pwn', 'exploit', 'rop', 'buffer overflow', 'bof', 
+                      'shellcode', 'reverse engineering', 'elf', 'executable', '.bin'],
+            'Crypto': ['crypto', 'cipher', 'hash', 'encryption', 'decrypt', 'encode', 
+                      'base64', 'rsa', 'aes', 'cipher', 'cryptography'],
+            'Network': ['network', 'pcap', 'packet', 'wireshark', 'tshark', 'sniff',
+                       'tcp', 'udp', 'dns', 'traffic analysis', '.pcap', '.pcapng'],
+            'Forensics': ['forensic', 'steganography', 'metadata', 'exif', 'binwalk',
+                         'image analysis', 'hidden data', 'embedded', 'volatility',
+                         'memory dump', 'disk image'],
+            'Web': ['http', 'https', 'www', 'web', 'api', 'rest', 'graphql', 
+                   'xss', 'sqli', 'csrf', 'idor', 'ssti', 'lfi', 'rfi']
+        }
+        
         target_lower = target.lower()
         rules_lower = rules.lower()
         combined = f"{target_lower} {rules_lower}"
         
-        # Binary/Pwn context detection
-        binary_keywords = ['binary', 'pwn', 'exploit', 'rop', 'buffer overflow', 'bof', 
-                          'shellcode', 'reverse engineering', 'elf', 'executable', '.bin']
-        if any(keyword in combined for keyword in binary_keywords):
-            return "Binary"
-        
-        # Crypto context detection
-        crypto_keywords = ['crypto', 'cipher', 'hash', 'encryption', 'decrypt', 'encode', 
-                          'base64', 'rsa', 'aes', 'cipher', 'cryptography']
-        if any(keyword in combined for keyword in crypto_keywords):
-            return "Crypto"
-        
-        # Forensics context detection
-        forensics_keywords = ['forensic', 'steganography', 'metadata', 'exif', 'binwalk',
-                             'image analysis', 'hidden data', 'embedded', 'volatility',
-                             'memory dump', 'disk image', '.pcap', '.pcapng']
-        if any(keyword in combined for keyword in forensics_keywords):
-            return "Forensics"
-        
-        # Network context detection
-        network_keywords = ['network', 'pcap', 'packet', 'wireshark', 'tshark', 'sniff',
-                           'tcp', 'udp', 'dns', 'traffic analysis']
-        if any(keyword in combined for keyword in network_keywords):
-            return "Network"
-        
-        # Web context detection (URLs, web-related keywords)
-        web_keywords = ['http', 'https', 'www', 'web', 'api', 'rest', 'graphql', 
-                       'xss', 'sqli', 'csrf', 'idor', 'ssti', 'lfi', 'rfi']
-        if any(keyword in combined for keyword in web_keywords) or '://' in target_lower:
-            return "Web"
+        # Check domains in priority order (Network before Forensics for .pcap handling)
+        for domain in ['Binary', 'Crypto', 'Network', 'Forensics', 'Web']:
+            if any(keyword in combined for keyword in DOMAIN_KEYWORDS[domain]):
+                return domain
         
         # Default to General if no specific context detected
         return "General"
