@@ -187,14 +187,7 @@ class RealToolManager:
                         # Check if we've exceeded the limit
                         if total_bytes_read > max_bytes:
                             # Kill the process immediately
-                            try:
-                                process.kill()
-                                await process.wait()
-                            except ProcessLookupError:
-                                # Process already terminated
-                                pass
-                            except Exception as e:
-                                logger.warning(f"Error killing process after size limit exceeded: {e}")
+                            await self._kill_process_safely(process)
                             
                             raise RuntimeError(
                                 f"Output exceeded maximum allowed size ({max_bytes} bytes). "
@@ -223,14 +216,7 @@ class RealToolManager:
             
         except asyncio.TimeoutError:
             # Kill process on timeout
-            try:
-                process.kill()
-                await process.wait()
-            except ProcessLookupError:
-                # Process already terminated
-                pass
-            except Exception as e:
-                logger.warning(f"Error killing process after timeout: {e}")
+            await self._kill_process_safely(process)
             raise asyncio.TimeoutError(f"Command timed out after {timeout} seconds")
         
         # Combine chunks
@@ -239,6 +225,22 @@ class RealToolManager:
         return_code = process.returncode if process.returncode is not None else -1
         
         return stdout_bytes, stderr_bytes, return_code
+    
+    async def _kill_process_safely(self, process) -> None:
+        """
+        Safely kill a process and wait for it to terminate.
+        
+        Args:
+            process: The asyncio subprocess to kill
+        """
+        try:
+            process.kill()
+            await process.wait()
+        except ProcessLookupError:
+            # Process already terminated
+            pass
+        except Exception as e:
+            logger.warning(f"Error killing process: {e}")
     
     async def _execute(self, tool_name: str, args: List[str], timeout: int = 600) -> Dict[str, Any]:
         """

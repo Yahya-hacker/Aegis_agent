@@ -32,6 +32,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Minimum required Python version
+MINIMUM_PYTHON_VERSION = (3, 8)
+
 
 class AegisInstaller:
     """Automated installer for Aegis Agent dependencies."""
@@ -46,8 +49,8 @@ class AegisInstaller:
     def check_python_version(self) -> bool:
         """Check if Python version is compatible."""
         logger.info("🔍 Checking Python version...")
-        if self.python_version < (3, 8):
-            logger.error(f"❌ Python 3.8+ required, found {self.python_version.major}.{self.python_version.minor}")
+        if self.python_version < MINIMUM_PYTHON_VERSION:
+            logger.error(f"❌ Python {MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}+ required, found {self.python_version.major}.{self.python_version.minor}")
             return False
         logger.info(f"✅ Python {self.python_version.major}.{self.python_version.minor}.{self.python_version.micro}")
         return True
