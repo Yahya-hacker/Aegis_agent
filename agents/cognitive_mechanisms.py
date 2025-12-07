@@ -136,6 +136,12 @@ class PreExecutionAuditor:
         r',\s*[\}\]]',  # Trailing comma before closing bracket
     ]
     
+    # Critical system paths that should not be targeted by rm -rf
+    CRITICAL_PATHS = [
+        '/', '/bin', '/boot', '/etc', '/lib', '/lib64',
+        '/sbin', '/usr', '/var', '/sys', '/proc', '/*'
+    ]
+    
     def __init__(
         self,
         llm_callable: Optional[Any] = None,
@@ -332,9 +338,7 @@ class PreExecutionAuditor:
                                         has_force = True
                                 
                                 # Check for critical target paths
-                                critical_paths = ['/', '/bin', '/boot', '/etc', '/lib', '/lib64', 
-                                                '/sbin', '/usr', '/var', '/sys', '/proc', '/*']
-                                if any(arg == path or arg.startswith(path + '/') for path in critical_paths):
+                                if any(arg == path or arg.startswith(path + '/') for path in self.CRITICAL_PATHS):
                                     has_critical_path = True
                             
                             # Flag as dangerous if ALL three conditions are met
