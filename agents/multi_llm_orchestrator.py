@@ -19,6 +19,7 @@ import os
 import re
 import time
 import aiohttp
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import logging
@@ -68,8 +69,10 @@ class MultiLLMOrchestrator:
         
         # Sophisticated tracking for long missions and complex chains
         self._initialize_usage_tracker()
-        self.context_history = []  # Track context size over time
+        # Use deque with maxlen to prevent unbounded growth (memory leak fix)
+        self.context_history = deque(maxlen=1000)  # Track context size over time with bounded history
         self.error_patterns = {}  # Track recurring errors for pattern detection
+        self.recent_errors = deque(maxlen=50)  # Rolling window of recent errors for semantic loop detection
         
         # Loop Breaker: Track action history to detect repetitive loops
         self.action_history: List[str] = []
@@ -170,8 +173,21 @@ class MultiLLMOrchestrator:
         """
         Initialize usage tracking for all roles.
         Extracted as a private method to avoid code duplication between __init__ and reset.
+        Also implements cleanup for error_patterns to prevent unbounded growth.
         """
         self.usage_tracker = {role: {'calls': 0, 'tokens': 0, 'cost': 0.0} for role in self.ALL_ROLES}
+        
+        # Cleanup error_patterns if it exceeds threshold (memory leak fix)
+        # Keep only the most frequently occurring errors
+        if hasattr(self, 'error_patterns') and len(self.error_patterns) > 500:
+            # Sort by occurrence count (descending) and keep top 200
+            sorted_errors = sorted(
+                self.error_patterns.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            self.error_patterns = dict(sorted_errors[:200])
+            logger.info(f"🧹 Cleaned up error_patterns: kept top 200 of {len(sorted_errors)} patterns")
     
     def _compute_action_signature(self, action: Dict[str, Any]) -> str:
         """
@@ -228,6 +244,117 @@ class MultiLLMOrchestrator:
             return True, loop_description
         
         return False, None
+    
+    def _detect_semantic_loop(
+        self,
+        new_action: Dict[str, Any],
+        error_result: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Detect semantic loops where the agent tries the same strategy repeatedly
+        with slightly different payloads but gets the same error every time.
+        
+        This catches scenarios like:
+        - Trying SQL injection 50 times with different payloads, all getting "403 Forbidden"
+        - Attempting command injection repeatedly, all getting "Invalid input"
+        - Repeatedly trying the same tool with different args but same error class
+        
+        Args:
+            new_action: The proposed new action
+            error_result: Optional error message from the last action
+            
+        Returns:
+            Tuple of (is_semantic_loop_detected, loop_description)
+        """
+        # Extract tool name and error type
+        tool = new_action.get('tool', 'unknown')
+        
+        # Classify error type if provided
+        error_class = self._classify_error(error_result) if error_result else None
+        
+        # Record the current action-error pair
+        if error_class:
+            self.recent_errors.append((tool, error_class))
+        
+        # Check last 5 actions for semantic loop
+        semantic_window = 5
+        if len(self.recent_errors) >= 3:
+            recent_pairs = list(self.recent_errors)[-semantic_window:]
+            
+            # Count how many times the same (tool, error_class) appears
+            if error_class:
+                current_pair = (tool, error_class)
+                matching_count = recent_pairs.count(current_pair)
+                
+                # If the same tool+error appears 3+ times in last 5 actions, it's a semantic loop
+                if matching_count >= 3:
+                    loop_description = (
+                        f"Semantic loop detected: '{tool}' with error '{error_class}' "
+                        f"occurred {matching_count} times in last {len(recent_pairs)} actions. "
+                        f"Same strategy failing repeatedly with similar errors."
+                    )
+                    logger.warning(f"🔄 SEMANTIC LOOP DETECTED: {loop_description}")
+                    return True, loop_description
+        
+        return False, None
+    
+    def _classify_error(self, error_msg: Optional[str]) -> Optional[str]:
+        """
+        Classify error messages into broad categories for semantic loop detection.
+        
+        Args:
+            error_msg: Error message to classify
+            
+        Returns:
+            Error classification string or None
+        """
+        if not error_msg:
+            return None
+        
+        error_lower = str(error_msg).lower()
+        
+        # Define error classification patterns
+        error_patterns = {
+            'forbidden': ['403', 'forbidden', 'access denied', 'unauthorized', '401'],
+            'not_found': ['404', 'not found', 'does not exist', 'no such'],
+            'timeout': ['timeout', 'timed out', 'connection timeout'],
+            'rate_limit': ['429', 'rate limit', 'too many requests'],
+            'bad_request': ['400', 'bad request', 'invalid input', 'malformed'],
+            'server_error': ['500', '502', '503', 'internal server error'],
+            'blocked': ['blocked', 'filtered', 'waf', 'firewall'],
+            'syntax_error': ['syntax error', 'parse error', 'invalid syntax'],
+            'connection_error': ['connection refused', 'connection reset', 'unreachable'],
+        }
+        
+        # Match error message to classification
+        for error_class, patterns in error_patterns.items():
+            if any(pattern in error_lower for pattern in patterns):
+                return error_class
+        
+        # Default classification for unknown errors
+        return 'unknown_error'
+    
+    def record_action_with_error(
+        self,
+        action: Dict[str, Any],
+        error_result: Optional[str] = None
+    ) -> None:
+        """
+        Record an action with its error result for semantic loop detection.
+        
+        Args:
+            action: The action that was executed
+            error_result: Optional error message from the action
+        """
+        # Record in action history for exact loop detection
+        self.record_action(action)
+        
+        # Record in recent_errors for semantic loop detection
+        if error_result:
+            tool = action.get('tool', 'unknown')
+            error_class = self._classify_error(error_result)
+            if error_class:
+                self.recent_errors.append((tool, error_class))
     
     def record_action(self, action: Dict[str, Any]) -> None:
         """
@@ -1083,5 +1210,5 @@ DO NOT propose the same action again. Think creatively about alternative approac
         """
         logger.info("🔄 Resetting usage tracking for new mission phase...")
         self._initialize_usage_tracker()
-        self.context_history = []
+        self.context_history = deque(maxlen=1000)  # Reset with bounded deque
         # Keep error_patterns to track systemic issues across resets

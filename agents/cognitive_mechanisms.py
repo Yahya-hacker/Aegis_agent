@@ -12,6 +12,7 @@ Everything must be in English - Professional AI security agent implementation
 import asyncio
 import json
 import re
+import shlex
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -261,26 +262,107 @@ class PreExecutionAuditor:
         tool: str,
         args: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Check for dangerous command patterns"""
+        """
+        Check for dangerous command patterns.
+        
+        Uses shlex to properly parse commands and detect dangerous flag combinations
+        that could bypass simple regex checks.
+        """
         issues = []
         
         # Check all string arguments for dangerous patterns
         for key, value in args.items():
             if isinstance(value, str):
-                for pattern, description in self.DANGEROUS_PATTERNS.items():
+                # First check non-command patterns using regex
+                non_command_patterns = {
+                    r':(){ :|:& };:': "Fork bomb attack",
+                    r'dd\s+if=.*of=/dev/sd': "Disk wiping operation",
+                    r'mkfs\.': "Filesystem formatting operation",
+                    r'curl.*\|\s*sh': "Piping curl output to shell",
+                    r'wget.*\|\s*sh': "Piping wget output to shell",
+                    r'eval\s*\(': "Use of eval() function",
+                    r'exec\s*\(': "Use of exec() function",
+                    r'__import__\s*\(': "Dynamic import operation",
+                }
+                
+                for pattern, description in non_command_patterns.items():
                     if re.search(pattern, value, re.IGNORECASE):
                         issues.append(f"Dangerous operation in '{key}': {description}")
         
-        # Tool-specific checks
+        # Tool-specific checks with robust command parsing
         if tool in ['execute_command', 'shell_exec', 'run_script']:
             command = args.get('command', '') or args.get('script', '')
-            # Check for truly dangerous rm -rf operations (root or wildcard)
-            if 'rm -rf' in command:
-                # Only flag if it's targeting root, wildcard, or system directories
-                if re.search(r'rm\s+-rf\s+/(?:\s|$)', command) or \
-                   re.search(r'rm\s+-rf\s+/\*', command) or \
-                   re.search(r'rm\s+-rf\s+\*', command):
-                    issues.append("Potentially destructive rm -rf command targeting critical paths")
+            
+            if command:
+                # Use shlex to properly parse the command into arguments
+                try:
+                    # Parse command into tokens
+                    tokens = shlex.split(command)
+                    
+                    if len(tokens) > 0:
+                        base_cmd = tokens[0]
+                        cmd_args = tokens[1:]
+                        
+                        # Check for dangerous rm command
+                        if base_cmd in ['rm', '/bin/rm', '/usr/bin/rm']:
+                            # Track if we've seen recursive and force flags
+                            has_recursive = False
+                            has_force = False
+                            has_critical_path = False
+                            
+                            # Iterate through arguments to detect flags and paths
+                            for arg in cmd_args:
+                                # Check for recursive flags
+                                if arg in ['-r', '-R', '--recursive'] or \
+                                   (arg.startswith('-') and 'r' in arg.replace('-', '')):
+                                    has_recursive = True
+                                
+                                # Check for force flags
+                                if arg in ['-f', '--force'] or \
+                                   (arg.startswith('-') and 'f' in arg.replace('-', '')):
+                                    has_force = True
+                                
+                                # Check for critical target paths
+                                critical_paths = ['/', '/bin', '/boot', '/etc', '/lib', '/lib64', 
+                                                '/sbin', '/usr', '/var', '/sys', '/proc', '/*']
+                                if any(arg == path or arg.startswith(path + '/') for path in critical_paths):
+                                    has_critical_path = True
+                            
+                            # Flag as dangerous if ALL three conditions are met
+                            if has_recursive and has_force and has_critical_path:
+                                issues.append(
+                                    f"Critically dangerous rm command in '{key}': "
+                                    f"combines recursive (-r/-R) and force (-f) flags "
+                                    f"targeting critical system paths. This could destroy the system."
+                                )
+                            elif has_recursive and has_force:
+                                # Still warn about rm -rf even without critical paths
+                                issues.append(
+                                    f"Potentially dangerous rm command in '{key}': "
+                                    f"combines recursive and force flags. Verify target paths carefully."
+                                )
+                        
+                        # Check for chmod 777
+                        if base_cmd in ['chmod', '/bin/chmod', '/usr/bin/chmod']:
+                            if '-R' in cmd_args or '--recursive' in cmd_args:
+                                if '777' in cmd_args:
+                                    issues.append(
+                                        f"Dangerous permission change in '{key}': "
+                                        f"recursive chmod 777 compromises security"
+                                    )
+                
+                except ValueError as e:
+                    # shlex.split failed - might be malformed or contains special chars
+                    # Fall back to basic pattern matching
+                    logger.warning(f"Could not parse command with shlex: {e}, using fallback checks")
+                    
+                    # Fallback: check for obviously dangerous patterns
+                    if re.search(r'rm\s+.*-[rf]+.*\s+/', command) or \
+                       re.search(r'rm\s+-[rf]+\s+/', command):
+                        issues.append(
+                            f"Potentially dangerous rm command in '{key}': "
+                            f"appears to target root or system paths"
+                        )
         
         return {
             'safe': len(issues) == 0,
