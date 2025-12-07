@@ -312,15 +312,24 @@ class PreExecutionAuditor:
                             
                             # Iterate through arguments to detect flags and paths
                             for arg in cmd_args:
-                                # Check for recursive flags
-                                if arg in ['-r', '-R', '--recursive'] or \
-                                   (arg.startswith('-') and 'r' in arg.replace('-', '')):
+                                # Check for recursive flags (more precise detection)
+                                if arg in ['-r', '-R', '--recursive']:
                                     has_recursive = True
+                                elif arg.startswith('-') and not arg.startswith('--') and len(arg) > 1:
+                                    # Short flag bundle like -rf, -fr, -rFv, etc.
+                                    # Check if 'r' or 'R' is in the flag bundle
+                                    flag_chars = arg[1:]  # Remove leading dash
+                                    if 'r' in flag_chars or 'R' in flag_chars:
+                                        has_recursive = True
                                 
-                                # Check for force flags
-                                if arg in ['-f', '--force'] or \
-                                   (arg.startswith('-') and 'f' in arg.replace('-', '')):
+                                # Check for force flags (more precise detection)
+                                if arg in ['-f', '--force']:
                                     has_force = True
+                                elif arg.startswith('-') and not arg.startswith('--') and len(arg) > 1:
+                                    # Short flag bundle like -rf, -fr, -fv, etc.
+                                    flag_chars = arg[1:]  # Remove leading dash
+                                    if 'f' in flag_chars:
+                                        has_force = True
                                 
                                 # Check for critical target paths
                                 critical_paths = ['/', '/bin', '/boot', '/etc', '/lib', '/lib64', 
