@@ -101,20 +101,30 @@ class PreExecutionAuditor:
     Acts as a code reviewer to catch errors, dangerous commands, and logic issues.
     """
     
+    # Configurable safety thresholds
+    REJECTION_THRESHOLD = 0.4  # Below this score, action is rejected
+    WARNING_THRESHOLD = 0.7    # Below this score, action gets warnings
+    
+    # Configurable circular logic detection
+    DEFAULT_CIRCULAR_WINDOW = 3  # Number of recent actions to check
+    DEFAULT_CIRCULAR_THRESHOLD = 2  # Number of repetitions to trigger warning
+    
     # Dangerous command patterns that should trigger rejection
-    DANGEROUS_PATTERNS = [
-        r'rm\s+-rf\s+/',  # Dangerous recursive delete
-        r'rm\s+-rf\s+\*',  # Dangerous wildcard delete
-        r'dd\s+if=.*of=/dev/sd',  # Disk wiping
-        r'mkfs\.',  # Filesystem formatting
-        r':(){ :|:& };:',  # Fork bomb
-        r'chmod\s+-R\s+777',  # Dangerous permission change
-        r'curl.*\|\s*sh',  # Piping to shell (potential code injection)
-        r'wget.*\|\s*sh',  # Piping to shell
-        r'eval\s*\(',  # Dangerous eval
-        r'exec\s*\(',  # Dangerous exec
-        r'__import__\s*\(',  # Dynamic import (potential security risk)
-    ]
+    # Each pattern has a description for user-friendly error messages
+    DANGEROUS_PATTERNS = {
+        r'rm\s+-rf\s+/(?:\s|$)': "Recursive delete of root directory",
+        r'rm\s+-rf\s+/\*': "Recursive delete with root wildcard",
+        r'rm\s+-rf\s+\*': "Recursive delete with wildcard",
+        r'dd\s+if=.*of=/dev/sd': "Disk wiping operation",
+        r'mkfs\.': "Filesystem formatting operation",
+        r':(){ :|:& };:': "Fork bomb attack",
+        r'chmod\s+-R\s+777': "Dangerous permission change (777)",
+        r'curl.*\|\s*sh': "Piping curl output to shell",
+        r'wget.*\|\s*sh': "Piping wget output to shell",
+        r'eval\s*\(': "Use of eval() function",
+        r'exec\s*\(': "Use of exec() function",
+        r'__import__\s*\(': "Dynamic import operation",
+    }
     
     # Syntax error patterns
     SYNTAX_ERROR_PATTERNS = [
@@ -125,16 +135,33 @@ class PreExecutionAuditor:
         r',\s*[\}\]]',  # Trailing comma before closing bracket
     ]
     
-    def __init__(self, llm_callable: Optional[Any] = None):
+    def __init__(
+        self,
+        llm_callable: Optional[Any] = None,
+        rejection_threshold: float = 0.4,
+        warning_threshold: float = 0.7,
+        circular_window: int = 3,
+        circular_threshold: int = 2
+    ):
         """
         Initialize the auditor.
         
         Args:
             llm_callable: Optional async callable for LLM-based auditing
                          Should accept (system_prompt, user_message) and return response
+            rejection_threshold: Safety score below which actions are rejected (default: 0.4)
+            warning_threshold: Safety score below which warnings are issued (default: 0.7)
+            circular_window: Number of recent actions to check for circular logic (default: 3)
+            circular_threshold: Number of repetitions to trigger circular logic warning (default: 2)
         """
         self.llm_callable = llm_callable
         self.audit_history: List[Dict[str, Any]] = []
+        
+        # Configurable thresholds
+        self.rejection_threshold = rejection_threshold
+        self.warning_threshold = warning_threshold
+        self.circular_window = circular_window
+        self.circular_threshold = circular_threshold
     
     async def audit_proposed_action(
         self,
@@ -201,11 +228,11 @@ class PreExecutionAuditor:
         })
         
         # Determine result
-        if safety_score < 0.4:
+        if safety_score < self.rejection_threshold:
             result = AuditResult.REJECTED
             is_approved = False
             reason = f"Action rejected due to safety concerns: {'; '.join(issues[:3])}"
-        elif safety_score < 0.7:
+        elif safety_score < self.warning_threshold:
             result = AuditResult.WARNING
             is_approved = True
             reason = f"Action approved with warnings: {'; '.join(issues[:2])}"
@@ -240,15 +267,20 @@ class PreExecutionAuditor:
         # Check all string arguments for dangerous patterns
         for key, value in args.items():
             if isinstance(value, str):
-                for pattern in self.DANGEROUS_PATTERNS:
+                for pattern, description in self.DANGEROUS_PATTERNS.items():
                     if re.search(pattern, value, re.IGNORECASE):
-                        issues.append(f"Dangerous pattern detected in '{key}': {pattern}")
+                        issues.append(f"Dangerous operation in '{key}': {description}")
         
         # Tool-specific checks
         if tool in ['execute_command', 'shell_exec', 'run_script']:
             command = args.get('command', '') or args.get('script', '')
-            if 'rm -rf' in command and ('/' in command or '*' in command):
-                issues.append("Potentially destructive rm -rf command")
+            # Check for truly dangerous rm -rf operations (root or wildcard)
+            if 'rm -rf' in command:
+                # Only flag if it's targeting root, wildcard, or system directories
+                if re.search(r'rm\s+-rf\s+/(?:\s|$)', command) or \
+                   re.search(r'rm\s+-rf\s+/\*', command) or \
+                   re.search(r'rm\s+-rf\s+\*', command):
+                    issues.append("Potentially destructive rm -rf command targeting critical paths")
         
         return {
             'safe': len(issues) == 0,
@@ -308,10 +340,10 @@ class PreExecutionAuditor:
         
         # Check for circular logic
         recent_actions = context.get('recent_actions', [])
-        if len(recent_actions) >= 3:
+        if len(recent_actions) >= self.circular_window:
             # Check if we're repeating the same action too many times
-            recent_tools = [a.get('tool', '') for a in recent_actions[-3:]]
-            if recent_tools.count(tool) >= 2:
+            recent_tools = [a.get('tool', '') for a in recent_actions[-self.circular_window:]]
+            if recent_tools.count(tool) >= self.circular_threshold:
                 issues.append(f"Circular logic detected: '{tool}' repeated {recent_tools.count(tool)} times")
                 suggestions.append(f"Consider using a different tool or changing approach")
         

@@ -597,9 +597,10 @@ async def main():
     
     print()
     
-    # Exit code
-    sys.exit(0 if failed == 0 else 1)
+    # Return success/failure
+    return failed == 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    success = asyncio.run(main())
+    sys.exit(0 if success else 1)
