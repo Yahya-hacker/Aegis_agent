@@ -18,11 +18,12 @@ import json
 import os
 import re
 import time
-import aiohttp
 from collections import deque
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import logging
+
+import aiohttp
 from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,14 @@ class MultiLLMOrchestrator:
     ROLE_CODER = 'coder'
     ROLE_VISUAL = 'visual'
     ALL_ROLES = [ROLE_STRATEGIC, ROLE_VULNERABILITY, ROLE_CODER, ROLE_VISUAL]
+    
+    # Memory leak prevention constants
+    ERROR_PATTERNS_MAX_SIZE = 500  # Clean up error_patterns when it exceeds this size
+    ERROR_PATTERNS_KEEP_COUNT = 200  # Keep this many most frequent patterns after cleanup
+    
+    # Semantic loop detection constants
+    SEMANTIC_LOOP_THRESHOLD = 3  # Number of same (tool, error) occurrences to trigger loop
+    SEMANTIC_WINDOW_SIZE = 5  # Number of recent actions to check for semantic loops
     
     def __init__(self):
         self.api_key = None  # Legacy field for backward compatibility
@@ -179,15 +188,18 @@ class MultiLLMOrchestrator:
         
         # Cleanup error_patterns if it exceeds threshold (memory leak fix)
         # Keep only the most frequently occurring errors
-        if hasattr(self, 'error_patterns') and len(self.error_patterns) > 500:
-            # Sort by occurrence count (descending) and keep top 200
+        if hasattr(self, 'error_patterns') and len(self.error_patterns) > self.ERROR_PATTERNS_MAX_SIZE:
+            # Sort by occurrence count (descending) and keep top N most frequent
             sorted_errors = sorted(
                 self.error_patterns.items(),
                 key=lambda x: x[1],
                 reverse=True
             )
-            self.error_patterns = dict(sorted_errors[:200])
-            logger.info(f"🧹 Cleaned up error_patterns: kept top 200 of {len(sorted_errors)} patterns")
+            self.error_patterns = dict(sorted_errors[:self.ERROR_PATTERNS_KEEP_COUNT])
+            logger.info(
+                f"🧹 Cleaned up error_patterns: kept top {self.ERROR_PATTERNS_KEEP_COUNT} "
+                f"of {len(sorted_errors)} patterns"
+            )
     
     def _compute_action_signature(self, action: Dict[str, Any]) -> str:
         """
@@ -276,18 +288,17 @@ class MultiLLMOrchestrator:
         if error_class:
             self.recent_errors.append((tool, error_class))
         
-        # Check last 5 actions for semantic loop
-        semantic_window = 5
-        if len(self.recent_errors) >= 3:
-            recent_pairs = list(self.recent_errors)[-semantic_window:]
+        # Check recent actions for semantic loop
+        if len(self.recent_errors) >= self.SEMANTIC_LOOP_THRESHOLD:
+            recent_pairs = list(self.recent_errors)[-self.SEMANTIC_WINDOW_SIZE:]
             
             # Count how many times the same (tool, error_class) appears
             if error_class:
                 current_pair = (tool, error_class)
                 matching_count = recent_pairs.count(current_pair)
                 
-                # If the same tool+error appears 3+ times in last 5 actions, it's a semantic loop
-                if matching_count >= 3:
+                # If the same tool+error appears threshold times, it's a semantic loop
+                if matching_count >= self.SEMANTIC_LOOP_THRESHOLD:
                     loop_description = (
                         f"Semantic loop detected: '{tool}' with error '{error_class}' "
                         f"occurred {matching_count} times in last {len(recent_pairs)} actions. "
