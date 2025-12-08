@@ -361,29 +361,20 @@ class GenesisFuzzer:
             for i in range(min(len(val_bytes), 10)):  # Limit to first 10 bytes
                 mutated = bytearray(val_bytes)
                 mutated[i] ^= 0xFF  # Flip all bits
-                try:
-                    mutations.append(mutated.decode('utf-8', errors='ignore'))
-                except AttributeError:
-                    pass
+                mutations.append(mutated.decode('utf-8', errors='ignore'))
             
             # Random byte insertion
             for i in range(min(len(val_bytes), 5)):
                 mutated = bytearray(val_bytes)
                 mutated.insert(i, random.randint(0, 255))
-                try:
-                    mutations.append(mutated.decode('utf-8', errors='ignore'))
-                except AttributeError:
-                    pass
+                mutations.append(mutated.decode('utf-8', errors='ignore'))
             
             # Random byte deletion
             if len(val_bytes) > 1:
                 for i in range(min(len(val_bytes), 5)):
                     mutated = bytearray(val_bytes)
                     del mutated[i]
-                    try:
-                        mutations.append(mutated.decode('utf-8', errors='ignore'))
-                    except AttributeError:
-                        pass
+                    mutations.append(mutated.decode('utf-8', errors='ignore'))
         
         return mutations
     
