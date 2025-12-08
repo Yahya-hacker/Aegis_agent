@@ -363,7 +363,7 @@ class GenesisFuzzer:
                 mutated[i] ^= 0xFF  # Flip all bits
                 try:
                     mutations.append(mutated.decode('utf-8', errors='ignore'))
-                except (UnicodeDecodeError, AttributeError):
+                except AttributeError:
                     pass
             
             # Random byte insertion
@@ -372,7 +372,7 @@ class GenesisFuzzer:
                 mutated.insert(i, random.randint(0, 255))
                 try:
                     mutations.append(mutated.decode('utf-8', errors='ignore'))
-                except (UnicodeDecodeError, AttributeError):
+                except AttributeError:
                     pass
             
             # Random byte deletion
@@ -382,7 +382,7 @@ class GenesisFuzzer:
                     del mutated[i]
                     try:
                         mutations.append(mutated.decode('utf-8', errors='ignore'))
-                    except (UnicodeDecodeError, AttributeError):
+                    except AttributeError:
                         pass
         
         return mutations
