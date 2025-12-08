@@ -48,7 +48,7 @@ class ReasoningDisplay:
             # Check if terminal supports colors
             if sys.stdout.isatty():
                 return f"{self.COLORS.get(color, '')}{text}{self.COLORS['END']}"
-        except:
+        except (AttributeError, OSError):
             pass
         return text
     

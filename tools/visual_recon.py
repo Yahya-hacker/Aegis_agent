@@ -735,7 +735,7 @@ class VisualReconTool:
             # Wait for navigation or network idle after click
             try:
                 await page.wait_for_load_state('networkidle', timeout=5000)
-            except:
+            except Exception:
                 pass  # Timeout is okay, element might not trigger navigation
             
             # Get new page state

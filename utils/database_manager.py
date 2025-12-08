@@ -117,7 +117,7 @@ class MissionDatabase:
         if self.conn:
             try:
                 self.conn.close()
-            except:
+            except Exception:
                 pass
     
     # --- SUBDOMAIN OPERATIONS ---

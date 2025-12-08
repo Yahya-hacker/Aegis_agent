@@ -93,7 +93,7 @@ class AegisScanner:
         try:
             result = urlparse(url)
             return all([result.scheme, result.netloc])
-        except:
+        except (ValueError, AttributeError):
             return False
     
     async def _self_correct_and_retry(self, tool: str, original_args: Dict, error_message: str) -> Optional[Dict]:

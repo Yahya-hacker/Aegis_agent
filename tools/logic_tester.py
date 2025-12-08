@@ -227,7 +227,7 @@ class LogicTesterTool:
             # Try to parse response body
             try:
                 step_result["response_body"] = response.json()
-            except:
+            except (ValueError, AttributeError):
                 step_result["response_body"] = response.text[:500]  # First 500 chars
             
             logger.info(f"    ✓ Status: {response.status_code}")
