@@ -19,7 +19,7 @@ import subprocess
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,13 @@ class RealToolManager:
         self.last_request_time: Dict[str, float] = {}
         self.min_delay_between_requests = 2.0
         self.max_concurrent_requests = 3
-        self.active_processes = 0
+        
+        # Production-grade concurrency control with Semaphore
+        self.semaphore = asyncio.Semaphore(self.max_concurrent_requests)
+        
+        # Safe stream consumption limits (prevent output bombs)
+        self.max_output_bytes = 50 * 1024 * 1024  # 50MB for security scans
+        self.read_chunk_size = 4096  # 4KB chunks
         
         # God Mode configuration
         self.high_impact_mode = high_impact_mode
@@ -123,8 +129,137 @@ class RealToolManager:
         
         return paths
     
+    async def _safe_run_command(
+        self,
+        cmd: List[str],
+        timeout: int,
+        max_bytes: Optional[int] = None
+    ) -> Tuple[bytes, bytes, int]:
+        """
+        Safely run a command with output size limits to prevent "output bombs".
+        
+        Instead of using communicate() which loads all output into RAM,
+        this reads the output in chunks and enforces a maximum size limit.
+        
+        Args:
+            cmd: Command and arguments as a list
+            timeout: Maximum time to wait for command completion
+            max_bytes: Maximum bytes to read from stdout/stderr combined.
+                      If None, uses self.max_output_bytes (default 50MB)
+        
+        Returns:
+            Tuple of (stdout_bytes, stderr_bytes, return_code)
+            
+        Raises:
+            RuntimeError: If output exceeds max_bytes
+            asyncio.TimeoutError: If command exceeds timeout
+        """
+        if max_bytes is None:
+            max_bytes = self.max_output_bytes
+        
+        # Create subprocess
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout_chunks = []
+        stderr_chunks = []
+        total_bytes_read = 0
+        
+        try:
+            # Read output in chunks with size tracking
+            async def read_stream(stream, chunks_list):
+                nonlocal total_bytes_read
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            stream.read(self.read_chunk_size),
+                            timeout=1.0  # Short timeout per chunk
+                        )
+                        if not chunk:
+                            break
+                        
+                        chunk_size = len(chunk)
+                        total_bytes_read += chunk_size
+                        
+                        # Check if we've exceeded the limit
+                        if total_bytes_read > max_bytes:
+                            # Kill the process immediately
+                            await self._kill_process_safely(process)
+                            
+                            raise RuntimeError(
+                                f"Output exceeded maximum allowed size ({max_bytes} bytes). "
+                                f"Process killed to prevent memory exhaustion. "
+                                f"This may indicate an 'output bomb' attack."
+                            )
+                        
+                        chunks_list.append(chunk)
+                    except asyncio.TimeoutError:
+                        # No data available right now, check if process finished
+                        if process.returncode is not None:
+                            break
+                        continue
+            
+            # Read both streams concurrently
+            await asyncio.wait_for(
+                asyncio.gather(
+                    read_stream(process.stdout, stdout_chunks),
+                    read_stream(process.stderr, stderr_chunks)
+                ),
+                timeout=timeout
+            )
+            
+            # Wait for process to complete
+            await asyncio.wait_for(process.wait(), timeout=5.0)
+            
+        except asyncio.TimeoutError:
+            # Kill process on timeout
+            await self._kill_process_safely(process)
+            raise asyncio.TimeoutError(f"Command timed out after {timeout} seconds")
+        
+        # Combine chunks
+        stdout_bytes = b''.join(stdout_chunks)
+        stderr_bytes = b''.join(stderr_chunks)
+        return_code = process.returncode if process.returncode is not None else -1
+        
+        return stdout_bytes, stderr_bytes, return_code
+    
+    async def _kill_process_safely(self, process) -> None:
+        """
+        Safely kill a process and wait for it to terminate.
+        
+        Args:
+            process: The asyncio subprocess to kill
+        """
+        try:
+            process.kill()
+            await process.wait()
+        except ProcessLookupError:
+            # Process already terminated
+            pass
+        except Exception as e:
+            logger.warning(f"Error killing process: {e}")
+    
     async def _execute(self, tool_name: str, args: List[str], timeout: int = 600) -> Dict[str, Any]:
-        """Wrapper d'exécution asynchrone générique avec rate limiting"""
+        """
+        Execute a tool with production-grade safety measures.
+        
+        Features:
+        - Rate limiting with minimum delay between requests
+        - Concurrency control using asyncio.Semaphore
+        - Safe stream consumption to prevent output bombs
+        - Reliable timeout with process killing
+        
+        Args:
+            tool_name: Name of the tool to execute
+            args: Command line arguments for the tool
+            timeout: Maximum execution time in seconds
+            
+        Returns:
+            Dict with status and output or error information
+        """
         if tool_name not in self.tool_paths:
             return {"status": "error", "error": f"Outil {tool_name} non trouvé"}
         
@@ -138,47 +273,37 @@ class RealToolManager:
                 logger.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before executing {tool_name}")
                 await asyncio.sleep(wait_time)
         
-        # Check concurrent request limit
-        while self.active_processes >= self.max_concurrent_requests:
-            logger.warning(f"⚠️ Max concurrent requests ({self.max_concurrent_requests}) reached, waiting...")
-            await asyncio.sleep(1)
-        
         self.last_request_time[tool_name] = time.time()
-        self.active_processes += 1
         
-        try:
-            cmd = [self.tool_paths[tool_name]] + args
-            logger.info(f"Exécution : {' '.join(cmd)}")
-            
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
+        # Production-grade concurrency control using Semaphore
+        async with self.semaphore:
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
-                # Kill the process if it times out
+                cmd = [self.tool_paths[tool_name]] + args
+                logger.info(f"Exécution : {' '.join(cmd)}")
+                
+                # Use safe command runner to prevent output bombs
                 try:
-                    process.kill()
-                    await process.wait()
-                except:
-                    pass
-                logger.error(f"Tool {tool_name} exceeded timeout of {timeout}s")
-                return {"status": "error", "error": f"Timeout after {timeout}s"}
-            
-            if process.returncode != 0:
-                logger.error(f"Error from {tool_name}: {stderr.decode()}")
-                return {"status": "error", "error": stderr.decode()}
-
-            return {"status": "success", "stdout": stdout.decode(), "stderr": stderr.decode()}
-            
-        except Exception as e:
-            logger.error(f"Failed to execute {tool_name}: {e}", exc_info=True)
-            return {"status": "error", "error": str(e)}
-        finally:
-            self.active_processes -= 1
+                    stdout, stderr, return_code = await self._safe_run_command(cmd, timeout)
+                except RuntimeError as e:
+                    # Output bomb detected
+                    logger.error(f"Output bomb detected for {tool_name}: {e}")
+                    return {"status": "error", "error": str(e)}
+                except asyncio.TimeoutError as e:
+                    logger.error(f"Tool {tool_name} exceeded timeout of {timeout}s")
+                    return {"status": "error", "error": str(e)}
+                
+                if return_code != 0:
+                    stderr_str = stderr.decode('utf-8', errors='replace')
+                    logger.error(f"Error from {tool_name}: {stderr_str}")
+                    return {"status": "error", "error": stderr_str}
+                
+                stdout_str = stdout.decode('utf-8', errors='replace')
+                stderr_str = stderr.decode('utf-8', errors='replace')
+                return {"status": "success", "stdout": stdout_str, "stderr": stderr_str}
+                
+            except Exception as e:
+                logger.error(f"Failed to execute {tool_name}: {e}", exc_info=True)
+                return {"status": "error", "error": str(e)}
 
     # --- MÉTHODES D'OUTILS SPÉCIFIQUES ---
 
@@ -257,22 +382,28 @@ class RealToolManager:
                 logger.info("🔐 Injecting session cookies into Nuclei scan")
                 args.extend(["-H", f"Cookie: {cookie_header}"])
         
-        result = await self._execute("nuclei", args)
-        if result["status"] == "error":
-            return result
-        
-        findings = []
-        if output_file.exists():
-            with open(output_file, 'r') as f:
-                for line in f:
-                    if line.strip():
-                        try:
-                            findings.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
-            output_file.unlink()  # Cleanup
+        # Production-grade context manager for temporary file cleanup
+        try:
+            result = await self._execute("nuclei", args)
+            if result["status"] == "error":
+                return result
             
-        return {"status": "success", "data": findings}
+            findings = []
+            if output_file.exists():
+                with open(output_file, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            try:
+                                findings.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                continue
+                
+            return {"status": "success", "data": findings}
+        finally:
+            # ALWAYS cleanup temporary file, even if script crashes
+            # This prevents disk exhaustion from orphaned scan files
+            output_file.unlink(missing_ok=True)
+            logger.debug(f"🧹 Cleaned up temporary file: {output_file}")
 
     async def port_scanning(self, target: str) -> Dict:
         """
