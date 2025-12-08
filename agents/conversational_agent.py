@@ -1,6 +1,7 @@
 # agents/conversational_agent.py
 # --- MODIFIED AND CORRECTED VERSION ---
 # --- ENHANCED WITH UI COMMAND QUEUE SUPPORT ---
+# --- V8.0: STRATEGIC PLANNING WITH CONFIRMATION WORKFLOW ---
 
 import asyncio
 import re
@@ -10,6 +11,7 @@ from typing import Dict, List, Any, Optional
 import logging
 from agents.field_tester import AegisFieldTester # <-- IMPORT ADDED
 from agents.learning_engine import AegisLearningEngine
+from agents.strategic_planner import StrategicPlanner  # <-- STRATEGIC PLANNER ADDED
 from utils.reasoning_display import get_reasoning_display
 
 logger = logging.getLogger(__name__)
@@ -288,8 +290,13 @@ class AegisConversation:
 
     async def run_autonomous_loop_with_triage(self, target: str, rules: str):
         """
-        THIS IS THE MAIN AGENT LOOP (refactored to use triage_mission).
-        Think -> Propose -> Approve -> Act -> Observe
+        THIS IS THE MAIN AGENT LOOP with STRATEGIC PLANNING workflow.
+        
+        New workflow (v8.0):
+        1. Strategic Reconnaissance (SoM + technology fingerprinting)
+        2. Generate Strategic Plan with Chain of Thought
+        3. Request User Confirmation
+        4. Execute Plan -> Think -> Propose -> Approve -> Act -> Observe
         
         Args:
             target: Target extracted by triage_mission
@@ -308,6 +315,33 @@ class AegisConversation:
         logger.info(f"🎯 Domain context detected and set: {domain_context}")
         print(f"🎯 Domain context: {domain_context}")
         
+        # --- INITIALIZE SCANNER ---
+        from agents.scanner import AegisScanner
+        scanner = AegisScanner(self.ai_core)
+        
+        # --- NEW: STRATEGIC PLANNING PHASE ---
+        print("\n" + "="*80)
+        print("🧠 STRATEGIC PLANNING PHASE")
+        print("="*80)
+        print("\nThe agent will now analyze the target and create a customized plan.")
+        print("You will be asked to approve the plan before any exploitation begins.")
+        
+        # Create strategic planner
+        planner = StrategicPlanner(self.ai_core, scanner)
+        
+        # Step 1: Deep Reconnaissance
+        reconnaissance = await planner.analyze_target(target, rules)
+        
+        # Step 2: Generate Strategic Plan with CoT
+        strategic_plan = await planner.generate_strategic_plan(target, rules, reconnaissance)
+        
+        # Step 3: Request User Confirmation
+        plan_approved = await planner.request_user_confirmation(strategic_plan)
+        
+        if not plan_approved:
+            print("\n🛑 Mission aborted by user. Exiting.")
+            return
+        
         # --- START OF AGENT LOOP ---
         
         bbp_rules = f"""
@@ -316,80 +350,18 @@ class AegisConversation:
         {rules}
         """
         
-        print(f"📜 Rules loaded for {target}.")
+        print(f"\n📜 Rules loaded for {target}.")
+        print("\n" + "="*80)
+        print("🚀 EXECUTION PHASE - Following Approved Strategic Plan")
+        print("="*80)
         
-        from agents.scanner import AegisScanner
-        scanner = AegisScanner(self.ai_core)
-        
-        # Initializes agent memory
+        # Initialize agent memory with strategic plan context
         self.agent_memory = [
             {"type": "mission", "content": f"The mission is to scan {target} while respecting the rules."},
+            {"type": "strategic_plan", "content": f"Strategic Plan: {json.dumps(strategic_plan, indent=2)}"},
+            {"type": "reconnaissance", "content": f"Reconnaissance Data: {json.dumps(reconnaissance, indent=2)}"},
         ]
         self.global_findings = []
-
-        # --- PHASE 0: VISUAL RECONNAISSANCE & INITIAL PLANNING ---
-        print("\n" + "="*70)
-        print("👁️ PHASE 0: VISUAL RECONNAISSANCE & INITIAL PLANNING")
-        print("="*70)
-        
-        # 1. Take Screenshot & Analyze
-        print("📸 Screenshot capture and structural analysis...")
-        self.reasoning_display.show_thought(
-            "Performing initial visual reconnaissance to understand target structure",
-            thought_type="observation"
-        )
-        
-        # Create a visual recon action
-        visual_action = {
-            "tool": "capture_screenshot_som",
-            "args": {
-                "url": target,
-                "full_page": False
-            }
-        }
-        
-        visual_result = await scanner.execute_action(visual_action)
-        
-        if visual_result.get("status") == "success":
-            print("✅ Visual analysis completed.")
-            # We don't print the full base64 or mapping, just a summary
-            element_count = len(visual_result.get("element_mapping", {}))
-            print(f"   • {element_count} interactive elements identified")
-            
-            # Add to memory
-            self.agent_memory.append({
-                "type": "observation", 
-                "content": f"Initial Visual Analysis of {target}: Found {element_count} interactive elements. Screenshot captured."
-            })
-            
-            # 2. Generate Customized Plan
-            print("📝 Generating customized plan...")
-            self.reasoning_display.show_thought(
-                "Generating customized mission plan based on visual analysis and rules",
-                thought_type="planning"
-            )
-            
-            # Inject a specific instruction for the first step to force planning
-            self.agent_memory.append({
-                "type": "system_instruction",
-                "content": f"""
-                BASED ON THE VISUAL ANALYSIS OF {target} AND BBP RULES:
-                1. ANALYZE the application structure (e.g., Login page, Dashboard, E-commerce).
-                2. GENERATE a customized execution plan.
-                3. DO NOT run tools sequentially without reason.
-                4. IF BBP rules say "No DoS", use stealthy options.
-                5. IF you struggle, STOP, reason, and change approach.
-                
-                YOUR FIRST ACTION MUST BE TO OUTPUT THE PLAN.
-                """
-            })
-            
-        else:
-            print(f"⚠️ Initial visual analysis failed: {visual_result.get('error')}")
-            self.agent_memory.append({
-                "type": "observation",
-                "content": f"Initial visual recon failed: {visual_result.get('error')}. Proceeding with standard recon."
-            })
         
         for step_count in range(20): # Limit to 20 steps
             print("\n" + "="*70)
