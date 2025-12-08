@@ -17,6 +17,7 @@ Key Features:
 
 import logging
 import json
+import asyncio
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
@@ -451,7 +452,6 @@ Generate the strategic plan now:"""
         print(f"{Colors.WARNING}Ensure you have proper authorization before proceeding.{Colors.ENDC}")
         
         try:
-            import asyncio
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,

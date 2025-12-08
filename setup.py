@@ -23,6 +23,7 @@ import sys
 import subprocess
 import shutil
 import logging
+import getpass
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 import json
@@ -260,9 +261,18 @@ class AegisSetup:
         print(f"   {Colors.OKBLUE}To use Aegis Agent, you need an OpenRouter API key.{Colors.ENDC}")
         print(f"   {Colors.OKBLUE}Get one at: https://openrouter.ai/{Colors.ENDC}\n")
         
-        api_key = input(f"   Enter your OpenRouter API key (or press Enter to skip): ").strip()
+        # Use getpass for secure input (hides the key)
+        try:
+            api_key = getpass.getpass("   Enter your OpenRouter API key (hidden, or press Enter to skip): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n   Input cancelled.")
+            api_key = ""
         
         if api_key:
+            # Basic validation of API key format
+            if len(api_key) < 10 or not api_key.replace('-', '').replace('_', '').isalnum():
+                self.print_warning("API key format seems invalid. Saving anyway, but you may need to edit .env manually.")
+            
             # Update .env file with API key
             with open(env_file, 'r') as f:
                 content = f.read()
