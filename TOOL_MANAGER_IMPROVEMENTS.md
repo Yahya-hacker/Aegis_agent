@@ -180,26 +180,26 @@ This method is now used in:
 
 ---
 
-## Installation Script (install.py)
+## Setup Script (setup.py)
 
-Created a comprehensive automated installer that handles all dependencies:
+Created a comprehensive automated setup script that handles all dependencies and configuration:
 
 **Features:**
 - ✅ Checks prerequisites (Python 3.8+, Go 1.18+)
-- ✅ Installs system packages via apt (nmap, sqlmap, build tools)
 - ✅ Installs Python packages from requirements.txt
-- ✅ Installs Go-based security tools (subfinder, nuclei, naabu, httpx, etc.)
-- ✅ Installs Playwright with browser dependencies
-- ✅ Configures PATH in shell rc files
-- ✅ Comprehensive error handling and reporting
+- ✅ Installs Playwright browsers with dependencies
+- ✅ Installs Go-based security tools (subfinder, nuclei, httpx, etc.)
+- ✅ Interactive .env configuration with API key setup
+- ✅ Creates necessary directory structure
+- ✅ Comprehensive error handling and colored output
 - ✅ Verification of successful installation
 
 **Usage:**
 ```bash
-python3 install.py
+python setup.py
 ```
 
-The installer provides clear feedback at each step and handles partial failures gracefully.
+The setup script provides a user-friendly interface with colored output, progress tracking, and handles partial failures gracefully.
 
 ---
 

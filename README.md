@@ -242,29 +242,45 @@ VISUAL_API_KEY=sk-visual-key             # Separate account for screenshots
 
 ### Installation
 
+#### Automated Setup (Recommended)
+
 ```bash
 # Clone repository
 git clone https://github.com/Yahya-hacker/Aegis_agent.git
 cd Aegis_agent
 
+# Run automated setup script
+python setup.py
+
+# The setup script will:
+# - Check Python and Go versions
+# - Install all Python dependencies
+# - Install Playwright browsers
+# - Install Go-based security tools (if Go is installed)
+# - Configure environment variables (.env)
+# - Create necessary directories
+# - Verify installation
+
+# After setup completes:
+python main.py
+```
+
+#### Manual Installation
+
+If you prefer manual installation:
+
+```bash
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install Playwright browsers (auto-installed if missing)
+# Install Playwright browsers
 playwright install chromium
 
 # Configure API keys
 cp .env.example .env
 nano .env  # Add your OpenRouter API key(s)
 
-# Run Aegis
-python main.py
-```
-
-### Optional Security Tools
-
-```bash
-# Install Go-based tools
+# Optional: Install Go-based security tools
 go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
@@ -272,8 +288,8 @@ go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install github.com/lc/gau/v2/cmd/gau@latest
 go install github.com/tomnomnom/waybackurls@latest
 
-# Install SQLMap
-apt install sqlmap  # or pip install sqlmap
+# Run Aegis
+python main.py
 ```
 
 ---
