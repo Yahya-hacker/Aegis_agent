@@ -31,10 +31,10 @@ def import_module_directly(module_path: str):
     if not module_file.exists():
         raise ImportError(f"Module file not found: {module_file}")
     
-    module_name = module_path.split(".")[-1]
-    spec = importlib.util.spec_from_file_location(module_name, module_file)
+    # Use full module path to avoid namespace collisions
+    spec = importlib.util.spec_from_file_location(module_path, module_file)
     module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
+    sys.modules[module_path] = module
     spec.loader.exec_module(module)
     return module
 
