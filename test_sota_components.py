@@ -4,15 +4,39 @@ SOTA Agent Integration Tests
 =============================
 
 Basic tests to verify SOTA components are working correctly.
+
+These tests are designed to work even when optional dependencies
+(selenium, nmap, etc.) are not installed.
 """
 
 import asyncio
 import sys
+import importlib.util
 from pathlib import Path
 
 # Add project root to path
 SCRIPT_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(SCRIPT_DIR))
+
+
+def import_module_directly(module_path: str):
+    """
+    Import a module directly without triggering package __init__.py.
+    This allows testing individual SOTA components without requiring
+    all dependencies (selenium, nmap, etc.) to be installed.
+    """
+    module_file = SCRIPT_DIR / module_path.replace(".", "/")
+    module_file = module_file.with_suffix(".py")
+    
+    if not module_file.exists():
+        raise ImportError(f"Module file not found: {module_file}")
+    
+    module_name = module_path.split(".")[-1]
+    spec = importlib.util.spec_from_file_location(module_name, module_file)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 async def test_ktv_loop():
@@ -22,7 +46,10 @@ async def test_ktv_loop():
     print("="*80)
     
     try:
-        from agents.ktv_loop import KTVLoop, Fact
+        # Import directly to avoid triggering agents/__init__.py which requires selenium
+        ktv_loop_module = import_module_directly("agents.ktv_loop")
+        KTVLoop = ktv_loop_module.KTVLoop
+        Fact = ktv_loop_module.Fact
         
         # Create mock AI core and scanner
         class MockAICore:
@@ -102,7 +129,11 @@ async def test_discovery_validation():
     print("="*80)
     
     try:
-        from agents.discovery_validation_agents import DiscoveryAgent, ValidationAgent, PotentialFinding
+        # Import directly to avoid triggering agents/__init__.py which requires selenium
+        dv_module = import_module_directly("agents.discovery_validation_agents")
+        DiscoveryAgent = dv_module.DiscoveryAgent
+        ValidationAgent = dv_module.ValidationAgent
+        PotentialFinding = dv_module.PotentialFinding
         from datetime import datetime
         
         # Create mock components
