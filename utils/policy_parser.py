@@ -142,6 +142,10 @@ class PolicyParser:
                 match = re.search(pattern, sentence, re.IGNORECASE)
                 if match:
                     self._rule_counter += 1
+                    # Safe access to match groups
+                    value = match.group(1)
+                    unit = match.group(2) if match.lastindex and match.lastindex >= 2 else "requests"
+                    
                     rule = PolicyRule(
                         id=f"rule_{self._rule_counter}",
                         rule_type=rule_type,
@@ -149,12 +153,12 @@ class PolicyParser:
                         pattern=sentence,
                         description=sentence,
                         metadata={
-                            "value": match.group(1),
-                            "unit": match.group(2) if match.lastindex >= 2 else "requests"
+                            "value": value,
+                            "unit": unit
                         }
                     )
                     rules.append(rule)
-                    logger.info(f"  ✓ Parsed {rule_type}: {match.group(1)} {match.group(2) if match.lastindex >= 2 else ''}")
+                    logger.info(f"  ✓ Parsed {rule_type}: {value} {unit}")
             
             # Try risk patterns
             for pattern, rule_type in self.risk_patterns:

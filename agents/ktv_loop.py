@@ -19,6 +19,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+# Import parse_json_robust at module level for better performance
+try:
+    from agents.enhanced_ai_core import parse_json_robust
+except ImportError:
+    # Fallback if not available
+    async def parse_json_robust(content, orchestrator=None, context=""):
+        import json
+        try:
+            return json.loads(content)
+        except:
+            return None
+
 logger = logging.getLogger(__name__)
 
 
@@ -194,7 +206,6 @@ Output format:
             )
             
             # Parse response
-            from agents.enhanced_ai_core import parse_json_robust
             result = await parse_json_robust(response, self.ai_core.orchestrator, "hypothesis generation")
             
             if not result or "hypotheses" not in result:
@@ -344,7 +355,6 @@ Output format:
             )
             
             # Parse response
-            from agents.enhanced_ai_core import parse_json_robust
             validation = await parse_json_robust(response, self.ai_core.orchestrator, "validation analysis")
             
             if not validation:

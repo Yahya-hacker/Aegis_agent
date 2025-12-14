@@ -44,8 +44,8 @@ def simhash(text: str, hash_bits: int = 64) -> int:
     v = [0] * hash_bits
     
     for token in tokens:
-        # Hash the token
-        h = int(hashlib.md5(token.encode()).hexdigest(), 16)
+        # Use SHA-256 instead of MD5 for better security
+        h = int(hashlib.sha256(token.encode()).hexdigest(), 16)
         
         # Update vector
         for i in range(hash_bits):

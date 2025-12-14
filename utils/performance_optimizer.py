@@ -257,18 +257,30 @@ class CacheManager:
             else:
                 del self.memory_cache[key]
         
-        # Try disk cache
+        # Try disk cache (with safe JSON parsing first)
         if disk and self.cache_dir:
             cache_file = self.cache_dir / f"{key}.cache"
             if cache_file.exists():
                 try:
-                    with open(cache_file, 'rb') as f:
-                        value, expiry = pickle.load(f)
-                    
-                    if datetime.now() < expiry:
-                        return value
-                    else:
-                        cache_file.unlink()
+                    # Try JSON first (safer)
+                    try:
+                        with open(cache_file, 'r') as f:
+                            cache_data = json.load(f)
+                        
+                        expiry = datetime.fromisoformat(cache_data["expiry"])
+                        if datetime.now() < expiry:
+                            return cache_data["value"]
+                        else:
+                            cache_file.unlink()
+                    except (json.JSONDecodeError, KeyError, ValueError):
+                        # Fallback to pickle (less safe)
+                        with open(cache_file, 'rb') as f:
+                            value, expiry = pickle.load(f)
+                        
+                        if datetime.now() < expiry:
+                            return value
+                        else:
+                            cache_file.unlink()
                 except Exception as e:
                     logger.warning(f"Error reading cache file: {e}")
         
@@ -281,12 +293,24 @@ class CacheManager:
         # Store in memory
         self.memory_cache[key] = (value, expiry)
         
-        # Store on disk
+        # Store on disk using JSON where possible (safer than pickle)
         if disk and self.cache_dir:
             cache_file = self.cache_dir / f"{key}.cache"
             try:
-                with open(cache_file, 'wb') as f:
-                    pickle.dump((value, expiry), f)
+                # Try JSON serialization first (safer)
+                try:
+                    cache_data = {
+                        "value": value,
+                        "expiry": expiry.isoformat()
+                    }
+                    with open(cache_file, 'w') as f:
+                        json.dump(cache_data, f)
+                except (TypeError, ValueError):
+                    # Fallback to pickle for complex objects
+                    # Note: pickle can execute arbitrary code - use with caution
+                    logger.warning("Using pickle for cache storage (security risk)")
+                    with open(cache_file, 'wb') as f:
+                        pickle.dump((value, expiry), f)
             except Exception as e:
                 logger.warning(f"Error writing cache file: {e}")
     

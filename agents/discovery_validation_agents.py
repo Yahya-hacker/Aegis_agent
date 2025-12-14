@@ -474,13 +474,28 @@ Output format:
             
             results = []
             
-            # Execute each step
+            # Execute each step with validation
             for step in poc.steps:
                 step_action = step.get("details", {})
                 
-                if isinstance(step_action, dict) and "tool" in step_action:
-                    result = await self.scanner.execute_action(step_action)
-                    results.append(result)
+                # Validate step action before execution
+                if not isinstance(step_action, dict):
+                    logger.warning(f"Invalid step action format: {type(step_action)}")
+                    continue
+                
+                if "tool" not in step_action:
+                    logger.warning(f"Step missing 'tool' field: {step_action}")
+                    continue
+                
+                # Additional safety: validate tool is allowed
+                allowed_tools = ["http_request", "sql_injection_test", "xss_test", "path_traversal_test"]
+                if step_action.get("tool") not in allowed_tools:
+                    logger.warning(f"Potentially unsafe tool in PoC: {step_action.get('tool')}")
+                    # Skip or require approval for unknown tools
+                    continue
+                
+                result = await self.scanner.execute_action(step_action)
+                results.append(result)
             
             # Analyze results to determine if impact was demonstrated
             final_result = results[-1] if results else {}

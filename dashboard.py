@@ -457,7 +457,9 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://via.placeholder.com/150x50/0E1117/00D9FF?text=AEGIS+AI", use_container_width=True)
+        # Use a simple emoji or text instead of external image
+        st.markdown("# 🛡️ AEGIS AI")
+        st.markdown("*State-of-the-Art Pentest Agent*")
         
         st.markdown("### 🎛️ Control Panel")
         

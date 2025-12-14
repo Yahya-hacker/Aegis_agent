@@ -61,10 +61,18 @@ def launch_ui_dashboard():
             import streamlit
             print("✓ Streamlit found")
         except ImportError:
-            print("⚠️  Streamlit not installed. Installing now...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "streamlit", "plotly", "pandas"], 
-                         check=True, capture_output=True)
-            print("✓ Streamlit installed")
+            print("⚠️  Streamlit not found. UI features require streamlit, plotly, and pandas.")
+            print("   Install with: pip install streamlit plotly pandas")
+            response = input("   Install now? (y/N): ").strip().lower()
+            
+            if response == 'y':
+                print("   Installing streamlit, plotly, pandas...")
+                subprocess.run([sys.executable, "-m", "pip", "install", "streamlit", "plotly", "pandas"], 
+                             check=True, capture_output=True)
+                print("✓ Packages installed")
+            else:
+                print("   Skipping UI launch. Agent will continue without UI.")
+                return False
         
         # Launch streamlit in a subprocess
         ui_process = subprocess.Popen(
