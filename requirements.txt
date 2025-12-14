@@ -14,6 +14,9 @@ playwright>=1.40.0
 # Interface utilisateur et utilitaires
 colorama>=0.4.6
 pillow>=10.0.0
+streamlit>=1.28.0
+plotly>=5.17.0
+pandas>=2.0.0
 
 # Graphe de connaissances et fonctionnalités avancées
 networkx>=3.0
