@@ -4,7 +4,117 @@
 
 **v8.0 NEW:** Full-Spectrum CTF & Red Team Operations with autonomous self-healing capabilities.
 
+**v8.1 NEW: OMEGA PROTOCOL** — Neuro-Symbolic Swarm Intelligence for advanced reasoning and safe execution.
+
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
+
+---
+
+## 🌐 OMEGA PROTOCOL: Neuro-Symbolic Swarm Intelligence
+
+The **Omega Protocol** is an advanced cognitive architecture that enhances the agent's reasoning capabilities:
+
+### Core Components
+
+| Component | Description | Key Features |
+|-----------|-------------|--------------|
+| **Knowledge Graph** | Graph-native attack surface mapping | Nodes (Assets, Tech, Creds), Edges (Attack Paths), Traversal-based testing |
+| **Adversarial Swarm** | Internal debate before risky actions | RED (Attacker), BLUE (Defender), JUDGE (Strategist) |
+| **Epistemic Priority** | Confidence-based mode shifting | Blocks exploitation until confidence ≥ 60%, focuses on information gain |
+| **Virtual Sandbox** | Safe execution with verification | Pre-compute predictions, halt on >20% deviation, dependency lock |
+| **Report Generator** | Multi-format export | JSON, HTML, PDF reports with attack graphs |
+
+### Graph-Native KTV Loop
+
+All reasoning maps to the Knowledge Graph:
+
+```
+[GRAPH STATE] Nodes: 5 (Web, API, ?DB), Edges: 2
+[ATTACK PATH] Node(Web) --[SQLi, Conf: 0.9]--> Node(DB) --[Access, Conf: 0.7]--> Node(AdminHash)
+```
+
+- **KNOW (Nodes)**: Every confirmed fact is a Node
+- **THINK (Edges)**: Every hypothesis is a probabilistic Edge
+- **TEST (Traversal)**: Validate paths through the graph
+
+### Adversarial Swarm Protocol
+
+Before executing high-risk tools (risk score > 5), the agent conducts an internal debate:
+
+```
+[DEBATE] 
+  RED: Use aggressive SQLMap with all payloads
+  BLUE: WAF detected (Cloudflare), aggressive scans will trigger blocks
+  JUDGE: Execute stealth variant with URL encoding and 2-second delays
+```
+
+### Epistemic Priority Rule
+
+When architecture confidence is low, exploitation is disabled:
+
+```
+[EPISTEMIC STATE] Mode: SEARCH
+[CONFIDENCE] Overall: 45% (threshold: 60%)
+[EXPLOITATION] LOCKED - Complete reconnaissance first
+
+[RECOMMENDED ACTIONS]
+1. technology_fingerprint - Identify technology stack
+2. javascript_analysis - Extract endpoints from JS
+3. api_discovery - Find API endpoints
+```
+
+### Virtual Sandbox Safety
+
+Every command is pre-computed and verified:
+
+1. **Pre-Compute**: Predict expected HTTP response before execution
+2. **Atomic Verify**: If response deviates >20%, HALT and re-evaluate
+3. **Dependency Lock**: No tool installation mid-mission; use fallbacks
+
+### Report Generation
+
+Generate professional reports in multiple formats:
+
+```python
+from utils.report_generator import get_report_generator, ReportFormat
+
+generator = get_report_generator()
+paths = generator.generate_report(report_data, formats=[
+    ReportFormat.JSON,  # Machine-readable
+    ReportFormat.HTML,  # Interactive web report
+    ReportFormat.PDF    # Professional document (requires weasyprint)
+])
+```
+
+### Using the Omega Protocol
+
+```python
+from agents.omega_protocol import get_omega_protocol
+
+# Initialize with AI core and scanner
+protocol = get_omega_protocol(ai_core, scanner)
+
+# Execute a complete mission
+results = await protocol.execute_omega_mission(
+    target="https://target.com",
+    rules="Standard penetration testing",
+    max_iterations=10
+)
+
+# Or execute individual actions through the pipeline
+result = await protocol.execute_action({
+    "tool": "sql_injection_test",
+    "args": {"url": "https://target.com/search?q=test"}
+})
+
+# Get current state for UI display
+state = protocol.get_omega_state()
+# {
+#   "graph": {"nodes": 12, "edges": 8, "attack_paths": 3},
+#   "epistemic": {"confidence": 0.72, "mode": "exploitation"},
+#   "swarm": {"debates": 5}
+# }
+```
 
 ---
 

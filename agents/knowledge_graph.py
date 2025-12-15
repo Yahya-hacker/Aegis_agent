@@ -24,7 +24,8 @@ try:
     import networkx as nx
 except ImportError:
     nx = None
-    logging.warning("NetworkX not available, using fallback graph implementation")
+    logger = logging.getLogger(__name__)
+    logger.warning("NetworkX not available, using fallback graph implementation")
 
 logger = logging.getLogger(__name__)
 

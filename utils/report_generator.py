@@ -15,7 +15,6 @@ Reports include:
 - Remediation recommendations
 """
 
-import asyncio
 import logging
 import json
 import html

@@ -51,12 +51,25 @@
       },
       "created_at": "2025-12-15T12:41:57.217430",
       "last_updated": "2025-12-15T12:41:57.217431"
+    },
+    {
+      "id": "n_endpoint_5",
+      "node_type": "endpoint",
+      "label": "http://test.com",
+      "description": "Endpoint discovered via http_request",
+      "confidence": 0.9,
+      "properties": {
+        "url": "http://test.com",
+        "tool": "http_request"
+      },
+      "created_at": "2025-12-15T12:45:20.447708",
+      "last_updated": "2025-12-15T12:45:20.447708"
     }
   ],
   "edges": [],
   "attack_paths": [],
   "counters": {
-    "node": 4,
+    "node": 5,
     "edge": 0,
     "path": 0
   }

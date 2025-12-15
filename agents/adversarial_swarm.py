@@ -21,6 +21,17 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+# Import parse_json_robust for LLM response parsing
+try:
+    from agents.enhanced_ai_core import parse_json_robust
+except ImportError:
+    # Fallback if enhanced_ai_core not available
+    async def parse_json_robust(content, orchestrator=None, context=""):
+        try:
+            return json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
 logger = logging.getLogger(__name__)
 
 
@@ -417,7 +428,6 @@ Respond in JSON format:
             )
             
             # Parse response
-            from agents.enhanced_ai_core import parse_json_robust
             result = await parse_json_robust(response, self.ai_core.orchestrator, "swarm debate")
             
             if result:

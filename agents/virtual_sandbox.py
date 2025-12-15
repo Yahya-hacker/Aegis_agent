@@ -150,14 +150,14 @@ class VirtualSandbox:
         r"wget.*\|\s*bash",
     ]
     
-    def __init__(self, deviation_threshold: float = 0.20):
+    def __init__(self, deviation_threshold: float = None):
         """
         Initialize the Virtual Sandbox.
         
         Args:
             deviation_threshold: Maximum allowed deviation (default: 20%)
         """
-        self.deviation_threshold = deviation_threshold
+        self.deviation_threshold = deviation_threshold if deviation_threshold is not None else self.DEVIATION_THRESHOLD
         self.prediction_history: List[Tuple[ResponsePrediction, Any, VerificationResult]] = []
         self._locked_tools: set = set()
     
