@@ -115,11 +115,11 @@ async def main():
         except Exception as e:
             logger.error(f"Error stopping keep-alive: {e}")
         
-        # Cleanup: Close database connections
+        # Cleanup: Close database connections (async)
         try:
-            from utils.database_manager import get_database
-            db = get_database()
-            db.close()
+            from utils.database_manager import get_async_database
+            db = await get_async_database()
+            await db.close()
             logger.info("Database connection closed")
         except Exception as e:
             logger.error(f"Error closing database: {e}")

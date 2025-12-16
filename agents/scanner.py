@@ -14,8 +14,9 @@ from tools.tool_manager import RealToolManager
 from tools.python_tools import PythonToolManager
 from tools.visual_recon import get_visual_recon_tool
 from tools.tool_installer import get_tool_installer
-from utils.database_manager import get_database
+from utils.database_manager import get_async_database, AsyncMissionDatabase
 from utils.impact_quantifier import get_impact_quantifier
+from utils.output_sanitizer import get_output_sanitizer, OutputSanitizer
 from agents.enhanced_ai_core import parse_json_robust
 
 # Import CTF capability modules
@@ -39,6 +40,8 @@ class AegisScanner:
     - Digital Forensics (forensics_lab)
     - Binary Exploitation (pwn_exploiter)
     - Network Analysis (network_sentry)
+    
+    Uses async database operations to prevent blocking the event loop.
     """
     
     def __init__(self, ai_core):
@@ -46,10 +49,11 @@ class AegisScanner:
         self.real_tools = RealToolManager()
         self.python_tools = PythonToolManager()
         self.visual_recon = get_visual_recon_tool()
-        self.db = get_database()  # Mission database
+        self._db: Optional[AsyncMissionDatabase] = None  # Async mission database (lazy init)
         self.som_mappings = {}  # Store SoM mappings {url: element_mapping}
         self.impact_quantifier = get_impact_quantifier(ai_core)  # RAG-based impact assessment
         self.tool_installer = get_tool_installer()  # Self-healing tool installer
+        self.output_sanitizer: OutputSanitizer = get_output_sanitizer()  # Output sanitizer for large outputs
         
         # Initialize CTF capability engines
         self.crypto_engine = get_crypto_engine()
@@ -59,6 +63,12 @@ class AegisScanner:
         self.network_sentry = get_network_sentry()
         
         logger.info("🛡️ AegisScanner v8.0 initialized with CTF capabilities")
+    
+    async def _get_db(self) -> AsyncMissionDatabase:
+        """Get or initialize the async database connection"""
+        if self._db is None:
+            self._db = await get_async_database()
+        return self._db
     
     def _validate_domain(self, domain: str) -> bool:
         """Validate domain name format"""
@@ -178,13 +188,13 @@ If you cannot suggest a fix, respond with:
     async def execute_action(self, action: Dict) -> Dict:
         """
         Orchestrateur qui exécute l'action demandée par l'IA avec validation, error handling,
-        and self-correction capabilities (TASK 3)
+        self-correction capabilities (TASK 3), and output sanitization (Issue 5)
         
         Args:
             action: Dictionary containing tool name and arguments
             
         Returns:
-            Dictionary with status and results
+            Dictionary with status and results (sanitized for large outputs)
         """
         # Input validation
         if not isinstance(action, dict):
@@ -213,8 +223,15 @@ If you cannot suggest a fix, respond with:
                 # Execute the tool with current args
                 result = await self._execute_tool_internal(tool, current_args)
                 
-                # If successful, return immediately
+                # Issue 5: Sanitize output before returning to prevent context overflow
                 if result.get("status") == "success":
+                    # Build context for sanitizer
+                    context = f"{tool} with args: {json.dumps(current_args)[:200]}"
+                    result = self.output_sanitizer.sanitize(
+                        tool_name=tool,
+                        output=result,
+                        context=context
+                    )
                     return result
                 
                 # If error, prepare for potential retry
@@ -283,13 +300,14 @@ If you cannot suggest a fix, respond with:
                 if not self._validate_domain(domain):
                     return {"status": "error", "error": f"Invalid domain format: {domain}"}
                 
-                # TASK 2: Execute and record in database
+                # TASK 2: Execute and record in database (async)
                 result = await self.real_tools.subdomain_enumeration(domain)
                 if result.get("status") == "success":
                     # Record scan in database
                     data = result.get("data", [])
                     scan_result = f"Found {len(data)} subdomains" if isinstance(data, list) else "Completed"
-                    self.db.mark_scanned(domain, "subdomain_enumeration", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(domain, "subdomain_enumeration", scan_result)
                 return result
 
             elif tool == "port_scanning":
@@ -299,12 +317,13 @@ If you cannot suggest a fix, respond with:
                 if not self._validate_target(target):
                     return {"status": "error", "error": f"Invalid target format: {target}"}
                 
-                # TASK 2: Execute and record in database
+                # TASK 2: Execute and record in database (async)
                 result = await self.real_tools.port_scanning(target)
                 if result.get("status") == "success":
                     data = result.get("data", [])
                     scan_result = f"Found {len(data)} open ports" if isinstance(data, list) else "Completed"
-                    self.db.mark_scanned(target, "port_scanning", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(target, "port_scanning", scan_result)
                 return result
 
             elif tool == "nmap_scan":
@@ -318,24 +337,26 @@ If you cannot suggest a fix, respond with:
                     
                 if not target: return {"status": "error", "error": "Missing target"}
                 
-                # TASK 2: Execute and record in database
+                # TASK 2: Execute and record in database (async)
                 result = await self.python_tools.nmap_scan(target, ports, arguments)
                 if result.get("status") == "success":
                     data = result.get("data", [])
                     scan_result = f"Scanned {len(data)} ports" if isinstance(data, list) else "Completed"
-                    self.db.mark_scanned(target, "nmap_scan", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(target, "nmap_scan", scan_result)
                 return result
 
             elif tool == "url_discovery":
                 domain = args.get("domain")
                 if not domain: return {"status": "error", "error": "Missing domain"}
                 
-                # TASK 2: Execute and record in database
+                # TASK 2: Execute and record in database (async)
                 result = await self.real_tools.url_discovery(domain)
                 if result.get("status") == "success":
                     data = result.get("data", [])
                     scan_result = f"Found {len(data)} URLs" if isinstance(data, list) else "Completed"
-                    self.db.mark_scanned(domain, "url_discovery", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(domain, "url_discovery", scan_result)
                 return result
 
             elif tool == "tech_detection":
@@ -349,10 +370,11 @@ If you cannot suggest a fix, respond with:
                 if not self._validate_url(target):
                     return {"status": "error", "error": f"Invalid URL format: {target}"}
                 
-                # TASK 2: Execute and record in database
+                # TASK 2: Execute and record in database (async)
                 result = await self.python_tools.advanced_technology_detection(target)
                 if result.get("status") == "success":
-                    self.db.mark_scanned(target, "tech_detection", "Technology detection completed")
+                    db = await self._get_db()
+                    await db.mark_scanned(target, "tech_detection", "Technology detection completed")
                 return result
             
             # Attack and Logic Analysis Tools (NEW)
@@ -365,12 +387,13 @@ If you cannot suggest a fix, respond with:
                 if not self._validate_url(target_url):
                     return {"status": "error", "error": f"Invalid URL format: {target_url}"}
                 
-                # TASK 2: Execute, record scan and findings in database
+                # TASK 2: Execute, record scan and findings in database (async)
                 result = await self.real_tools.vulnerability_scan(target_url)
                 if result.get("status") == "success":
                     data = result.get("data", [])
                     scan_result = f"Found {len(data)} vulnerabilities" if isinstance(data, list) else "Completed"
-                    self.db.mark_scanned(target_url, "vulnerability_scan", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(target_url, "vulnerability_scan", scan_result)
                     
                     # TASK 3: Verify each finding before adding to database
                     if isinstance(data, list):
@@ -382,12 +405,12 @@ If you cannot suggest a fix, respond with:
                                 verified_finding = await self.ai_core.verify_finding_with_reasoning(finding, target_url)
                                 
                                 if verified_finding is not None:
-                                    # Finding passed verification - add to database
+                                    # Finding passed verification - add to database (async)
                                     finding_type = verified_finding.get('template-id', 'unknown')
                                     severity = verified_finding.get('info', {}).get('severity', 'info')
                                     description = verified_finding.get('info', {}).get('name', '')
                                     evidence = verified_finding.get('matched-at', '')
-                                    self.db.add_finding(finding_type, target_url, severity, description, evidence)
+                                    await db.add_finding(finding_type, target_url, severity, description, evidence)
                                     verified_count += 1
                                 else:
                                     # Finding rejected as hallucination
@@ -401,13 +424,14 @@ If you cannot suggest a fix, respond with:
                 target_url = args.get("target")
                 if not target_url: return {"status": "error", "error": "Missing URL target"}
                 
-                # TASK 2: Execute and record findings
+                # TASK 2: Execute and record findings (async)
                 result = await self.real_tools.run_sqlmap(target_url)
                 if result.get("status") == "success":
                     data = result.get("data", {})
                     vulnerable = data.get("vulnerable", False)
                     scan_result = "SQL Injection found" if vulnerable else "No SQL Injection"
-                    self.db.mark_scanned(target_url, "run_sqlmap", scan_result)
+                    db = await self._get_db()
+                    await db.mark_scanned(target_url, "run_sqlmap", scan_result)
                     
                     # TASK 3: Verify finding before recording if vulnerable
                     if vulnerable:
@@ -424,8 +448,8 @@ If you cannot suggest a fix, respond with:
                         verified_finding = await self.ai_core.verify_finding_with_reasoning(finding, target_url)
                         
                         if verified_finding is not None:
-                            # Finding passed verification
-                            self.db.add_finding(
+                            # Finding passed verification (async)
+                            await db.add_finding(
                                 "SQL Injection",
                                 target_url,
                                 "high",
@@ -489,7 +513,7 @@ If you cannot suggest a fix, respond with:
                 
                 return await self.python_tools.replay_request_with_session(original_request, session_name)
             
-            # Database Tools (TASK 2)
+            # Database Tools (TASK 2) - Now async
             elif tool == "db_add_finding":
                 finding_type = args.get("type")
                 url = args.get("url")
@@ -500,7 +524,8 @@ If you cannot suggest a fix, respond with:
                 if not all([finding_type, url, severity]):
                     return {"status": "error", "error": "Missing arguments (type, url, severity required)"}
                 
-                finding_id = self.db.add_finding(finding_type, url, severity, description, evidence)
+                db = await self._get_db()
+                finding_id = await db.add_finding(finding_type, url, severity, description, evidence)
                 if finding_id > 0:
                     return {"status": "success", "data": {"finding_id": finding_id, "message": "Finding added"}}
                 else:
@@ -509,7 +534,8 @@ If you cannot suggest a fix, respond with:
             elif tool == "db_get_findings":
                 severity = args.get("severity")
                 verified = args.get("verified")
-                findings = self.db.get_findings(severity=severity, verified=verified)
+                db = await self._get_db()
+                findings = await db.get_findings(severity=severity, verified=verified)
                 return {"status": "success", "data": findings}
             
             elif tool == "db_is_scanned":
@@ -518,7 +544,8 @@ If you cannot suggest a fix, respond with:
                 if not target:
                     return {"status": "error", "error": "Missing target"}
                 
-                is_scanned = self.db.is_scanned(target, scan_type)
+                db = await self._get_db()
+                is_scanned = await db.is_scanned(target, scan_type)
                 return {"status": "success", "data": {"target": target, "scan_type": scan_type, "is_scanned": is_scanned}}
             
             elif tool == "db_mark_scanned":
@@ -529,14 +556,16 @@ If you cannot suggest a fix, respond with:
                 if not all([target, scan_type]):
                     return {"status": "error", "error": "Missing arguments (target, scan_type required)"}
                 
-                success = self.db.mark_scanned(target, scan_type, result)
+                db = await self._get_db()
+                success = await db.mark_scanned(target, scan_type, result)
                 if success:
                     return {"status": "success", "data": {"message": "Target marked as scanned"}}
                 else:
                     return {"status": "error", "error": "Failed to mark target as scanned"}
             
             elif tool == "db_get_statistics":
-                stats = self.db.get_statistics()
+                db = await self._get_db()
+                stats = await db.get_statistics()
                 return {"status": "success", "data": stats}
             
             # Visual Reconnaissance Tools (SoM - Set-of-Mark)

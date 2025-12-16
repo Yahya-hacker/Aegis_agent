@@ -57,6 +57,8 @@ data/blackboard_*.json
 data/graph_*.graphml
 data/http_memory/
 data/command_queue.json
+data/outputs/
+data/cortex_*.graphml
 *.jsonl
 
 # Nuclei templates (downloaded)
