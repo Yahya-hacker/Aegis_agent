@@ -605,11 +605,39 @@ class SemanticAuditor:
     
     def _clean_html(self, html: str) -> str:
         """Remove HTML tags and extract text content"""
-        # Remove script and style blocks
-        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        # Use a more robust approach to remove script and style blocks
+        # Handle cases with spaces, newlines, or other content in closing tags
+        # First remove opening script/style tags and everything until the next </ or end
+        # Then handle the rest with generic tag removal
         
-        # Remove HTML tags
+        # Remove script blocks - match from <script to </script with any variation
+        while True:
+            # Find script start
+            script_start = re.search(r'<script[^>]*>', html, re.IGNORECASE)
+            if not script_start:
+                break
+            # Find corresponding end
+            script_end = re.search(r'</script\s*[^>]*>', html[script_start.end():], re.IGNORECASE)
+            if script_end:
+                html = html[:script_start.start()] + html[script_start.end() + script_end.end():]
+            else:
+                # No closing tag found, just remove to end
+                html = html[:script_start.start()]
+                break
+        
+        # Remove style blocks similarly
+        while True:
+            style_start = re.search(r'<style[^>]*>', html, re.IGNORECASE)
+            if not style_start:
+                break
+            style_end = re.search(r'</style\s*[^>]*>', html[style_start.end():], re.IGNORECASE)
+            if style_end:
+                html = html[:style_start.start()] + html[style_start.end() + style_end.end():]
+            else:
+                html = html[:style_start.start()]
+                break
+        
+        # Remove all remaining HTML tags
         html = re.sub(r'<[^>]+>', ' ', html)
         
         # Clean up whitespace
