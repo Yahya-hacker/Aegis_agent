@@ -144,6 +144,21 @@ class HybridAnalysisEngine:
         self.analysis_cache: Dict[str, SourceCodeAnalysis] = {}
         self._analysis_counter = 0
         
+        # Robustness: Import timeout and circuit breaker utilities
+        try:
+            from utils.robustness import (
+                get_timeout_manager,
+                get_circuit_breaker,
+                get_bottleneck_detector
+            )
+            self._timeout_mgr = get_timeout_manager()
+            self._circuit = get_circuit_breaker("hybrid_analysis")
+            self._bottleneck = get_bottleneck_detector()
+        except ImportError:
+            self._timeout_mgr = None
+            self._circuit = None
+            self._bottleneck = None
+        
         logger.info("🔬 Hybrid Analysis Engine initialized")
     
     async def detect_source_exposure(

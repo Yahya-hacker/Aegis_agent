@@ -543,21 +543,34 @@ class HiveMind:
             "published": 0,
             "received": 0,
             "applied": 0,
-            "queries": 0
+            "queries": 0,
+            "errors": 0
         }
         
         # Auto-apply rules
         self._auto_apply_rules: Dict[str, Callable] = {}
         
+        # Robustness: Graceful degradation support
+        self._degraded_mode = False
+        self._last_error_time: Optional[float] = None
+        self._consecutive_errors = 0
+        self._max_consecutive_errors = 5
+        
         logger.info(f"🐝 Hive Mind initialized - Agent ID: {self.agent_id}")
     
     async def start(self) -> None:
         """Start the Hive Mind (subscribe to updates, start heartbeat)"""
-        # Subscribe to knowledge updates
-        await self.backend.subscribe(self._on_knowledge_received)
-        
-        # Start heartbeat
-        asyncio.create_task(self._heartbeat_loop())
+        try:
+            # Subscribe to knowledge updates
+            await self.backend.subscribe(self._on_knowledge_received)
+            
+            # Start heartbeat
+            asyncio.create_task(self._heartbeat_loop())
+            
+            self._degraded_mode = False
+        except Exception as e:
+            logger.warning(f"⚠️ Hive Mind starting in degraded mode: {e}")
+            self._degraded_mode = True
         
         logger.info("🐝 Hive Mind connected to swarm")
     
