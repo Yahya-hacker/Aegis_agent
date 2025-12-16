@@ -690,6 +690,136 @@
         }
       },
       "json_prompt_template": "{\"tool\": \"follow_tcp_stream\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"stream_number\": 0}}"
+    },
+    {
+      "tool_name": "hybrid_analysis",
+      "binary_name": "python",
+      "description": "Hybrid Analysis (Code-to-Payload Loop): Detect source code exposure (.git, package.json, etc.), auto-clone repositories, analyze code with LLM to identify exact vulnerable lines, and generate targeted payloads. Essential for white-box advantages on black-box targets.",
+      "intrusive": false,
+      "category": "sota_analysis",
+      "priority": 1,
+      "use_case": "Web applications with potential source code exposure",
+      "args_schema": {
+        "target_url": {
+          "type": "string",
+          "required": true,
+          "description": "Target URL to analyze for source code exposure"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"hybrid_analysis\", \"args\": {\"target_url\": \"<TARGET_URL>\"}}"
+    },
+    {
+      "tool_name": "get_hive_intelligence",
+      "binary_name": "internal",
+      "description": "Get shared intelligence from Hive Mind for a target domain. Returns WAF bypasses discovered by other agents, known vulnerabilities, and failed attempts to avoid. Use this before attacking any domain to leverage swarm knowledge.",
+      "intrusive": false,
+      "category": "sota_analysis",
+      "priority": 1,
+      "use_case": "Before attacking any target domain",
+      "args_schema": {
+        "target_domain": {
+          "type": "string",
+          "required": true,
+          "description": "Target domain to get intelligence for"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"get_hive_intelligence\", \"args\": {\"target_domain\": \"<DOMAIN>\"}}"
+    },
+    {
+      "tool_name": "share_waf_bypass",
+      "binary_name": "internal",
+      "description": "Share a discovered WAF bypass with the Hive Mind. When you find a bypass on one subdomain, all agents attacking related subdomains will instantly know and can apply the same technique.",
+      "intrusive": false,
+      "category": "sota_analysis",
+      "priority": 1,
+      "use_case": "After discovering a WAF bypass technique",
+      "args_schema": {
+        "target_domain": {
+          "type": "string",
+          "required": true,
+          "description": "Domain where bypass was found"
+        },
+        "waf_type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of WAF (cloudflare, akamai, imperva, etc.)"
+        },
+        "bypass_technique": {
+          "type": "string",
+          "required": true,
+          "description": "Description of the bypass technique"
+        },
+        "payload": {
+          "type": "string",
+          "required": true,
+          "description": "The actual bypass payload"
+        },
+        "headers": {
+          "type": "object",
+          "required": false,
+          "description": "Optional special headers used for bypass"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"share_waf_bypass\", \"args\": {\"target_domain\": \"<DOMAIN>\", \"waf_type\": \"<WAF>\", \"bypass_technique\": \"<TECHNIQUE>\", \"payload\": \"<PAYLOAD>\"}}"
+    },
+    {
+      "tool_name": "ingest_documentation",
+      "binary_name": "internal",
+      "description": "Ingest documentation (API docs, user manuals, policies) into the Semantic Auditor's RAG system. Extracts business policies like 'One coupon per user' for logic bug detection.",
+      "intrusive": false,
+      "category": "sota_analysis",
+      "priority": 1,
+      "use_case": "When target has accessible documentation",
+      "args_schema": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "URL of the documentation to ingest"
+        },
+        "doc_type": {
+          "type": "string",
+          "required": false,
+          "description": "Type of documentation: api_doc, user_manual, policy, faq (default: api_doc)"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"ingest_documentation\", \"args\": {\"url\": \"<DOC_URL>\", \"doc_type\": \"api_doc\"}}"
+    },
+    {
+      "tool_name": "audit_business_logic",
+      "binary_name": "internal",
+      "description": "Audit an action against business policies to detect logic bugs. Compares 'intended behavior' from ingested docs vs 'actual behavior' observed. Flags violations like using multiple coupons when docs say 'one per user'.",
+      "intrusive": false,
+      "category": "sota_analysis",
+      "priority": 1,
+      "use_case": "After performing actions that might violate business rules",
+      "args_schema": {
+        "action": {
+          "type": "string",
+          "required": true,
+          "description": "Action performed (e.g., 'apply_coupon', 'create_order')"
+        },
+        "endpoint": {
+          "type": "string",
+          "required": true,
+          "description": "API endpoint used"
+        },
+        "parameters": {
+          "type": "object",
+          "required": true,
+          "description": "Request parameters"
+        },
+        "response": {
+          "type": "object",
+          "required": true,
+          "description": "Response data"
+        },
+        "success": {
+          "type": "boolean",
+          "required": true,
+          "description": "Whether the action succeeded"
+        }
+      },
+      "json_prompt_template": "{\"tool\": \"audit_business_logic\", \"args\": {\"action\": \"<ACTION>\", \"endpoint\": \"<ENDPOINT>\", \"parameters\": {}, \"response\": {}, \"success\": true}}"
     }
   ]
 }

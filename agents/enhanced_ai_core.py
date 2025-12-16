@@ -933,6 +933,11 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
         # PHASE 2: Business logic mapper for application-specific testing
         from utils.business_logic_mapper import get_business_logic_mapper
         self.logic_mapper = get_business_logic_mapper()
+        
+        # SOTA MODULES: Hybrid Analysis, Hive Mind, Semantic Auditor
+        self.hybrid_analysis = None  # Lazy loaded
+        self.hive_mind = None  # Lazy loaded
+        self.semantic_auditor = None  # Lazy loaded
     
     async def initialize(self):
         """Initialize the enhanced AI core with all LLMs"""
@@ -964,9 +969,34 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
             self.is_initialized = True
             logger.info("✅ Enhanced AI Core ready with multi-LLM support.")
             
+            # Initialize SOTA modules
+            await self._initialize_sota_modules()
+            
         except Exception as e:
             logger.error(f"❌ Failed to initialize Enhanced AI Core: {e}", exc_info=True)
             raise
+    
+    async def _initialize_sota_modules(self):
+        """Initialize SOTA modules: Hybrid Analysis, Hive Mind, Semantic Auditor"""
+        try:
+            # Initialize Hybrid Analysis Engine
+            from agents.hybrid_analysis import get_hybrid_analysis_engine
+            self.hybrid_analysis = get_hybrid_analysis_engine(ai_core=self)
+            logger.info("🔬 Hybrid Analysis Engine initialized")
+            
+            # Initialize Hive Mind
+            from agents.hive_mind import get_hive_mind_async
+            self.hive_mind = await get_hive_mind_async()
+            logger.info("🐝 Hive Mind connected to swarm")
+            
+            # Initialize Semantic Auditor
+            from agents.semantic_auditor import get_semantic_auditor
+            self.semantic_auditor = get_semantic_auditor(ai_core=self)
+            logger.info("🕵️ Semantic Auditor ready")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ SOTA modules initialization warning: {e}")
+            # Don't fail initialization, these are enhancements
     
     def _prune_memory(self, history: List[Dict]) -> List[Dict]:
         """
@@ -1356,6 +1386,54 @@ IMPACT ASSESSMENT WORKFLOW:
 3. The RAG system will query the documentation to understand what the endpoint does
 4. Strategic LLM will reason: "This endpoint consumes 500MB disk. If looped, causes DoS. High impact."
 5. Use the impact assessment to prioritize findings and write better reports
+
+===== SOTA FEATURES (STATE-OF-THE-ART CAPABILITIES) =====
+
+HYBRID ANALYSIS (CODE-TO-PAYLOAD LOOP):
+When scanning a web app, you can detect and exploit source code exposure:
+- hybrid_analysis(target_url): Perform full hybrid analysis workflow
+  * Detects .git folders or open source components
+  * Auto-clones repositories
+  * Uses Code LLM (Qwen) to identify exact vulnerable code lines
+  * Generates targeted payloads specific to the discovered vulnerabilities
+
+HYBRID ANALYSIS WORKFLOW:
+1. When you encounter a new web target, run hybrid_analysis(url) first
+2. If .git is exposed or source code found, the system will:
+   - Clone/reconstruct the repository
+   - Scan code for SQL injection, XSS, command injection, etc.
+   - Identify exact file and line number of vulnerable code
+   - Generate payloads that work specifically for that code pattern
+3. Test generated payloads against the live target
+4. This gives you WHITE-BOX testing advantages on BLACK-BOX targets!
+
+HIVE MIND (COLLABORATIVE SWARM INTELLIGENCE):
+You are part of a distributed agent network. Knowledge is shared in real-time:
+- share_waf_bypass(domain, waf_type, technique, payload): Share a WAF bypass you discovered
+- get_hive_intelligence(domain): Get all shared intelligence for a domain
+  * WAF bypasses from other agents
+  * Previously discovered vulnerabilities
+  * Failed attempts (to avoid repeating)
+  * Active agent count
+
+HIVE MIND WORKFLOW:
+1. Before attacking a domain, run get_hive_intelligence(domain)
+2. Check if other agents have already found WAF bypasses or vulnerabilities
+3. When you discover a new bypass or vulnerability, SHARE IT with share_waf_bypass() or auto-share
+4. This enables exponential learning - what one agent learns, all agents know!
+
+SEMANTIC AUDITOR (BUSINESS LOGIC BUG DETECTION):
+The Auditor compares "intended behavior" (from docs) vs "actual behavior":
+- ingest_documentation(url, type="api_doc"): Ingest docs into policy extractor
+- audit_business_logic(action, endpoint, params, response, success): Audit an action
+
+BUSINESS LOGIC AUDITING WORKFLOW:
+1. When target has documentation (API docs, user manuals), ingest them first
+2. The system extracts policies like "One coupon per user", "Max 5 requests/min"
+3. During testing, record observations with audit_business_logic()
+4. If docs say "One coupon per user" but you can apply two, it flags:
+   "BUSINESS LOGIC BUG - Coupon Reuse Vulnerability"
+5. Focus on these policy-violating behaviors for high-impact findings
 
 ENHANCED MULTI-STAGE REASONING FRAMEWORK:
 
@@ -2176,3 +2254,323 @@ If there's nothing to extract in a category, use an empty list []."""
                 
         except Exception as e:
             logger.error(f"Error extracting facts: {e}", exc_info=True)
+    
+    # --- SOTA FEATURE: HYBRID ANALYSIS (Code-to-Payload Loop) ---
+    async def perform_hybrid_analysis(
+        self,
+        target_url: str
+    ) -> Dict[str, Any]:
+        """
+        Perform hybrid analysis: detect source code exposure, analyze code,
+        and generate targeted payloads.
+        
+        This implements the Code-to-Payload Loop:
+        1. Detects .git folders or open source components
+        2. Auto-clones the repository
+        3. Passes code to Code LLM (Qwen)
+        4. Identifies exact vulnerable code lines
+        5. Generates payloads specific to those vulnerabilities
+        
+        Args:
+            target_url: Target URL to analyze
+            
+        Returns:
+            Hybrid analysis results with vulnerabilities and payloads
+        """
+        if not self.hybrid_analysis:
+            from agents.hybrid_analysis import get_hybrid_analysis_engine
+            self.hybrid_analysis = get_hybrid_analysis_engine(ai_core=self)
+        
+        logger.info(f"🔬 Starting hybrid analysis for {target_url}")
+        
+        try:
+            results = await self.hybrid_analysis.full_hybrid_analysis(target_url)
+            
+            # Add to blackboard
+            if results.get("vulnerabilities"):
+                for vuln in results["vulnerabilities"]:
+                    self.blackboard.add_fact(
+                        f"Source code vulnerability: {vuln['type']} in {vuln['file']} line {vuln['line']}"
+                    )
+                    self.blackboard.add_relationship(
+                        target_url,
+                        "HAS_SOURCE_VULN",
+                        vuln['type'],
+                        file=vuln['file'],
+                        line=vuln['line'],
+                        severity=vuln['severity']
+                    )
+            
+            if results.get("entry_points"):
+                for endpoint in results["entry_points"][:10]:
+                    self.blackboard.add_goal(f"Test discovered endpoint: {endpoint}")
+            
+            # Share with Hive Mind
+            if self.hive_mind and results.get("vulnerabilities"):
+                from urllib.parse import urlparse
+                domain = urlparse(target_url).netloc
+                for vuln in results["vulnerabilities"]:
+                    await self.hive_mind.share_vulnerability(
+                        target_domain=domain,
+                        vuln_type=f"source_code_{vuln['type']}",
+                        endpoint=vuln['file'],
+                        severity=vuln['severity'],
+                        payload=vuln.get('payload_suggestions', [''])[0] if vuln.get('payload_suggestions') else None,
+                        confidence=vuln.get('confidence', 0.7)
+                    )
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Hybrid analysis failed: {e}", exc_info=True)
+            return {"status": "error", "error": str(e)}
+    
+    # --- SOTA FEATURE: HIVE MIND (Collaborative Swarm Intelligence) ---
+    async def share_waf_bypass(
+        self,
+        target_domain: str,
+        waf_type: str,
+        bypass_technique: str,
+        payload: str,
+        headers: Optional[Dict[str, str]] = None
+    ) -> bool:
+        """
+        Share a discovered WAF bypass with the Hive Mind.
+        
+        When Agent A finds a WAF bypass on subdomain1, Agent B attacking
+        subdomain2 will instantly know and can apply the same bypass.
+        
+        Args:
+            target_domain: Domain where bypass was found
+            waf_type: Type of WAF (cloudflare, akamai, etc.)
+            bypass_technique: Description of the technique
+            payload: The actual bypass payload
+            headers: Any special headers used
+            
+        Returns:
+            True if successfully shared
+        """
+        if not self.hive_mind:
+            from agents.hive_mind import get_hive_mind_async
+            self.hive_mind = await get_hive_mind_async()
+        
+        return await self.hive_mind.share_waf_bypass(
+            target_domain=target_domain,
+            waf_type=waf_type,
+            bypass_technique=bypass_technique,
+            payload=payload,
+            headers=headers
+        )
+    
+    async def get_hive_intelligence(
+        self,
+        target_domain: str
+    ) -> Dict[str, Any]:
+        """
+        Get shared intelligence from the Hive Mind for a target.
+        
+        Args:
+            target_domain: Target domain to get intelligence for
+            
+        Returns:
+            Dictionary with WAF bypasses, vulnerabilities, etc.
+        """
+        if not self.hive_mind:
+            from agents.hive_mind import get_hive_mind_async
+            self.hive_mind = await get_hive_mind_async()
+        
+        waf_bypasses = await self.hive_mind.get_waf_bypasses(target_domain)
+        vulnerabilities = await self.hive_mind.get_vulnerabilities(target_domain)
+        failed_attempts = await self.hive_mind.get_failed_attempts(target_domain)
+        
+        return {
+            "waf_bypasses": [
+                {
+                    "waf_type": b.data.get("waf_type"),
+                    "technique": b.data.get("bypass_technique"),
+                    "payload": b.data.get("payload"),
+                    "confidence": b.confidence
+                }
+                for b in waf_bypasses
+            ],
+            "vulnerabilities": [
+                {
+                    "type": v.data.get("type"),
+                    "endpoint": v.data.get("endpoint"),
+                    "severity": v.data.get("severity"),
+                    "confidence": v.confidence
+                }
+                for v in vulnerabilities
+            ],
+            "failed_attempts": [
+                {
+                    "type": f.data.get("attempt_type"),
+                    "details": f.data
+                }
+                for f in failed_attempts
+            ],
+            "swarm_status": await self.hive_mind.get_swarm_status()
+        }
+    
+    def get_hive_context_for_llm(self, target_domain: str) -> str:
+        """
+        Get Hive Mind intelligence formatted for LLM context.
+        
+        Args:
+            target_domain: Target domain
+            
+        Returns:
+            Formatted string for LLM context
+        """
+        if not self.hive_mind:
+            return "[HIVE MIND] Not connected"
+        
+        return self.hive_mind.format_for_llm(target_domain)
+    
+    # --- SOTA FEATURE: SEMANTIC AUDITOR (Business Logic Gap) ---
+    async def ingest_documentation(
+        self,
+        url: str,
+        doc_type: str = "api_doc"
+    ) -> Dict[str, Any]:
+        """
+        Ingest documentation into the Semantic Auditor's RAG system.
+        
+        This allows the Auditor to understand "intended behavior" from
+        documentation and compare it against actual behavior.
+        
+        Args:
+            url: URL of the documentation
+            doc_type: Type (api_doc, user_manual, policy, faq)
+            
+        Returns:
+            Ingestion result with extracted policies
+        """
+        if not self.semantic_auditor:
+            from agents.semantic_auditor import get_semantic_auditor
+            self.semantic_auditor = get_semantic_auditor(ai_core=self)
+        
+        return await self.semantic_auditor.ingest_documentation(url, doc_type)
+    
+    async def audit_business_logic(
+        self,
+        action: str,
+        endpoint: str,
+        parameters: Dict[str, Any],
+        response: Dict[str, Any],
+        success: bool
+    ) -> List[Dict[str, Any]]:
+        """
+        Audit an action against business policies to detect logic bugs.
+        
+        Example: Docs say "One coupon per user" but action succeeds twice.
+        The Auditor flags: "Business Logic Bug - Coupon Reuse Possible"
+        
+        Args:
+            action: Action performed (e.g., "apply_coupon")
+            endpoint: API endpoint
+            parameters: Request parameters
+            response: Response data
+            success: Whether the action succeeded
+            
+        Returns:
+            List of detected violations
+        """
+        if not self.semantic_auditor:
+            from agents.semantic_auditor import get_semantic_auditor
+            self.semantic_auditor = get_semantic_auditor(ai_core=self)
+        
+        # Record the observation
+        obs_id = self.semantic_auditor.record_observation(
+            action=action,
+            endpoint=endpoint,
+            parameters=parameters,
+            response=response,
+            success=success
+        )
+        
+        # Get the observation and audit it
+        observation = next(
+            o for o in self.semantic_auditor.observations
+            if o.id == obs_id
+        )
+        
+        violations = await self.semantic_auditor.audit_observation(observation)
+        
+        # Add violations to blackboard
+        for violation in violations:
+            self.blackboard.add_fact(
+                f"BUSINESS LOGIC BUG: {violation.description} (severity: {violation.severity})"
+            )
+            self.blackboard.add_relationship(
+                endpoint,
+                "HAS_LOGIC_BUG",
+                violation.violation_type,
+                severity=violation.severity,
+                impact=violation.impact
+            )
+        
+        # Share critical violations with Hive Mind
+        if self.hive_mind:
+            from urllib.parse import urlparse
+            domain = urlparse(endpoint).netloc if endpoint.startswith("http") else "unknown"
+            
+            for violation in violations:
+                if violation.severity in ["critical", "high"]:
+                    await self.hive_mind.share_vulnerability(
+                        target_domain=domain,
+                        vuln_type=f"business_logic_{violation.violation_type}",
+                        endpoint=endpoint,
+                        severity=violation.severity,
+                        evidence=violation.evidence[:200],
+                        confidence=violation.confidence
+                    )
+        
+        return [
+            {
+                "id": v.id,
+                "type": v.violation_type,
+                "severity": v.severity,
+                "description": v.description,
+                "impact": v.impact,
+                "exploitation_steps": v.exploitation_steps,
+                "confidence": v.confidence
+            }
+            for v in violations
+        ]
+    
+    def get_policy_context_for_llm(self) -> str:
+        """
+        Get business policies formatted for LLM context.
+        
+        Returns:
+            Formatted string with extracted policies
+        """
+        if not self.semantic_auditor:
+            return "[BUSINESS POLICIES] No documentation ingested"
+        
+        return self.semantic_auditor.get_policy_summary()
+    
+    def get_sota_status(self) -> Dict[str, Any]:
+        """
+        Get status of all SOTA modules.
+        
+        Returns:
+            Status dictionary for Hybrid Analysis, Hive Mind, Semantic Auditor
+        """
+        status = {
+            "hybrid_analysis": {
+                "initialized": self.hybrid_analysis is not None,
+                "analysis_cache_size": len(self.hybrid_analysis.analysis_cache) if self.hybrid_analysis else 0
+            },
+            "hive_mind": {
+                "initialized": self.hive_mind is not None,
+                "agent_id": self.hive_mind.agent_id if self.hive_mind else None,
+                "stats": self.hive_mind.stats if self.hive_mind else {}
+            },
+            "semantic_auditor": {
+                "initialized": self.semantic_auditor is not None,
+                "stats": self.semantic_auditor.get_statistics() if self.semantic_auditor else {}
+            }
+        }
+        return status
