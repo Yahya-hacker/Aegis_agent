@@ -451,15 +451,28 @@ class MissionDatabase:
         self._initialized = False
     
     def _run_sync(self, coro):
-        """Run an async coroutine synchronously"""
+        """
+        Run an async coroutine synchronously.
+        
+        Note: This wrapper is for backwards compatibility only.
+        New code should use get_async_database() and await directly.
+        """
         try:
             loop = asyncio.get_running_loop()
-            # We're in an async context - create a task
-            # This is not ideal but maintains backwards compatibility
+            # We're in an async context - this sync wrapper shouldn't be called
+            # from async code. Log a warning and use nest_asyncio pattern.
+            import warnings
+            warnings.warn(
+                "Sync database wrapper called from async context. "
+                "Use 'await get_async_database()' instead for better performance.",
+                DeprecationWarning,
+                stacklevel=3
+            )
+            # Use a new event loop in a thread to avoid blocking
             import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(asyncio.run, coro)
-                return future.result()
+                return future.result(timeout=30)  # Add timeout to prevent deadlocks
         except RuntimeError:
             # No running loop - safe to use asyncio.run
             return asyncio.run(coro)

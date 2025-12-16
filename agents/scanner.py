@@ -225,8 +225,18 @@ If you cannot suggest a fix, respond with:
                 
                 # Issue 5: Sanitize output before returning to prevent context overflow
                 if result.get("status") == "success":
-                    # Build context for sanitizer
-                    context = f"{tool} with args: {json.dumps(current_args)[:200]}"
+                    # Build context for sanitizer - truncate args safely
+                    try:
+                        args_str = json.dumps(current_args, default=str)
+                        if len(args_str) > 200:
+                            # Smart truncation: show key names and partial values
+                            truncated_args = {k: str(v)[:50] + "..." if len(str(v)) > 50 else v 
+                                            for k, v in current_args.items()}
+                            args_str = json.dumps(truncated_args, default=str)[:200]
+                        context = f"{tool} with args: {args_str}"
+                    except (TypeError, ValueError):
+                        context = f"{tool} execution"
+                    
                     result = self.output_sanitizer.sanitize(
                         tool_name=tool,
                         output=result,

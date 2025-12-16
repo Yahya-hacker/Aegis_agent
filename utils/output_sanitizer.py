@@ -134,9 +134,10 @@ class OutputSanitizer:
         
         # Keep beginning and end
         snippet_size = max_len // 2
+        chars_removed = len(s) - (2 * snippet_size)
         truncated = (
             s[:snippet_size] +
-            f"\n\n[... TRUNCATED {len(s) - max_len} characters ...]\n\n" +
+            f"\n\n[... TRUNCATED {chars_removed} characters ...]\n\n" +
             s[-snippet_size:]
         )
         return truncated, True
