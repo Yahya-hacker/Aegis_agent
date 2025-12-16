@@ -32,6 +32,15 @@ from abc import ABC, abstractmethod
 logger = logging.getLogger(__name__)
 
 
+# Configurable constants
+AGENT_HEARTBEAT_INTERVAL = 30  # Seconds between heartbeats
+AGENT_TIMEOUT_THRESHOLD = 60  # Seconds before agent considered inactive
+KNOWLEDGE_DEFAULT_TTL = 3600  # Default time-to-live for knowledge items
+WAF_BYPASS_TTL = 7200  # Time-to-live for WAF bypass knowledge
+VULNERABILITY_TTL = 3600  # Time-to-live for vulnerability knowledge
+FAILED_ATTEMPT_TTL = 1800  # Time-to-live for failed attempt knowledge
+
+
 class KnowledgeType(Enum):
     """Types of knowledge that can be shared"""
     WAF_BYPASS = "waf_bypass"
@@ -160,11 +169,20 @@ class FileBasedBackend(HiveMindBackend):
             return {}
     
     def _write_json(self, file_path: Path, data: Dict) -> None:
-        """Thread-safe JSON write"""
+        """Thread-safe JSON write with proper error handling"""
         temp_file = file_path.with_suffix('.tmp')
-        with open(temp_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        temp_file.replace(file_path)
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            temp_file.replace(file_path)
+        except Exception as e:
+            # Clean up temp file on failure
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except OSError:
+                    pass
+            raise e
     
     async def publish(self, knowledge: SharedKnowledge) -> bool:
         """Publish knowledge to shared file"""
@@ -637,8 +655,9 @@ class HiveMind:
         Returns:
             True if successfully shared
         """
+        # Use SHA256 for better collision resistance
         knowledge = SharedKnowledge(
-            id=f"waf_{hashlib.md5(f'{target_domain}{waf_type}{payload}'.encode()).hexdigest()[:12]}",
+            id=f"waf_{hashlib.sha256(f'{target_domain}{waf_type}{payload}'.encode()).hexdigest()[:12]}",
             knowledge_type=KnowledgeType.WAF_BYPASS.value,
             target_domain=target_domain,
             data={
@@ -651,7 +670,7 @@ class HiveMind:
             confidence=confidence,
             source_agent=self.agent_id,
             timestamp=time.time(),
-            ttl=7200,  # 2 hours
+            ttl=WAF_BYPASS_TTL,
             tags=["waf", waf_type, "bypass"]
         )
         
@@ -687,8 +706,9 @@ class HiveMind:
         Returns:
             True if successfully shared
         """
+        # Use SHA256 for better collision resistance
         knowledge = SharedKnowledge(
-            id=f"vuln_{hashlib.md5(f'{target_domain}{endpoint}{vuln_type}'.encode()).hexdigest()[:12]}",
+            id=f"vuln_{hashlib.sha256(f'{target_domain}{endpoint}{vuln_type}'.encode()).hexdigest()[:12]}",
             knowledge_type=KnowledgeType.VULNERABILITY.value,
             target_domain=target_domain,
             data={
@@ -702,7 +722,7 @@ class HiveMind:
             confidence=confidence,
             source_agent=self.agent_id,
             timestamp=time.time(),
-            ttl=3600,  # 1 hour
+            ttl=VULNERABILITY_TTL,
             tags=["vulnerability", vuln_type, severity]
         )
         
@@ -732,8 +752,9 @@ class HiveMind:
         Returns:
             True if successfully shared
         """
+        # Use SHA256 for better collision resistance
         knowledge = SharedKnowledge(
-            id=f"pattern_{hashlib.md5(f'{target_domain}{pattern_name}'.encode()).hexdigest()[:12]}",
+            id=f"pattern_{hashlib.sha256(f'{target_domain}{pattern_name}'.encode()).hexdigest()[:12]}",
             knowledge_type=KnowledgeType.SUCCESS_PATTERN.value,
             target_domain=target_domain,
             data={
@@ -744,7 +765,7 @@ class HiveMind:
             confidence=success_rate,
             source_agent=self.agent_id,
             timestamp=time.time(),
-            ttl=3600,
+            ttl=KNOWLEDGE_DEFAULT_TTL,
             tags=["pattern", "success"]
         )
         
@@ -771,8 +792,9 @@ class HiveMind:
         Returns:
             True if successfully shared
         """
+        # Use UUID for unique ID since time.time() can have race conditions
         knowledge = SharedKnowledge(
-            id=f"fail_{hashlib.md5(f'{target_domain}{attempt_type}{time.time()}'.encode()).hexdigest()[:12]}",
+            id=f"fail_{uuid.uuid4().hex[:12]}",
             knowledge_type=KnowledgeType.FAILED_ATTEMPT.value,
             target_domain=target_domain,
             data={
@@ -783,7 +805,7 @@ class HiveMind:
             confidence=0.9,
             source_agent=self.agent_id,
             timestamp=time.time(),
-            ttl=1800,  # 30 minutes
+            ttl=FAILED_ATTEMPT_TTL,
             tags=["failure", attempt_type]
         )
         

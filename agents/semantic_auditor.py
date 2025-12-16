@@ -18,6 +18,7 @@ import json
 import re
 import os
 import hashlib
+import uuid
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -347,8 +348,8 @@ class SemanticPolicyExtractor:
             for category, keywords in self.POLICY_KEYWORDS.items():
                 for keyword in keywords:
                     if keyword in sentence_lower:
-                        # Found a potential policy
-                        policy_id = hashlib.md5(
+                        # Found a potential policy - use SHA256 for better collision resistance
+                        policy_id = hashlib.sha256(
                             f"{source}{sentence[:50]}".encode()
                         ).hexdigest()[:12]
                         
@@ -641,9 +642,8 @@ class SemanticAuditor:
         Returns:
             Observation ID
         """
-        obs_id = hashlib.md5(
-            f"{action}{endpoint}{time.time()}".encode()
-        ).hexdigest()[:12]
+        # Use UUID for unique ID generation instead of time-based hash
+        obs_id = f"obs_{uuid.uuid4().hex[:12]}"
         
         observation = BehaviorObservation(
             id=obs_id,

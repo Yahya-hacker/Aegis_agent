@@ -360,6 +360,10 @@ class BottleneckDetector:
     might be stuck in an infinite loop or waiting too long.
     """
     
+    # Configurable constants
+    MAX_HISTORY_SIZE = 100  # Maximum operation history entries
+    TRIM_TO_SIZE = 50  # Size to trim to when max is reached
+    
     def __init__(
         self,
         stuck_threshold: float = 300.0,  # 5 minutes
@@ -384,9 +388,9 @@ class BottleneckDetector:
             "duration": None
         })
         
-        # Trim history
-        if len(self.operation_history) > 100:
-            self.operation_history = self.operation_history[-50:]
+        # Trim history using configurable constants
+        if len(self.operation_history) > self.MAX_HISTORY_SIZE:
+            self.operation_history = self.operation_history[-self.TRIM_TO_SIZE:]
     
     def end_operation(self) -> float:
         """Mark end of current operation, returns duration"""

@@ -70,6 +70,13 @@ class HybridAnalysisEngine:
     4. Generates payloads specific to those vulnerabilities
     """
     
+    # Configurable limits
+    MAX_SOURCE_FILES = 50  # Maximum source files to analyze per repo
+    MAX_FINDINGS_PER_FILE = 5  # Maximum pattern findings per file for LLM analysis
+    MAX_FILES_FOR_LLM = 10  # Maximum files to send to LLM
+    GIT_CLONE_TIMEOUT = 60  # Seconds timeout for git clone
+    GIT_RECONSTRUCT_TIMEOUT = 120  # Seconds timeout for git reconstruction
+    
     # Common open source component indicators
     OPENSOURCE_INDICATORS = {
         ".git": "git_repository",
@@ -327,7 +334,7 @@ class HybridAnalysisEngine:
             
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
-                timeout=60  # 60 second timeout
+                timeout=self.GIT_CLONE_TIMEOUT
             )
             
             if process.returncode == 0:
