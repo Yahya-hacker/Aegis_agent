@@ -264,9 +264,21 @@ class StdioTransport(MCPTransport):
             env = os.environ.copy()
             env.update(self.env)
             
-            # Spawn subprocess
-            self.process = await asyncio.create_subprocess_shell(
-                cmd,
+            # Parse command into arguments for exec (security: avoid shell injection)
+            import shlex
+            try:
+                cmd_args = shlex.split(cmd)
+            except ValueError as e:
+                logger.error(f"Invalid command format: {e}")
+                return False
+            
+            if not cmd_args:
+                logger.error("Empty command provided")
+                return False
+            
+            # Spawn subprocess using exec (more secure than shell)
+            self.process = await asyncio.create_subprocess_exec(
+                *cmd_args,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

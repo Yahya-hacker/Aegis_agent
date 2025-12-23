@@ -165,12 +165,12 @@ function App() {
         await fetchMCPServers();
         setShowMCPModal(false);
       } else {
-        const error = await response.json();
-        alert(`Failed to connect: ${error.detail}`);
+        // Sanitize error message - only show safe, generic error
+        alert('Failed to connect to MCP server. Please check the endpoint and try again.');
       }
     } catch (error) {
       console.error('Failed to connect MCP server:', error);
-      alert('Failed to connect to MCP server');
+      alert('Failed to connect to MCP server. Please check your connection.');
     }
   }, [fetchMCPServers]);
 
@@ -205,12 +205,12 @@ function App() {
         // Send message about uploaded file
         handleSendMessage(`[File uploaded: ${data.filename}]`);
       } else {
-        const error = await response.json();
-        alert(`Upload failed: ${error.detail}`);
+        // Sanitize error message
+        alert('Upload failed. Please check the file type and try again.');
       }
     } catch (error) {
       console.error('File upload failed:', error);
-      alert('File upload failed');
+      alert('File upload failed. Please try again.');
     }
   }, [handleSendMessage]);
 

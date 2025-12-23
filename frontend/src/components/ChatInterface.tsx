@@ -192,7 +192,7 @@ export default function ChatInterface({
             type="file"
             className="hidden"
             onChange={handleFileChange}
-            accept=".txt,.json,.xml,.html,.css,.js,.py,.php,.java,.c,.cpp,.h,.md,.yaml,.yml,.png,.jpg,.jpeg,.gif,.bmp,.svg,.pdf,.doc,.docx,.pcap,.pcapng,.bin,.elf,.exe,.dll,.so"
+            accept=".txt,.json,.xml,.html,.css,.js,.py,.php,.java,.c,.cpp,.h,.md,.yaml,.yml,.log,.csv,.sql,.sh,.rb,.go,.rs,.png,.jpg,.jpeg,.gif,.bmp,.svg,.pdf,.doc,.docx,.pcap,.pcapng"
           />
 
           {/* Text Input */}

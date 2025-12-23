@@ -239,13 +239,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS origins from environment (default to localhost for development)
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=CORS_ORIGINS,  # Configure via CORS_ORIGINS env var for production
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -463,25 +466,45 @@ async def disconnect_mcp_server(server_name: str):
 async def upload_file(file: UploadFile = File(...)):
     """Upload a file for analysis"""
     try:
-        # Validate file type
-        allowed_extensions = {
+        # Validate file type - security-focused list
+        # Analysis files (source code, docs, configs)
+        safe_extensions = {
             '.txt', '.json', '.xml', '.html', '.css', '.js', '.py',
             '.php', '.java', '.c', '.cpp', '.h', '.md', '.yaml', '.yml',
-            '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg',
-            '.pdf', '.doc', '.docx', '.pcap', '.pcapng',
-            '.bin', '.elf', '.exe', '.dll', '.so'
+            '.log', '.csv', '.sql', '.sh', '.rb', '.go', '.rs'
         }
+        # Image files for visual analysis
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg'}
+        # Document files
+        doc_extensions = {'.pdf', '.doc', '.docx'}
+        # Network captures (for forensics)
+        network_extensions = {'.pcap', '.pcapng'}
+        
+        allowed_extensions = safe_extensions | image_extensions | doc_extensions | network_extensions
+        
+        # Note: Binary executables (.exe, .dll, .so, .elf, .bin) are intentionally excluded
+        # for security. For binary analysis, use the CLI mode or specific binary tools.
         
         file_ext = Path(file.filename).suffix.lower()
         if file_ext not in allowed_extensions:
             raise HTTPException(
                 status_code=400, 
-                detail=f"File type {file_ext} not allowed"
+                detail=f"File type {file_ext} not allowed. For binary analysis, use CLI mode."
             )
         
-        # Save file
+        # Validate filename for path traversal
+        if ".." in file.filename or "/" in file.filename or "\\" in file.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid filename"
+            )
+        
+        # Save file with sanitized name
         file_id = str(uuid.uuid4())[:8]
-        safe_filename = f"{file_id}_{file.filename}"
+        # Only keep alphanumeric, dots, underscores and hyphens in filename
+        import re
+        safe_basename = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename).name)
+        safe_filename = f"{file_id}_{safe_basename}"
         file_path = UPLOADS_DIR / safe_filename
         
         with open(file_path, "wb") as f:
@@ -501,7 +524,7 @@ async def upload_file(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"File upload failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="File upload failed")
 
 
 # ---- Chat History ----
@@ -728,10 +751,23 @@ if frontend_path.exists():
     
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
-        """Serve React frontend"""
-        file_path = frontend_path / path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
+        """Serve React frontend with path traversal protection"""
+        # Security: Prevent directory traversal attacks
+        if ".." in path or path.startswith("/"):
+            return FileResponse(frontend_path / "index.html")
+        
+        # Resolve and validate path is within frontend directory
+        try:
+            file_path = (frontend_path / path).resolve()
+            # Ensure resolved path is still within frontend_path
+            if not str(file_path).startswith(str(frontend_path.resolve())):
+                return FileResponse(frontend_path / "index.html")
+            
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+        except (ValueError, OSError):
+            pass
+        
         return FileResponse(frontend_path / "index.html")
 
 
