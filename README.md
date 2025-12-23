@@ -1,12 +1,34 @@
-# Aegis Agent v8.0 — Full-Spectrum Cyber Operations Platform
+# Aegis Agent v9.0 "Nexus" — Full-Spectrum Cyber Operations Platform
 
 **Aegis Agent** is an AI-powered autonomous penetration testing platform that transforms from traditional vulnerability scanning into an intelligent zero-day research system. Built with a multi-LLM architecture and advanced exploitation capabilities, it discovers vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
 
-**v8.0 NEW:** Full-Spectrum CTF & Red Team Operations with autonomous self-healing capabilities.
+**v9.0 NEW: "NEXUS"** — State-of-the-Art Web UI + MCP Client Integration for dynamic tool hot-plugging.
 
-**v8.1 NEW: OMEGA PROTOCOL** — Neuro-Symbolic Swarm Intelligence for advanced reasoning and safe execution.
+**v8.1: OMEGA PROTOCOL** — Neuro-Symbolic Swarm Intelligence for advanced reasoning and safe execution.
 
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
+
+---
+
+## 🚀 What's New in v9.0 "Nexus"
+
+### Modern Web Interface
+- **React + TypeScript Frontend** with dark "Cyberpunk" theme
+- **Real-time Chat Interface** for dialoguing with the agent
+- **Mode Selector** for instant switching between Penetration Testing, CTF Mode, Red Teaming, and Audit modes
+- **Mission Dashboard** with real-time tool status, progress bars, and swarm monitor
+- **File Upload Support** for analyzing binaries, documents, PCAPs, and screenshots
+
+### MCP Client Integration
+- **Dynamic Tool Hot-Plugging** via Model Context Protocol
+- **Connect to Any MCP Server** without restarting the agent
+- **SSE and stdio Transport Support** for flexible connectivity
+- **Unified Tool Registry** across all connected servers
+
+### Performance Optimizations
+- **Memory Compression** to prevent context saturation during long scans
+- **Parallel Hypothesis Testing** in KTV Loop (3x faster)
+- **Consolidated Server Architecture** (FastAPI + WebSocket)
 
 ---
 
@@ -346,19 +368,48 @@ VISUAL_API_KEY=sk-visual-key             # Separate account for screenshots
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
+- Node.js 18+ (for frontend)
 - OpenRouter API key ([get one here](https://openrouter.ai/))
-- Node.js (for Mirror JS Sandbox)
 
 ### Installation
 
-#### Automated Setup (Recommended)
+#### Option 1: New Web UI (Recommended for v9.0)
 
 ```bash
 # Clone repository
 git clone https://github.com/Yahya-hacker/Aegis_agent.git
 cd Aegis_agent
 
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Configure API keys
+cp .env.example .env
+nano .env  # Add your OpenRouter API key(s)
+
+# Install frontend dependencies (optional)
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Start the v9.0 Nexus server
+python server.py
+
+# Access the UI at http://localhost:8000
+```
+
+#### Option 2: CLI Mode (Legacy)
+
+```bash
+# For command-line interface (no web UI)
+python main.py
+```
+
+#### Option 3: Automated Setup
+
+```bash
 # Run automated setup script
 python setup.py
 
@@ -372,34 +423,24 @@ python setup.py
 # - Verify installation
 
 # After setup completes:
-python main.py
+python server.py  # Web UI
+# OR
+python main.py    # CLI mode
 ```
 
-#### Manual Installation
-
-If you prefer manual installation:
+### Environment Variables
 
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
+# Required
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 
-# Install Playwright browsers
-playwright install chromium
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
 
-# Configure API keys
-cp .env.example .env
-nano .env  # Add your OpenRouter API key(s)
-
-# Optional: Install Go-based security tools
-go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
-go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-go install github.com/lc/gau/v2/cmd/gau@latest
-go install github.com/tomnomnom/waybackurls@latest
-
-# Run Aegis
-python main.py
+# Optional: Model overrides
+STRATEGIC_MODEL=deepseek/deepseek-r1
+CODE_MODEL=qwen/qwen-2.5-72b-instruct
 ```
 
 ---

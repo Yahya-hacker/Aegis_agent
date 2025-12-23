@@ -448,7 +448,103 @@ Output format:
             # Sort hypotheses by priority
             hypotheses.sort(key=lambda h: (h.priority, h.confidence), reverse=True)
             
-            # TEST and VALIDATE the top hypothesis
+            # PARALLEL EXECUTION: Test top N hypotheses concurrently
+            max_parallel = min(3, len(hypotheses))  # Test up to 3 hypotheses in parallel
+            top_hypotheses = hypotheses[:max_parallel]
+            
+            logger.info(f"🚀 Parallel testing {len(top_hypotheses)} hypotheses...")
+            
+            # Create tasks for parallel execution
+            test_tasks = [self.test(h) for h in top_hypotheses]
+            test_results = await asyncio.gather(*test_tasks, return_exceptions=True)
+            
+            # VALIDATE phase - Validate all test results in parallel
+            validate_tasks = []
+            valid_pairs = []
+            
+            for i, result in enumerate(test_results):
+                if isinstance(result, Exception):
+                    logger.error(f"Test failed for hypothesis {top_hypotheses[i].id}: {result}")
+                    continue
+                validate_tasks.append(self.validate(top_hypotheses[i], result))
+                valid_pairs.append((top_hypotheses[i], result))
+            
+            if validate_tasks:
+                validated_results = await asyncio.gather(*validate_tasks, return_exceptions=True)
+                
+                for i, validated_result in enumerate(validated_results):
+                    if isinstance(validated_result, Exception):
+                        logger.error(f"Validation failed: {validated_result}")
+                        continue
+                    
+                    hypothesis = valid_pairs[i][0]
+                    findings["total_hypotheses_tested"] += 1
+                    
+                    if validated_result.success:
+                        findings["confirmed_vulnerabilities"].append({
+                            "description": hypothesis.description,
+                            "confidence": hypothesis.confidence,
+                            "evidence": validated_result.evidence
+                        })
+            
+            # Update iteration count
+            findings["iterations"] = iteration + 1
+            findings["total_facts_discovered"] = len(self.state.facts)
+            
+            # Check if we should continue
+            if not self.state.hypotheses or iteration >= max_iterations - 1:
+                break
+            
+            # Small delay to avoid overwhelming the system
+            await asyncio.sleep(0.5)
+        
+        logger.info(f"\n{'='*80}\n✅ KTV Loop Complete\n{'='*80}")
+        logger.info(f"📊 Results: {findings['total_hypotheses_tested']} hypotheses tested, "
+                   f"{len(findings['confirmed_vulnerabilities'])} vulnerabilities confirmed")
+        
+        return findings
+    
+    async def execute_loop_sequential(self, context: Dict[str, Any], max_iterations: int = 10) -> Dict[str, Any]:
+        """
+        Execute the KTV loop sequentially (original behavior).
+        
+        Use this for careful, step-by-step testing where parallel execution
+        might cause issues (e.g., rate-limited targets).
+        
+        Args:
+            context: Mission context (target, rules, etc.)
+            max_iterations: Maximum number of loop iterations
+            
+        Returns:
+            Summary of findings
+        """
+        logger.info("🔄 Starting sequential KNOW-THINK-TEST-VALIDATE loop")
+        
+        findings = {
+            "confirmed_vulnerabilities": [],
+            "total_hypotheses_tested": 0,
+            "total_facts_discovered": len(self.state.facts),
+            "iterations": 0
+        }
+        
+        for iteration in range(max_iterations):
+            self.state.iteration = iteration + 1
+            logger.info(f"\n{'='*80}\n🔄 ITERATION {iteration + 1}/{max_iterations}\n{'='*80}")
+            
+            # KNOW phase - Review current facts
+            logger.info(f"📚 KNOW: {len(self.state.facts)} confirmed facts")
+            
+            # THINK phase - Generate hypotheses
+            hypotheses = await self.think(context)
+            
+            if not hypotheses:
+                logger.info("No more hypotheses to test - loop complete")
+                break
+            
+            # Sort hypotheses by priority
+            hypotheses.sort(key=lambda h: (h.priority, h.confidence), reverse=True)
+            
+            # TEST and VALIDATE the top hypothesis (sequential)
             top_hypothesis = hypotheses[0]
             
             # TEST phase

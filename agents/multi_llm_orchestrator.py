@@ -1223,3 +1223,115 @@ DO NOT propose the same action again. Think creatively about alternative approac
         self._initialize_usage_tracker()
         self.context_history = deque(maxlen=1000)  # Reset with bounded deque
         # Keep error_patterns to track systemic issues across resets
+    
+    def compress_messages(
+        self,
+        messages: List[Dict[str, str]],
+        max_messages: int = 10,
+        max_total_tokens: int = 8000
+    ) -> List[Dict[str, str]]:
+        """
+        Memory Compression for preventing context saturation during long scans.
+        
+        Implements a sliding window with summarization approach:
+        1. Keeps the first 2 messages (system prompt + initial context)
+        2. Keeps the last N messages (recent context)
+        3. Summarizes middle messages to reduce token usage
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            max_messages: Maximum number of messages to keep (default: 10)
+            max_total_tokens: Approximate max total tokens (default: 8000)
+            
+        Returns:
+            Compressed message list
+        """
+        if len(messages) <= max_messages:
+            return messages
+        
+        logger.info(f"🗜️ Compressing messages: {len(messages)} → {max_messages}")
+        
+        # Estimate tokens (rough approximation: ~4 chars per token)
+        def estimate_tokens(text: str) -> int:
+            return len(text) // 4
+        
+        # Keep first 2 messages (system prompt and initial context)
+        preserved_start = min(2, len(messages))
+        first_messages = messages[:preserved_start]
+        
+        # Keep last N messages for recent context
+        preserved_end = max_messages - preserved_start - 1  # -1 for summary message
+        last_messages = messages[-preserved_end:] if preserved_end > 0 else []
+        
+        # Get middle section to summarize
+        middle_start = preserved_start
+        middle_end = len(messages) - preserved_end if preserved_end > 0 else len(messages)
+        middle_messages = messages[middle_start:middle_end]
+        
+        if not middle_messages:
+            return messages
+        
+        # Build summary of middle section
+        summary_parts = []
+        key_findings = []
+        key_actions = []
+        
+        for msg in middle_messages:
+            content = msg.get('content', '')
+            role = msg.get('role', 'unknown')
+            
+            # Extract key information based on role
+            if role == 'assistant':
+                # Look for findings, actions, and decisions
+                if any(kw in content.lower() for kw in ['found', 'discovered', 'vulnerability', 'vulnerable']):
+                    # Extract first sentence or first 100 chars
+                    finding = content.split('.')[0][:150] if content else ''
+                    if finding:
+                        key_findings.append(finding)
+                        
+                if any(kw in content.lower() for kw in ['executing', 'running', 'scanning', 'testing']):
+                    action = content.split('.')[0][:100] if content else ''
+                    if action:
+                        key_actions.append(action)
+        
+        # Build compressed summary message
+        summary_lines = [
+            f"[COMPRESSED CONTEXT: {len(middle_messages)} messages summarized]",
+        ]
+        
+        if key_findings:
+            summary_lines.append(f"\n**Key Findings ({len(key_findings)}):**")
+            for i, finding in enumerate(key_findings[:5], 1):  # Limit to top 5
+                summary_lines.append(f"  {i}. {finding}")
+            if len(key_findings) > 5:
+                summary_lines.append(f"  ... and {len(key_findings) - 5} more")
+        
+        if key_actions:
+            summary_lines.append(f"\n**Recent Actions ({len(key_actions)}):**")
+            for action in key_actions[-3:]:  # Last 3 actions
+                summary_lines.append(f"  • {action}")
+        
+        summary_content = "\n".join(summary_lines)
+        
+        # Create compressed message list
+        compressed = first_messages.copy()
+        compressed.append({
+            "role": "system",
+            "content": summary_content
+        })
+        compressed.extend(last_messages)
+        
+        # Verify token count and further compress if needed
+        total_tokens = sum(estimate_tokens(m.get('content', '')) for m in compressed)
+        
+        if total_tokens > max_total_tokens:
+            logger.warning(f"⚠️ Compressed context still large ({total_tokens} est. tokens)")
+            # Truncate long messages
+            for i, msg in enumerate(compressed):
+                if i > 0 and estimate_tokens(msg.get('content', '')) > 1000:
+                    original_content = msg['content']
+                    compressed[i]['content'] = original_content[:3000] + "... [truncated]"
+        
+        logger.info(f"🗜️ Memory compression complete: {len(messages)} → {len(compressed)} messages")
+        
+        return compressed

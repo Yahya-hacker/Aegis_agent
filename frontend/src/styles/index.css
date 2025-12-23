@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-cyber-bg text-cyber-text font-sans;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-cyber-surface;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-cyber-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-cyber-accent;
+}
+
+/* Custom utility classes */
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-cyber-accent text-cyber-bg font-semibold rounded-lg
+           hover:bg-cyber-accent-dim transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-cyber-accent focus:ring-opacity-50;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-cyber-surface text-cyber-text border border-cyber-border rounded-lg
+           hover:border-cyber-accent transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-cyber-accent focus:ring-opacity-50;
+  }
+
+  .card {
+    @apply bg-cyber-card border border-cyber-border rounded-xl p-4;
+  }
+
+  .input-field {
+    @apply w-full bg-cyber-surface border border-cyber-border rounded-lg px-4 py-2
+           text-cyber-text placeholder-cyber-text-dim
+           focus:outline-none focus:border-cyber-accent transition-colors;
+  }
+
+  .glow-border {
+    @apply border border-cyber-accent shadow-lg shadow-cyber-accent/20;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-running {
+    @apply bg-cyber-accent/20 text-cyber-accent;
+  }
+
+  .status-success {
+    @apply bg-cyber-success/20 text-cyber-success;
+  }
+
+  .status-error {
+    @apply bg-cyber-error/20 text-cyber-error;
+  }
+
+  .status-pending {
+    @apply bg-cyber-warning/20 text-cyber-warning;
+  }
+}
+
+/* Chat message animations */
+.chat-message {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-50;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+}
+
+.typing-indicator span {
+  @apply w-2 h-2 rounded-full bg-cyber-accent;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Tool status spinner */
+.spinner {
+  @apply w-4 h-4 border-2 border-cyber-accent border-t-transparent rounded-full;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
