@@ -27,11 +27,36 @@ export function useWebSocket({
   const reconnectCountRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  
+  // Store callbacks in refs to avoid recreating the connect function
+  const onMessageRef = useRef(onMessage);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+  
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+  }, [onConnect]);
+  
+  useEffect(() => {
+    onDisconnectRef.current = onDisconnect;
+  }, [onDisconnect]);
 
-  // Connect to WebSocket
+  // Connect to WebSocket - only depends on url and config, not callbacks
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
+    }
+    
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.onclose = null; // Prevent triggering reconnect
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     try {
@@ -41,13 +66,13 @@ export function useWebSocket({
         console.log('[WebSocket] Connected');
         setIsConnected(true);
         reconnectCountRef.current = 0;
-        onConnect?.();
+        onConnectRef.current?.();
       };
 
       ws.onclose = () => {
         console.log('[WebSocket] Disconnected');
         setIsConnected(false);
-        onDisconnect?.();
+        onDisconnectRef.current?.();
         
         // Attempt reconnection
         if (reconnectCountRef.current < maxReconnectAttempts) {
@@ -71,7 +96,7 @@ export function useWebSocket({
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          onMessage(data);
+          onMessageRef.current(data);
         } catch (error) {
           console.error('[WebSocket] Failed to parse message:', error);
         }
@@ -81,7 +106,7 @@ export function useWebSocket({
     } catch (error) {
       console.error('[WebSocket] Connection error:', error);
     }
-  }, [url, onMessage, onConnect, onDisconnect, reconnectInterval, maxReconnectAttempts]);
+  }, [url, reconnectInterval, maxReconnectAttempts]);
 
   // Send message
   const sendMessage = useCallback((data: Record<string, unknown>) => {

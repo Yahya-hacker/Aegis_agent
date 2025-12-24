@@ -62,7 +62,20 @@ class AegisScanner:
         # Initialize Genesis Fuzzer for zero-day discovery
         self.genesis_fuzzer = get_genesis_fuzzer()
         
+        # Initialize Application Spider
+        from tools.application_spider import get_application_spider
+        self.application_spider = get_application_spider(ai_core.orchestrator if ai_core else None)
+        
         logger.info("🛡️ AegisScanner v8.0 initialized with CTF capabilities")
+    
+    def _normalize_tool_name(self, tool: str) -> str:
+        """Normalize tool name by stripping module prefixes."""
+        # Handle dotted names like "application_spider.crawl_and_map_application"
+        if '.' in tool:
+            parts = tool.split('.')
+            # Return just the method name
+            return parts[-1]
+        return tool
     
     def _validate_domain(self, domain: str) -> bool:
         """Validate domain name format"""
@@ -95,6 +108,58 @@ class AegisScanner:
             return all([result.scheme, result.netloc])
         except (ValueError, AttributeError):
             return False
+    
+    async def _http_form_submit(self, target_url: str, payloads: Dict) -> Dict:
+        """
+        Submit form data via HTTP POST as a fallback when Selenium is not available.
+        
+        Args:
+            target_url: URL to submit to
+            payloads: Dictionary of field names to values
+            
+        Returns:
+            Result dictionary with response data
+        """
+        import httpx
+        
+        logger.info(f"📬 HTTP form submission to {target_url}")
+        
+        try:
+            # Flatten the payloads if they contain lists (use first item)
+            flat_payloads = {}
+            for key, value in payloads.items():
+                if isinstance(value, list):
+                    flat_payloads[key] = value[0] if value else ""
+                else:
+                    flat_payloads[key] = value
+            
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+                # First, try to get the page to find the form
+                get_resp = await client.get(target_url)
+                
+                # Submit the form
+                post_resp = await client.post(target_url, data=flat_payloads)
+                
+                # Check for SQL error patterns in response
+                sql_errors = ["sql syntax", "mysql", "sqlite", "postgresql", "ora-", "sql error", "syntax error"]
+                response_lower = post_resp.text.lower()
+                sql_detected = any(err in response_lower for err in sql_errors)
+                
+                return {
+                    "status": "success",
+                    "data": {
+                        "submitted": True,
+                        "method": "http_post",
+                        "status_code": post_resp.status_code,
+                        "final_url": str(post_resp.url),
+                        "response_length": len(post_resp.text),
+                        "sql_error_detected": sql_detected,
+                        "response_preview": post_resp.text[:500]
+                    }
+                }
+        except Exception as e:
+            logger.error(f"HTTP form submission failed: {e}")
+            return {"status": "error", "error": str(e)}
     
     async def _self_correct_and_retry(self, tool: str, original_args: Dict, error_message: str) -> Optional[Dict]:
         """
@@ -278,9 +343,27 @@ If you cannot suggest a fix, respond with:
         Returns:
             Result dictionary
         """
+        # Normalize tool name to handle dotted names like "module.method"
+        original_tool = tool
+        tool = self._normalize_tool_name(tool)
+        
         try:
+            # Application Spider Tools
+            if tool == "crawl_and_map_application":
+                base_url = args.get("base_url") or args.get("url") or args.get("target")
+                mode = args.get("mode", "fast")
+                
+                if not base_url:
+                    return {"status": "error", "error": "Missing base_url or url"}
+                
+                if '://' not in base_url:
+                    base_url = f"http://{base_url}"
+                
+                result = await self.application_spider.crawl_and_map_application(base_url, mode)
+                return {"status": "success", "data": result}
+            
             # Reconnaissance Tools
-            if tool == "subdomain_enumeration":
+            elif tool == "subdomain_enumeration":
                 domain = args.get("domain")
                 if not domain: 
                     return {"status": "error", "error": "Missing domain"}
@@ -454,7 +537,20 @@ If you cannot suggest a fix, respond with:
                 if not all([target_url, form_id, payloads]):
                     return {"status": "error", "error": "Missing arguments for test_form_payload"}
                 if '://' not in target_url: target_url = f"http://{target_url}"
-                return await self.python_tools.test_form_payload(target_url, form_id, payloads)
+                
+                # Try Selenium first, fall back to HTTP-based form submission
+                try:
+                    result = await self.python_tools.test_form_payload(target_url, form_id, payloads)
+                    if result.get("status") == "error" and "ChromeDriver" in result.get("error", ""):
+                        # ChromeDriver not available, use HTTP-based form submission
+                        logger.info("⚠️ ChromeDriver not available, using HTTP-based form submission")
+                        return await self._http_form_submit(target_url, payloads)
+                    return result
+                except Exception as e:
+                    if "ChromeDriver" in str(e) or "chromedriver" in str(e).lower():
+                        logger.info("⚠️ ChromeDriver not available, using HTTP-based form submission")
+                        return await self._http_form_submit(target_url, payloads)
+                    raise
                 
             elif tool == "fetch_url":
                 target_url = args.get("target")
@@ -897,8 +993,8 @@ If you cannot suggest a fix, respond with:
                 return {"status": "success", "data": result}
 
             else:
-                logger.warning(f"Outil inconnu demandé par l'IA : {tool}")
-                return {"status": "error", "error": f"Outil inconnu : {tool}"}
+                logger.warning(f"Unknown tool requested by AI: {original_tool} (normalized: {tool})")
+                return {"status": "error", "error": f"Unknown tool: {original_tool}. Available tools include: subdomain_enumeration, port_scanning, http_request, capture_screenshot_som, crawl_and_map_application, genesis_fuzz, solve_crypto, analyze_binary, etc."}
                 
         except Exception as e:
             logger.error(f"Erreur fatale en exécutant {tool}: {e}", exc_info=True)

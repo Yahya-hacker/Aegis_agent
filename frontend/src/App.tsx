@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ConfigBar from './components/ConfigBar';
 import ChatInterface from './components/ChatInterface';
 import MissionDashboard from './components/MissionDashboard';
@@ -48,9 +48,13 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
+  // Determine WebSocket URL based on protocol (wss for https, ws for http)
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat`;
+  
   // WebSocket connection
   const { sendMessage, isConnected: wsConnected } = useWebSocket({
-    url: `ws://${window.location.host}/ws/chat`,
+    url: wsUrl,
     onMessage: handleWebSocketMessage,
     onConnect: () => setIsConnected(true),
     onDisconnect: () => setIsConnected(false),

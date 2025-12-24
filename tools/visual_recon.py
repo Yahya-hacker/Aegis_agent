@@ -153,8 +153,19 @@ class VisualReconTool:
         Raises:
             RuntimeError: If browser initialization fails after auto-install attempt.
         """
+        # Check if browser is already initialized AND still connected
         if self.browser is not None:
-            return  # Already initialized
+            try:
+                # Test if browser is still responsive
+                if self.browser.is_connected():
+                    return  # Already initialized and working
+                else:
+                    logger.warning("⚠️ Browser disconnected, reinitializing...")
+                    await self._cleanup_browser()
+            except Exception:
+                # Browser in bad state, cleanup and reinitialize
+                logger.warning("⚠️ Browser in bad state, reinitializing...")
+                await self._cleanup_browser()
         
         try:
             logger.info("🌐 Initializing Playwright browser with stealth mode...")
@@ -169,6 +180,7 @@ class VisualReconTool:
                 '--window-size=1920,1080',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                '--single-process',  # More stable in containerized environments
             ]
             
             # First attempt to launch browser
@@ -379,15 +391,24 @@ class VisualReconTool:
         """
         logger.info(f"📸 Capturing SoM screenshot: {url}")
         
+        page = None
         try:
             await self._initialize_browser()
+            
+            if not self.context:
+                raise RuntimeError("Browser context not available")
             
             # Create new page
             page = await self.context.new_page()
             page.set_default_timeout(self.timeout)
             
-            # Navigate to URL
-            await page.goto(url, wait_until='networkidle')
+            # Navigate to URL with error handling
+            try:
+                await page.goto(url, wait_until='networkidle', timeout=self.timeout)
+            except Exception as nav_error:
+                # Try with 'load' instead of 'networkidle' which can be more reliable
+                logger.warning(f"⚠️ networkidle failed, trying with 'load': {nav_error}")
+                await page.goto(url, wait_until='load', timeout=self.timeout)
             
             # Inject JavaScript to add SoM badges and collect element data
             som_script = """
@@ -528,6 +549,7 @@ class VisualReconTool:
             viewport = page.viewport_size
             
             await page.close()
+            page = None
             
             logger.info(f"✅ SoM screenshot saved: {output_path}")
             
@@ -546,6 +568,15 @@ class VisualReconTool:
             
         except Exception as e:
             logger.error(f"Error capturing SoM screenshot: {e}", exc_info=True)
+            # Ensure page is closed on error
+            if page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+            # If browser error, cleanup to force reinit next time
+            if "closed" in str(e).lower() or "disconnected" in str(e).lower():
+                await self._cleanup_browser()
             return {
                 "status": "error",
                 "url": url,

@@ -46,6 +46,8 @@ DATA_DIR = SCRIPT_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 UPLOADS_DIR = DATA_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
+# Location of built frontend assets (Vite build output)
+FRONTEND_DIST = SCRIPT_DIR / "frontend" / "dist"
 
 # Configure logging
 logging.basicConfig(
@@ -239,16 +241,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS origins from environment (default to localhost for development)
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+# CORS origins from environment
+# Default allows localhost and Codespaces patterns; use "*" for open development
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,  # Configure via CORS_ORIGINS env var for production
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -258,7 +261,21 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """Root endpoint - health check"""
+    """Root endpoint - serve UI if built, else return health"""
+    index_path = FRONTEND_DIST / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {
+        "status": "online",
+        "name": "Aegis AI v9.0 Nexus",
+        "version": "9.0.0",
+        "agent_initialized": app_state.agent_initialized
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check for monitors and CLI"""
     return {
         "status": "online",
         "name": "Aegis AI v9.0 Nexus",
@@ -607,6 +624,13 @@ async def handle_chat_message(websocket: WebSocket, data: Dict[str, Any]):
         "timestamp": user_msg["timestamp"]
     })
     
+    # Check if user is trying to start the mission
+    content_lower = content.strip().lower().strip("'\"")
+    if content_lower == "start" and app_state.mission_config:
+        # User wants to start - trigger autonomous scan
+        await start_autonomous_scan(websocket)
+        return
+    
     # Process with AI if initialized
     if app_state.agent_initialized and app_state.ai_core:
         try:
@@ -727,17 +751,189 @@ async def start_autonomous_scan(websocket: WebSocket):
         })
         return
     
-    await websocket.send_json({
-        "type": "info",
-        "message": f"🔍 Starting autonomous scan of {app_state.mission_config.target}..."
-    })
+    target = app_state.mission_config.target
+    rules = app_state.mission_config.rules
+    mode = app_state.current_mode.value
     
-    # Autonomous scanning would be implemented here
-    # For now, we'll simulate the start
+    # Notify clients scan is starting
     await app_state.broadcast_message({
         "type": "scan_started",
-        "target": app_state.mission_config.target
+        "target": target,
+        "mode": mode
     })
+    
+    # Send initial message
+    start_msg = f"🔍 Starting autonomous reconnaissance on **{target}**...\n\n**Mode:** {mode.replace('_', ' ').title()}\n**Rules:** {rules}"
+    await app_state.broadcast_message({
+        "type": "chat",
+        "role": "assistant",
+        "content": start_msg,
+        "timestamp": time.time()
+    })
+    app_state.chat_history.append({
+        "role": "assistant",
+        "content": start_msg,
+        "timestamp": time.time()
+    })
+    
+    # Set domain context based on mode
+    if hasattr(app_state.ai_core, 'orchestrator'):
+        mode_to_context = {
+            "penetration_testing": "Web",
+            "ctf_mode": "CTF",
+            "red_teaming": "Binary",
+            "audit": "Web"
+        }
+        domain_context = mode_to_context.get(mode, "Web")
+        app_state.ai_core.orchestrator.set_domain_context(domain_context)
+        if hasattr(app_state.ai_core, 'blackboard'):
+            app_state.ai_core.blackboard.set_domain_context(domain_context)
+    
+    # Run autonomous scan loop
+    try:
+        await run_autonomous_loop(websocket, target, rules, mode)
+    except Exception as e:
+        logger.error(f"Autonomous scan error: {e}", exc_info=True)
+        await app_state.broadcast_message({
+            "type": "chat",
+            "role": "assistant",
+            "content": f"❌ Scan encountered an error: {str(e)}",
+            "timestamp": time.time()
+        })
+
+
+async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mode: str, max_iterations: int = 20):
+    """Run the autonomous scanning loop"""
+    from agents.scanner import AegisScanner
+    
+    # Initialize scanner with AI core
+    scanner = AegisScanner(app_state.ai_core)
+    
+    agent_memory = []
+    iteration = 0
+    
+    # Add mode-specific instructions to rules
+    mode_instructions = {
+        "penetration_testing": "Focus on web application vulnerabilities. Use standard penetration testing methodology.",
+        "ctf_mode": "This is a CTF challenge. Look for flags, hidden files, and creative exploitation paths. Use crypto, forensics, and pwn tools as needed.",
+        "red_teaming": "Simulate advanced adversary. Focus on stealth, persistence, and lateral movement opportunities.",
+        "audit": "Comprehensive security audit. Document all findings thoroughly with evidence."
+    }
+    enhanced_rules = f"{rules}\n\nMODE: {mode_instructions.get(mode, '')}"
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Broadcast tool status - thinking
+        await app_state.broadcast_message({
+            "type": "tool_status",
+            "tool": {"name": "AI Planning", "status": "running", "progress": None}
+        })
+        app_state.update_tool_status("AI Planning", "running")
+        
+        # Get next action from AI
+        try:
+            action = await app_state.ai_core.get_next_action_async(enhanced_rules, agent_memory)
+        except Exception as e:
+            logger.error(f"Error getting next action: {e}")
+            app_state.update_tool_status("AI Planning", "failed")
+            break
+        
+        app_state.update_tool_status("AI Planning", "completed")
+        
+        if not action:
+            break
+        
+        tool_name = action.get("tool", "")
+        
+        # Check for completion signals
+        if tool_name in ["complete", "done", "finish", "report"]:
+            # Generate final report
+            report = action.get("message", action.get("summary", "Mission completed."))
+            await app_state.broadcast_message({
+                "type": "chat",
+                "role": "assistant",
+                "content": f"✅ **Mission Complete**\n\n{report}",
+                "timestamp": time.time()
+            })
+            break
+        
+        if tool_name == "system":
+            # System message from AI
+            message = action.get("message", "")
+            await app_state.broadcast_message({
+                "type": "chat",
+                "role": "assistant",
+                "content": f"💭 {message}",
+                "timestamp": time.time()
+            })
+            agent_memory.append({"type": "thought", "content": message})
+            continue
+        
+        # Broadcast tool execution
+        await app_state.broadcast_message({
+            "type": "tool_status",
+            "tool": {"name": tool_name, "status": "running", "progress": None}
+        })
+        app_state.update_tool_status(tool_name, "running")
+        
+        # Send progress message
+        args_str = json.dumps(action.get("args", {}), indent=2) if action.get("args") else ""
+        await app_state.broadcast_message({
+            "type": "chat",
+            "role": "assistant",
+            "content": f"🔧 Executing **{tool_name}**...\n```json\n{args_str}\n```",
+            "timestamp": time.time()
+        })
+        
+        # Execute the tool
+        try:
+            result = await scanner.execute_action(action)
+            app_state.update_tool_status(tool_name, "completed")
+            
+            # Broadcast result
+            result_preview = str(result)[:500] + "..." if len(str(result)) > 500 else str(result)
+            await app_state.broadcast_message({
+                "type": "chat",
+                "role": "assistant", 
+                "content": f"📋 **{tool_name}** result:\n```\n{result_preview}\n```",
+                "timestamp": time.time()
+            })
+            
+            # Add to agent memory
+            agent_memory.append({
+                "type": "observation",
+                "tool": tool_name,
+                "result": result
+            })
+            
+        except Exception as e:
+            logger.error(f"Tool execution error: {e}")
+            app_state.update_tool_status(tool_name, "failed")
+            
+            await app_state.broadcast_message({
+                "type": "chat",
+                "role": "assistant",
+                "content": f"⚠️ **{tool_name}** failed: {str(e)}",
+                "timestamp": time.time()
+            })
+            
+            agent_memory.append({
+                "type": "error",
+                "tool": tool_name,
+                "error": str(e)
+            })
+        
+        # Small delay between iterations
+        await asyncio.sleep(1)
+    
+    if iteration >= max_iterations:
+        await app_state.broadcast_message({
+            "type": "chat",
+            "role": "assistant",
+            "content": f"⚠️ Reached maximum iterations ({max_iterations}). Stopping scan.",
+            "timestamp": time.time()
+        })
 
 
 # ============================================================================
@@ -745,30 +941,29 @@ async def start_autonomous_scan(websocket: WebSocket):
 # ============================================================================
 
 # Serve frontend static files if they exist
-frontend_path = SCRIPT_DIR / "frontend" / "dist"
-if frontend_path.exists():
-    app.mount("/assets", StaticFiles(directory=frontend_path / "assets"), name="assets")
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
     
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
         """Serve React frontend with path traversal protection"""
         # Security: Prevent directory traversal attacks
         if ".." in path or path.startswith("/"):
-            return FileResponse(frontend_path / "index.html")
+            return FileResponse(FRONTEND_DIST / "index.html")
         
         # Resolve and validate path is within frontend directory
         try:
-            file_path = (frontend_path / path).resolve()
+            file_path = (FRONTEND_DIST / path).resolve()
             # Ensure resolved path is still within frontend_path
-            if not str(file_path).startswith(str(frontend_path.resolve())):
-                return FileResponse(frontend_path / "index.html")
+            if not str(file_path).startswith(str(FRONTEND_DIST.resolve())):
+                return FileResponse(FRONTEND_DIST / "index.html")
             
             if file_path.exists() and file_path.is_file():
                 return FileResponse(file_path)
         except (ValueError, OSError):
             pass
         
-        return FileResponse(frontend_path / "index.html")
+        return FileResponse(FRONTEND_DIST / "index.html")
 
 
 # ============================================================================
