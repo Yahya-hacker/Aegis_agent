@@ -15,6 +15,7 @@ playwright>=1.40.0
 # Interface utilisateur et utilitaires
 colorama>=0.4.6
 pillow>=10.0.0
+streamlit>=1.28.0
 
 # Graphe de connaissances et fonctionnalités avancées
 networkx>=3.0
@@ -23,6 +24,9 @@ json-repair>=0.25.0
 # Base de données vectorielle et embeddings pour la mémoire de replay HTTP
 numpy>=1.24.0
 scikit-learn>=1.3.0
+
+# Parallel execution and async utilities
+asyncio>=3.4.3
 
 # Optionnel: Support de modèles locaux (non requis pour Together AI)
 # Décommentez si vous souhaitez exécuter des modèles localement au lieu d'utiliser Together AI
