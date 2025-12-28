@@ -67,13 +67,13 @@ class ParallelExecutionEngine:
     - Performance monitoring and metrics
     """
     
-    def __init__(self, max_concurrent_tasks: int = 10, default_timeout: float = 300.0):
+    def __init__(self, max_concurrent_tasks: int = 10, default_timeout: float = 120.0):
         """
         Initialize the parallel execution engine.
         
         Args:
             max_concurrent_tasks: Maximum number of concurrent tasks (default: 10)
-            default_timeout: Default timeout for tasks in seconds (default: 300)
+            default_timeout: Default timeout for tasks in seconds (default: 120)
         """
         self.max_concurrent_tasks = max_concurrent_tasks
         self.default_timeout = default_timeout
@@ -403,7 +403,7 @@ def get_parallel_engine(max_concurrent: int = 10) -> ParallelExecutionEngine:
 async def run_parallel(
     tasks: List[Coroutine],
     max_concurrent: int = 10,
-    timeout: float = 300.0
+    timeout: float = 120.0
 ) -> List[Any]:
     """
     Convenience function to run tasks in parallel.
@@ -411,7 +411,7 @@ async def run_parallel(
     Args:
         tasks: List of coroutines to execute
         max_concurrent: Maximum concurrent tasks
-        timeout: Default timeout for each task
+        timeout: Default timeout for each task (default: 120 seconds)
         
     Returns:
         List of results

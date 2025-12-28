@@ -279,21 +279,32 @@ if __name__ == "__main__":
             # Check for syntax errors
             compile(code, '<string>', 'exec')
             
-            # Basic security checks
-            dangerous_patterns = [
+            # Security checks - Warning only, don't block
+            # These patterns might be legitimate in security tools
+            potentially_dangerous_patterns = [
                 'eval(',
                 'exec(',
                 '__import__',
                 'os.system(',
-                'subprocess.call(',
-                'rm -rf',
-                'shutil.rmtree'
             ]
             
-            for pattern in dangerous_patterns:
+            for pattern in potentially_dangerous_patterns:
                 if pattern in code:
-                    logger.warning(f"⚠️ Potentially dangerous pattern detected: {pattern}")
-                    # Don't reject, just warn - the tool might need these
+                    logger.warning(f"⚠️ Potentially sensitive operation detected: {pattern}")
+                    logger.warning("   Review the generated tool carefully before execution")
+                    # Don't reject - security tools often need these operations
+            
+            # Block only truly dangerous patterns without legitimate use
+            forbidden_patterns = [
+                'rm -rf /',
+                'format C:',
+                'del /f /s /q C:\\',
+            ]
+            
+            for pattern in forbidden_patterns:
+                if pattern in code:
+                    logger.error(f"❌ Forbidden dangerous pattern detected: {pattern}")
+                    return False
             
             return True
             

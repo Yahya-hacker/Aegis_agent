@@ -317,9 +317,24 @@ class EnhancedErrorRecovery:
     async def _install_missing_module(self, module_name: str) -> bool:
         """Attempt to install a missing Python module"""
         try:
+            # Whitelist of trusted modules that can be auto-installed
+            TRUSTED_MODULES = {
+                'requests', 'aiohttp', 'httpx', 'beautifulsoup4', 'lxml',
+                'pillow', 'numpy', 'pandas', 'pyyaml', 'python-dotenv',
+                'colorama', 'tqdm', 'click', 'rich', 'tabulate',
+                'cryptography', 'pycryptodome', 'pyjwt',
+                'playwright', 'selenium', 'networkx', 'scikit-learn'
+            }
+            
+            # Check if module is in trusted list
+            if module_name.lower() not in TRUSTED_MODULES:
+                logger.warning(f"⚠️ Module '{module_name}' not in trusted whitelist")
+                logger.info("   Manual installation required for security")
+                return False
+            
             import subprocess
             
-            logger.info(f"📦 Installing {module_name}...")
+            logger.info(f"📦 Installing trusted module: {module_name}...")
             
             # Try to install with pip
             process = await asyncio.create_subprocess_exec(
