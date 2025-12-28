@@ -458,6 +458,7 @@ class ParallelExecutor:
             if task_id in self.running_tasks
         )
         pending = len(task_ids) - completed - failed - running
+        total = len(task_ids) if task_ids else 1  # Avoid division by zero
         
         return {
             'target': target,
@@ -467,8 +468,7 @@ class ParallelExecutor:
             'running': running,
             'pending': pending,
             'progress': (
-                (completed + failed) / len(task_ids) * 100
-                if task_ids else 100
+                (completed + failed) / total * 100
             )
         }
     

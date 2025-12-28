@@ -566,6 +566,11 @@ class CTFModeManager:
         
         challenge = self.challenges[challenge_id]
         
+        # Build file list
+        files_list = "\n".join(f"- {f}" for f in challenge.files) if challenge.files else "No files provided"
+        tools_list = "\n".join(f"- {t}" for t in challenge.attempted_tools) if challenge.attempted_tools else "No specific tools recorded"
+        notes_list = "\n".join(f"- {n}" for n in challenge.notes) if challenge.notes else "No notes recorded"
+        
         writeup = f"""# {challenge.name}
 
 **Category:** {challenge.domain.value}  
@@ -579,13 +584,13 @@ class CTFModeManager:
 ## Solution
 
 ### Files Analyzed
-{chr(10).join(f"- {f}" for f in challenge.files) if challenge.files else "No files provided"}
+{files_list}
 
 ### Tools Used
-{chr(10).join(f"- {t}" for t in challenge.attempted_tools) if challenge.attempted_tools else "No specific tools recorded"}
+{tools_list}
 
 ### Notes
-{chr(10).join(f"- {n}" for n in challenge.notes) if challenge.notes else "No notes recorded"}
+{notes_list}
 
 ### Flag
 `{challenge.flag or "Not yet solved"}`

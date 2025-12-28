@@ -338,6 +338,10 @@ Return ONLY the improved Python code:
         """
         Execute Python code in a sandboxed environment.
         
+        WARNING: This is a basic subprocess sandbox. For production use,
+        consider using containers (Docker), RestrictedPython, or other
+        proper isolation mechanisms for enhanced security.
+        
         Args:
             code: Python code to execute
             input_data: Input data for the code
@@ -345,6 +349,13 @@ Return ONLY the improved Python code:
         Returns:
             Execution result dictionary
         """
+        # Validate code before execution
+        if not self._validate_code(code):
+            return {
+                'success': False,
+                'error': 'Code validation failed - potential security risk detected'
+            }
+        
         # Write to temporary file
         with tempfile.NamedTemporaryFile(
             mode='w',
@@ -513,35 +524,51 @@ Return ONLY the Python code:
         return content.strip()
     
     def _validate_code(self, code: str) -> bool:
-        """Validate generated code for safety"""
-        # Check for forbidden imports
-        for forbidden in self.forbidden_imports:
-            if f'import {forbidden}' in code or f'from {forbidden}' in code:
-                logger.warning(f"Forbidden import detected: {forbidden}")
-                return False
-        
-        # Check for dangerous patterns
-        dangerous_patterns = [
-            'eval(',
-            'exec(',
-            'compile(',
-            '__import__',
-            'os.system(',
-            'os.popen(',
-        ]
-        
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                logger.warning(f"Dangerous pattern detected: {pattern}")
-                return False
+        """Validate generated code for safety using AST parsing"""
+        import ast
         
         # Try to compile to check syntax
         try:
-            compile(code, '<generated>', 'exec')
-            return True
+            tree = ast.parse(code)
         except SyntaxError as e:
             logger.warning(f"Syntax error in generated code: {e}")
             return False
+        
+        # Check for dangerous imports and calls using AST
+        class SecurityChecker(ast.NodeVisitor):
+            def __init__(self):
+                self.violations = []
+            
+            def visit_Import(self, node):
+                for alias in node.names:
+                    if alias.name in ['subprocess', 'ctypes', 'importlib', 'builtins', '__builtins__']:
+                        self.violations.append(f"Forbidden import: {alias.name}")
+                self.generic_visit(node)
+            
+            def visit_ImportFrom(self, node):
+                if node.module in ['subprocess', 'ctypes', 'importlib', 'builtins', '__builtins__']:
+                    self.violations.append(f"Forbidden import from: {node.module}")
+                self.generic_visit(node)
+            
+            def visit_Call(self, node):
+                # Check for dangerous function calls
+                if isinstance(node.func, ast.Name):
+                    if node.func.id in ['eval', 'exec', 'compile', '__import__']:
+                        self.violations.append(f"Forbidden call: {node.func.id}")
+                elif isinstance(node.func, ast.Attribute):
+                    if node.func.attr in ['system', 'popen', 'spawn']:
+                        self.violations.append(f"Forbidden method call: {node.func.attr}")
+                self.generic_visit(node)
+        
+        checker = SecurityChecker()
+        checker.visit(tree)
+        
+        if checker.violations:
+            for violation in checker.violations:
+                logger.warning(f"Security violation in generated code: {violation}")
+            return False
+        
+        return True
     
     def _sanitize_code(self, code: str) -> str:
         """Sanitize code by removing dangerous elements"""
@@ -567,6 +594,7 @@ Return ONLY the Python code:
     def _generate_tool_name(self, description: str) -> str:
         """Generate a unique tool name from description"""
         import re
+        import hashlib
         
         # Extract key words
         words = re.findall(r'\b[a-z]+\b', description.lower())
@@ -577,8 +605,8 @@ Return ONLY the Python code:
         if significant:
             return '_'.join(significant) + '_tool'
         else:
-            # Fallback to hash
-            return f"custom_tool_{hashlib.md5(description.encode()).hexdigest()[:8]}"
+            # Fallback to hash - use SHA-256 for security
+            return f"custom_tool_{hashlib.sha256(description.encode()).hexdigest()[:8]}"
     
     def _categorize_tool(self, description: str) -> str:
         """Categorize a tool based on its description"""

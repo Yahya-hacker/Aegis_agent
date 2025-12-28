@@ -562,7 +562,28 @@ def with_error_recovery(source: str = "unknown"):
                 return func(*args, **kwargs)
             except Exception as e:
                 record = recovery_system.record_error(e, source, {"args": str(args)[:100]})
-                raise
+                
+                # For sync functions, attempt simple retry recovery
+                retry_count = 0
+                max_retries = 2
+                last_error = e
+                
+                while retry_count < max_retries:
+                    retry_count += 1
+                    try:
+                        import time
+                        time.sleep(0.5 * retry_count)  # Backoff
+                        result = func(*args, **kwargs)
+                        record.recovery_successful = True
+                        record.recovery_action = "sync_retry"
+                        recovery_system.recovered_errors += 1
+                        return result
+                    except Exception as retry_error:
+                        last_error = retry_error
+                        continue
+                
+                # All retries failed
+                raise last_error
         
         if asyncio.iscoroutinefunction(func):
             return async_wrapper

@@ -22,9 +22,6 @@ export default function ConfigBar({
   mcpServerCount,
   isConnected,
 }: ConfigBarProps) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const currentModeData = modes.find(m => m.id === currentMode) || modes[0];
-
   return (
     <header className="border-b border-cyber-border/50 px-6 py-3" style={{ background: 'rgba(30, 31, 32, 0.95)' }}>
       <div className="flex items-center justify-between">
