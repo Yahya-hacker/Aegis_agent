@@ -35,7 +35,12 @@ class LLMConfig:
         self.model_name = model_name
         self.role = role
         self.specialization = specialization
-        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        # Modification pour supporter Ollama
+        local_mode = os.getenv("LOCAL_MODEL_MODE", "false").lower() == "true"
+        if local_mode:
+            self.api_url = f"{os.getenv('OLLAMA_HOST', 'http://localhost:11434')}/v1/chat/completions"
+        else:
+            self.api_url = "https://openrouter.ai/api/v1/chat/completions"
 
 class MultiLLMOrchestrator:
     """
