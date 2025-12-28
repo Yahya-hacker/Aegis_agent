@@ -1,10 +1,83 @@
-# Aegis Agent v8.0 — Full-Spectrum Cyber Operations Platform
+# Aegis Agent v8.5 — Full-Spectrum Cyber Operations Platform
 
 **Aegis Agent** is an AI-powered autonomous penetration testing platform that transforms from traditional vulnerability scanning into an intelligent zero-day research system. Built with a multi-LLM architecture and advanced exploitation capabilities, it discovers vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
 
-**v8.0 NEW:** Full-Spectrum CTF & Red Team Operations with autonomous self-healing capabilities.
+**v8.5 NEW:** Self-Modification Engine, Parallel Execution, Enhanced CTF Mode, and Professional Gemini-Style UI.
 
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
+
+---
+
+## 🚀 Aegis v8.5: Advanced Self-Modifying Agent
+
+### NEW v8.5 Features
+
+#### 🔧 Self-Modification Engine
+Aegis can now **modify its own code** and **create custom tools on-the-fly**:
+
+- **Dynamic Tool Creation**: AI-powered tool generation based on requirements
+- **Tool Adaptation**: Automatically modifies tools that fail or underperform
+- **Performance Monitoring**: Tracks success rates and execution times
+- **Code Validation**: Syntax checking and security scanning before execution
+
+```python
+# Create a custom tool during runtime
+await agent.create_custom_tool(
+    tool_name="custom_scanner",
+    description="Scan for specific vulnerabilities",
+    requirements="Should check for XSS, CSRF, and SQLi",
+    expected_inputs=["url", "depth"],
+    expected_outputs=["vulnerabilities", "severity"]
+)
+```
+
+#### ⚡ Parallel Execution Engine
+Execute multiple operations concurrently for **10x performance boost**:
+
+- **Concurrent Task Execution**: Run up to 20 parallel operations
+- **Smart Prioritization**: Critical tasks get priority
+- **Dependency Management**: Automatic task ordering
+- **Resource Limiting**: Prevents system overload
+
+```python
+# Execute multiple scans in parallel
+results = await agent.execute_parallel_tasks([
+    {"name": "Port Scan", "coroutine": scan_ports()},
+    {"name": "Directory Enum", "coroutine": enum_dirs()},
+    {"name": "Subdomain Discovery", "coroutine": find_subdomains()}
+])
+```
+
+#### 🎯 Enhanced CTF Mode
+Specialized mode for **Capture The Flag competitions**:
+
+- **Multi-Domain Support**: Web, Crypto, Binary, Reverse, Forensics, Network, PWN
+- **Concurrent Challenge Solving**: Solve multiple challenges simultaneously
+- **Auto-Detection**: Automatically classify challenges by domain
+- **Strategy Generation**: AI creates custom solving strategies
+- **Flag Pattern Recognition**: Identifies flags automatically
+
+```bash
+# Activate CTF mode
+> activate ctf mode
+> solve all challenges
+```
+
+#### 🛡️ Enhanced Error Recovery
+**Self-healing capabilities** that recover from failures:
+
+- **Auto-Retry with Backoff**: Intelligent retry strategies
+- **Self-Healing**: Automatically fixes common errors (missing modules, timeouts)
+- **Graceful Degradation**: Continues operation even with partial failures
+- **Error Pattern Learning**: Adapts strategies based on error history
+
+#### 💎 Professional Gemini-Style UI
+**Modern, intuitive interface** inspired by Google Gemini:
+
+- **Real-time Metrics Dashboard**: Live status and performance indicators
+- **Interactive Controls**: Quick action buttons and mode selection
+- **Visual Feedback**: Color-coded status badges and animations
+- **Responsive Design**: Optimized for all screen sizes
 
 ---
 
@@ -172,39 +245,46 @@ VISUAL_API_KEY=sk-visual-key             # Separate account for screenshots
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    AEGIS AGENT v7.5                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │  Strategic  │  │  Reasoning  │  │  Code + Visual LLM  │  │
-│  │    LLM      │  │     LLM     │  │    (Multi-Modal)    │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
-│         └────────────────┼────────────────────┘             │
-│                          ▼                                   │
-│              ┌───────────────────────┐                       │
-│              │  Multi-LLM Orchestrator │                      │
-│              │  (API Key Sharding)    │                       │
-│              └───────────┬───────────┘                       │
-│                          ▼                                   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Cortex Memory (Knowledge Graph)          │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐  │   │
-│  │  │  Facts  │ │  Goals  │ │ Vectors │ │ Attack Path│  │   │
-│  │  └─────────┘ └─────────┘ └─────────┘ └────────────┘  │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                          ▼                                   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │                     Tool Layer                        │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │   │
-│  │  │ Genesis  │ │  Nuclei  │ │  SQLMap  │ │ Chronos │  │   │
-│  │  │ Fuzzer   │ │   Scan   │ │  Inject  │ │  Race   │  │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └─────────┘  │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │   │
-│  │  │   CDP    │ │  Visual  │ │ App      │ │  Logic  │  │   │
-│  │  │  Hooks   │ │  Recon   │ │ Spider   │ │ Tester  │  │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └─────────┘  │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    AEGIS AGENT v8.5                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐  │
+│  │  Strategic  │  │  Reasoning  │  │    Code     │  │   Visual  │  │
+│  │     LLM     │  │     LLM     │  │     LLM     │  │    LLM    │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────┬─────┘  │
+│         └────────────────┴────────────────┴────────────────┘        │
+│                          ▼                                           │
+│              ┌────────────────────────────┐                          │
+│              │  Multi-LLM Orchestrator   │                          │
+│              │   (API Key Sharding)      │                          │
+│              └────────────┬───────────────┘                          │
+│                           ▼                                          │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │           Enhanced AI Core with Self-Modification          │     │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │     │
+│  │  │   Cortex     │ │   Parallel   │ │ Self-Mod Engine │   │     │
+│  │  │   Memory     │ │   Execution  │ │  (Tool Creator) │   │     │
+│  │  └──────────────┘ └──────────────┘ └──────────────────┘   │     │
+│  └────────────────────────────────────────────────────────────┘     │
+│                           ▼                                          │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │                  Advanced Tool Layer                       │     │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │     │
+│  │  │ Genesis  │ │  Nuclei  │ │  SQLMap  │ │   CTF Mode   │  │     │
+│  │  │ Fuzzer   │ │   Scan   │ │  Inject  │ │ (Multi-Domain│  │     │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │     │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │     │
+│  │  │ Visual   │ │ App      │ │  Custom  │ │    Error     │  │     │
+│  │  │ Recon    │ │ Spider   │ │  Tools   │ │   Recovery   │  │     │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │     │
+│  └────────────────────────────────────────────────────────────┘     │
+│                           ▼                                          │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │              Professional Gemini-Style UI                  │     │
+│  │  • Real-time Metrics  • Interactive Controls               │     │
+│  │  • Visual Feedback    • Mode Selection                     │     │
+│  └────────────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -250,6 +330,133 @@ go install github.com/tomnomnom/waybackurls@latest
 
 # Install SQLMap
 apt install sqlmap  # or pip install sqlmap
+```
+
+---
+
+## 📖 Usage Examples
+
+### Basic Penetration Testing
+
+```bash
+# Start Aegis
+python main.py
+
+# Scan a target
+> scan example.com
+
+# Activate UI mode
+> ui
+# Then run: streamlit run app.py
+```
+
+### CTF Mode
+
+```bash
+# Activate CTF mode
+> activate ctf mode
+CTF Name: PicoCTF 2024
+
+# The agent will prompt for challenge information
+# Or auto-detect from a directory
+
+# Solve all challenges in parallel
+> solve all challenges
+
+# View scoreboard
+> scoreboard
+```
+
+### Creating Custom Tools
+
+```python
+# Create a tool for specific vulnerability testing
+> create tool custom_xss_scanner that does comprehensive XSS detection
+
+Tool name: custom_xss_scanner
+Description: Comprehensive XSS scanner with DOM analysis
+Requirements: Should test for reflected, stored, and DOM-based XSS
+Expected inputs: url, depth, payloads
+Expected outputs: vulnerabilities, locations, severity
+
+# The agent will generate and validate the tool automatically
+```
+
+### Parallel Operations
+
+```python
+# From Python API
+import asyncio
+from agents.enhanced_ai_core import EnhancedAegisAI
+
+async def main():
+    agent = EnhancedAegisAI()
+    await agent.initialize()
+    
+    # Execute multiple tasks concurrently
+    results = await agent.execute_parallel_tasks([
+        {
+            "name": "Subdomain Discovery",
+            "coroutine": discover_subdomains("example.com"),
+            "priority": "high"
+        },
+        {
+            "name": "Port Scanning",
+            "coroutine": scan_ports("example.com"),
+            "priority": "normal"
+        },
+        {
+            "name": "Directory Enumeration",
+            "coroutine": enum_directories("example.com"),
+            "priority": "normal"
+        }
+    ])
+    
+    print(f"Completed {results['metrics']['completed']} tasks")
+
+asyncio.run(main())
+```
+
+### Advanced Commands
+
+```bash
+# Check agent status and metrics
+> status
+
+# List all available tools
+> list available tools
+
+# Get help
+> help
+
+# Inject custom instruction during mission
+> inject: Focus on API endpoints only
+
+# Stop current mission
+> stop
+```
+
+---
+
+## 🎯 CTF Challenge Examples
+
+### Web Challenge
+```bash
+> activate ctf mode
+> register challenge "SQL Injection Login" domain=web points=200
+> solve challenge
+```
+
+### Cryptography Challenge
+```bash
+> register challenge "RSA Weak Keys" domain=crypto points=300
+# Agent will automatically use ciphey, hashcat, and custom crypto tools
+```
+
+### Binary Exploitation
+```bash
+> register challenge "Buffer Overflow" domain=pwn points=500
+# Agent will use checksec, pwntools, and generate ROP chains
 ```
 
 ---
