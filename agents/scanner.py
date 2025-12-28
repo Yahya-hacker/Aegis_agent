@@ -992,9 +992,77 @@ If you cannot suggest a fix, respond with:
                 
                 return {"status": "success", "data": result}
 
+            # --- DYNAMIC TOOL GENERATION (v9.1) ---
+            # If no existing tool matches, attempt to generate one dynamically
             else:
-                logger.warning(f"Unknown tool requested by AI: {original_tool} (normalized: {tool})")
-                return {"status": "error", "error": f"Unknown tool: {original_tool}. Available tools include: subdomain_enumeration, port_scanning, http_request, capture_screenshot_som, crawl_and_map_application, genesis_fuzz, solve_crypto, analyze_binary, etc."}
+                logger.info(f"🔧 Unknown tool '{original_tool}' - attempting dynamic generation...")
+                
+                # Import dynamic tool generator
+                try:
+                    from utils.dynamic_tool_generator import get_tool_generator
+                    
+                    tool_generator = get_tool_generator(self.ai_core)
+                    
+                    # Build task description from tool name and args
+                    task_description = f"Security testing tool: {original_tool}"
+                    if args:
+                        task_description += f". Parameters: {json.dumps(args)}"
+                    
+                    # Generate the tool
+                    generated_tool = await tool_generator.generate_tool(
+                        task_description=task_description,
+                        input_schema={"args": args},
+                        output_format="json"
+                    )
+                    
+                    # Execute the generated tool
+                    result = await tool_generator.execute_tool(generated_tool, args)
+                    
+                    if result.get('success'):
+                        logger.info(f"✅ Dynamically generated tool '{original_tool}' executed successfully")
+                        return {
+                            "status": "success",
+                            "data": result.get('output'),
+                            "dynamic_tool": True,
+                            "tool_name": generated_tool.name
+                        }
+                    else:
+                        # Try to improve the tool and retry
+                        logger.warning(f"⚠️ Dynamic tool failed, attempting improvement...")
+                        improved_tool = await tool_generator.improve_tool(
+                            generated_tool,
+                            result.get('error', 'Unknown error'),
+                            f"Successfully execute {original_tool} with args {args}"
+                        )
+                        
+                        retry_result = await tool_generator.execute_tool(improved_tool, args)
+                        
+                        if retry_result.get('success'):
+                            return {
+                                "status": "success",
+                                "data": retry_result.get('output'),
+                                "dynamic_tool": True,
+                                "improved": True
+                            }
+                        else:
+                            return {
+                                "status": "error",
+                                "error": f"Dynamic tool generation failed: {retry_result.get('error')}",
+                                "available_tools": "subdomain_enumeration, port_scanning, vulnerability_scan, crawl_and_map_application, solve_crypto, analyze_binary, etc."
+                            }
+                            
+                except ImportError:
+                    logger.warning("Dynamic tool generator not available")
+                    return {
+                        "status": "error",
+                        "error": f"Unknown tool: {original_tool}. Available tools include: subdomain_enumeration, port_scanning, http_request, capture_screenshot_som, crawl_and_map_application, genesis_fuzz, solve_crypto, analyze_binary, etc."
+                    }
+                except Exception as gen_error:
+                    logger.error(f"Dynamic tool generation error: {gen_error}")
+                    return {
+                        "status": "error",
+                        "error": f"Failed to generate dynamic tool: {str(gen_error)}"
+                    }
                 
         except Exception as e:
             logger.error(f"Erreur fatale en exécutant {tool}: {e}", exc_info=True)

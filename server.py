@@ -561,6 +561,189 @@ async def clear_chat_history():
     return {"status": "cleared"}
 
 
+# ---- CTF Mode Endpoints ----
+
+@app.post("/api/ctf/configure")
+async def configure_ctf(ctf_name: str, flag_format: Optional[str] = None, team_name: Optional[str] = None):
+    """Configure CTF mode settings"""
+    try:
+        from utils.ctf_mode_manager import get_ctf_manager
+        
+        ctf_manager = get_ctf_manager()
+        ctf_manager.set_ctf_config(ctf_name, flag_format, team_name)
+        
+        return {
+            "status": "configured",
+            "ctf_name": ctf_name,
+            "flag_format": flag_format,
+            "team_name": team_name
+        }
+    except Exception as e:
+        logger.error(f"CTF configuration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ctf/challenge")
+async def add_ctf_challenge(
+    challenge_id: str,
+    name: str,
+    description: str = "",
+    domain: Optional[str] = None,
+    points: int = 0,
+    files: Optional[List[str]] = None,
+    url: Optional[str] = None
+):
+    """Add a CTF challenge"""
+    try:
+        from utils.ctf_mode_manager import get_ctf_manager, CTFDomain
+        
+        ctf_manager = get_ctf_manager()
+        
+        # Convert domain string to enum if provided
+        domain_enum = None
+        if domain:
+            try:
+                domain_enum = CTFDomain(domain.lower())
+            except ValueError:
+                pass
+        
+        challenge = await ctf_manager.add_challenge(
+            challenge_id=challenge_id,
+            name=name,
+            description=description,
+            domain=domain_enum,
+            points=points,
+            files=files,
+            url=url
+        )
+        
+        return {
+            "status": "added",
+            "challenge": {
+                "id": challenge.id,
+                "name": challenge.name,
+                "domain": challenge.domain.value,
+                "points": challenge.points
+            }
+        }
+    except Exception as e:
+        logger.error(f"Add challenge error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ctf/stats")
+async def get_ctf_stats():
+    """Get CTF progress statistics"""
+    try:
+        from utils.ctf_mode_manager import get_ctf_manager
+        
+        ctf_manager = get_ctf_manager()
+        return ctf_manager.get_ctf_stats()
+    except Exception as e:
+        logger.error(f"CTF stats error: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/api/ctf/tools/{challenge_id}")
+async def get_ctf_recommended_tools(challenge_id: str):
+    """Get recommended tools for a CTF challenge"""
+    try:
+        from utils.ctf_mode_manager import get_ctf_manager
+        
+        ctf_manager = get_ctf_manager()
+        tools = ctf_manager.get_recommended_tools(challenge_id)
+        
+        return {
+            "challenge_id": challenge_id,
+            "recommended_tools": tools
+        }
+    except Exception as e:
+        logger.error(f"Get recommended tools error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- Dynamic Tool Generation Endpoints ----
+
+@app.get("/api/tools/generated")
+async def list_generated_tools():
+    """List dynamically generated tools"""
+    try:
+        from utils.dynamic_tool_generator import get_tool_generator
+        
+        generator = get_tool_generator()
+        return {
+            "tools": generator.get_available_tools()
+        }
+    except Exception as e:
+        logger.error(f"List generated tools error: {e}")
+        return {"tools": [], "error": str(e)}
+
+
+@app.post("/api/tools/generate")
+async def generate_custom_tool(
+    task_description: str,
+    input_schema: Optional[Dict[str, Any]] = None
+):
+    """Generate a custom tool dynamically"""
+    try:
+        from utils.dynamic_tool_generator import get_tool_generator
+        
+        generator = get_tool_generator(app_state.ai_core)
+        tool = await generator.generate_tool(
+            task_description=task_description,
+            input_schema=input_schema
+        )
+        
+        return {
+            "status": "generated",
+            "tool": {
+                "name": tool.name,
+                "description": tool.description,
+                "category": tool.category,
+                "version": tool.version
+            }
+        }
+    except Exception as e:
+        logger.error(f"Generate tool error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- Parallel Execution Endpoints ----
+
+@app.post("/api/parallel/targets")
+async def add_parallel_targets(targets: List[str]):
+    """Add multiple targets for parallel scanning"""
+    try:
+        from utils.parallel_executor import get_multi_target_manager
+        
+        manager = get_multi_target_manager()
+        
+        for target in targets:
+            await manager.add_target(target)
+        
+        return {
+            "status": "added",
+            "targets_count": len(targets),
+            "progress": manager.get_all_progress()
+        }
+    except Exception as e:
+        logger.error(f"Add parallel targets error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/parallel/progress")
+async def get_parallel_progress():
+    """Get progress of parallel scanning"""
+    try:
+        from utils.parallel_executor import get_multi_target_manager
+        
+        manager = get_multi_target_manager()
+        return manager.get_all_progress()
+    except Exception as e:
+        logger.error(f"Get parallel progress error: {e}")
+        return {"error": str(e)}
+
+
 # ============================================================================
 # WEBSOCKET ENDPOINTS
 # ============================================================================

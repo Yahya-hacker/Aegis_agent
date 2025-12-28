@@ -2,155 +2,355 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global styles */
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Global styles - Gemini-inspired */
 :root {
   color-scheme: dark;
+  --gemini-blue: #8ab4f8;
+  --gemini-purple: #c58af9;
+  --gemini-bg: #1e1f20;
+  --gemini-surface: #282a2c;
+  --gemini-card: #303134;
+  --gemini-border: #3c4043;
+  --gemini-text: #e3e3e3;
+  --gemini-text-dim: #9aa0a6;
+  --gemini-accent: #8ab4f8;
+  --gemini-success: #81c995;
+  --gemini-warning: #fdd663;
+  --gemini-error: #f28b82;
 }
 
 body {
-  @apply bg-cyber-bg text-cyber-text font-sans;
+  @apply bg-cyber-bg text-cyber-text;
+  font-family: 'Google Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  background: linear-gradient(180deg, #1e1f20 0%, #131314 100%);
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling - Gemini style */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-cyber-surface;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-cyber-border rounded-full;
+  background: rgba(138, 180, 248, 0.3);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-cyber-accent;
+  background: rgba(138, 180, 248, 0.5);
 }
 
 /* Custom utility classes */
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-cyber-accent text-cyber-bg font-semibold rounded-lg
-           hover:bg-cyber-accent-dim transition-all duration-200
-           focus:outline-none focus:ring-2 focus:ring-cyber-accent focus:ring-opacity-50;
+    @apply px-6 py-3 font-medium rounded-full
+           transition-all duration-300 ease-out
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-cyber-bg;
+    background: linear-gradient(135deg, #8ab4f8 0%, #c58af9 100%);
+    color: #1e1f20;
+  }
+  
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(138, 180, 248, 0.4);
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-cyber-surface text-cyber-text border border-cyber-border rounded-lg
-           hover:border-cyber-accent transition-all duration-200
+    @apply px-6 py-3 bg-transparent text-cyber-text border rounded-full
+           transition-all duration-300
            focus:outline-none focus:ring-2 focus:ring-cyber-accent focus:ring-opacity-50;
+    border-color: rgba(138, 180, 248, 0.5);
+  }
+  
+  .btn-secondary:hover {
+    background: rgba(138, 180, 248, 0.1);
+    border-color: #8ab4f8;
   }
 
   .card {
-    @apply bg-cyber-card border border-cyber-border rounded-xl p-4;
+    @apply rounded-2xl p-5;
+    background: rgba(40, 42, 44, 0.8);
+    border: 1px solid rgba(60, 64, 67, 0.5);
+    backdrop-filter: blur(10px);
   }
 
   .input-field {
-    @apply w-full bg-cyber-surface border border-cyber-border rounded-lg px-4 py-2
+    @apply w-full rounded-2xl px-5 py-4
            text-cyber-text placeholder-cyber-text-dim
-           focus:outline-none focus:border-cyber-accent transition-colors;
+           focus:outline-none transition-all duration-200;
+    background: rgba(40, 42, 44, 0.6);
+    border: 1px solid rgba(60, 64, 67, 0.5);
+  }
+  
+  .input-field:focus {
+    border-color: #8ab4f8;
+    box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.2);
   }
 
   .glow-border {
-    @apply border border-cyber-accent shadow-lg shadow-cyber-accent/20;
+    border: 1px solid #8ab4f8;
+    box-shadow: 0 0 20px rgba(138, 180, 248, 0.3);
   }
 
   .status-badge {
-    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium;
   }
 
   .status-running {
-    @apply bg-cyber-accent/20 text-cyber-accent;
+    background: rgba(138, 180, 248, 0.15);
+    color: #8ab4f8;
   }
 
   .status-success {
-    @apply bg-cyber-success/20 text-cyber-success;
+    background: rgba(129, 201, 149, 0.15);
+    color: #81c995;
   }
 
   .status-error {
-    @apply bg-cyber-error/20 text-cyber-error;
+    background: rgba(242, 139, 130, 0.15);
+    color: #f28b82;
   }
 
   .status-pending {
-    @apply bg-cyber-warning/20 text-cyber-warning;
+    background: rgba(253, 214, 99, 0.15);
+    color: #fdd663;
+  }
+  
+  /* Gemini gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #8ab4f8 0%, #c58af9 50%, #f28b82 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Action confirmed indicator */
+  .action-confirmed {
+    @apply relative;
+  }
+  
+  .action-confirmed::after {
+    content: '✓';
+    @apply absolute -right-1 -top-1 w-5 h-5 flex items-center justify-center text-xs rounded-full;
+    background: #81c995;
+    color: #1e1f20;
   }
 }
 
-/* Chat message animations */
+/* Chat message animations - Gemini style */
 .chat-message {
-  animation: slideIn 0.3s ease-out;
+  animation: messageSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes slideIn {
+@keyframes messageSlideIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-/* Modal backdrop */
+/* Modal backdrop - Gemini style */
 .modal-backdrop {
-  @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-50;
-  animation: fadeIn 0.2s ease-out;
+  @apply fixed inset-0 z-50;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  animation: backdropFadeIn 0.3s ease-out;
 }
 
-@keyframes fadeIn {
+@keyframes backdropFadeIn {
   from {
     opacity: 0;
+    backdrop-filter: blur(0);
   }
   to {
     opacity: 1;
+    backdrop-filter: blur(8px);
   }
 }
 
-/* Typing indicator */
+/* Typing indicator - Gemini sparkle style */
 .typing-indicator {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
 }
 
 .typing-indicator span {
-  @apply w-2 h-2 rounded-full bg-cyber-accent;
-  animation: bounce 1.4s infinite ease-in-out both;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8ab4f8 0%, #c58af9 100%);
+  animation: geminiSparkle 1.8s infinite ease-in-out;
 }
 
 .typing-indicator span:nth-child(1) {
-  animation-delay: -0.32s;
+  animation-delay: 0s;
 }
 
 .typing-indicator span:nth-child(2) {
-  animation-delay: -0.16s;
+  animation-delay: 0.2s;
 }
 
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes geminiSparkle {
+  0%, 100% {
+    transform: scale(0.5);
+    opacity: 0.3;
   }
-  40% {
-    transform: scale(1);
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
   }
 }
 
-/* Tool status spinner */
+/* Tool status spinner - Gemini gradient */
 .spinner {
-  @apply w-4 h-4 border-2 border-cyber-accent border-t-transparent rounded-full;
-  animation: spin 1s linear infinite;
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: linear-gradient(#1e1f20, #1e1f20) padding-box,
+              linear-gradient(135deg, #8ab4f8, #c58af9, #f28b82) border-box;
+  animation: spinnerRotate 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes spinnerRotate {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Action execution indicator */
+.action-executing {
+  position: relative;
+  overflow: hidden;
+}
+
+.action-executing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(138, 180, 248, 0.2),
+    transparent
+  );
+  animation: actionSweep 1.5s ease-in-out infinite;
+}
+
+@keyframes actionSweep {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* CTF Mode Badge */
+.ctf-mode-badge {
+  background: linear-gradient(135deg, #f28b82 0%, #fdd663 100%);
+  color: #1e1f20;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Message bubbles - Gemini style */
+.message-user {
+  background: linear-gradient(135deg, rgba(138, 180, 248, 0.15) 0%, rgba(197, 138, 249, 0.15) 100%);
+  border: 1px solid rgba(138, 180, 248, 0.3);
+}
+
+.message-assistant {
+  background: rgba(40, 42, 44, 0.8);
+  border: 1px solid rgba(60, 64, 67, 0.5);
+}
+
+/* Code blocks - Gemini style */
+.code-block {
+  background: #131314;
+  border: 1px solid rgba(60, 64, 67, 0.5);
+  border-radius: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Progress bars */
+.progress-bar {
+  height: 4px;
+  background: rgba(60, 64, 67, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8ab4f8 0%, #c58af9 100%);
+  border-radius: 2px;
+  transition: width 0.3s ease-out;
+}
+
+/* Aegis logo glow */
+.aegis-logo {
+  text-shadow: 0 0 30px rgba(138, 180, 248, 0.5);
+}
+
+/* Swarm persona colors */
+.swarm-red {
+  background: rgba(242, 139, 130, 0.15);
+  border-left: 3px solid #f28b82;
+}
+
+.swarm-blue {
+  background: rgba(138, 180, 248, 0.15);
+  border-left: 3px solid #8ab4f8;
+}
+
+.swarm-judge {
+  background: rgba(197, 138, 249, 0.15);
+  border-left: 3px solid #c58af9;
+}
+
+/* Hover effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Focus ring - Gemini style */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-cyber-bg;
+  --tw-ring-color: rgba(138, 180, 248, 0.5);
 }

@@ -30,11 +30,22 @@ export default function ChatInterface({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    }
+  }, [inputValue]);
+
   // Handle send message
   const handleSend = () => {
     if (!inputValue.trim() || !isConnected) return;
     onSendMessage(inputValue);
     setInputValue('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   // Handle keyboard shortcut
@@ -66,20 +77,32 @@ export default function ChatInterface({
         if (match) {
           const [, lang, code] = match;
           return (
-            <pre key={i} className="bg-cyber-surface rounded-lg p-3 my-2 overflow-x-auto">
-              {lang && <span className="text-xs text-cyber-text-dim mb-1 block">{lang}</span>}
-              <code className="text-sm text-cyber-accent font-mono">{code}</code>
-            </pre>
+            <div key={i} className="code-block my-3 overflow-hidden">
+              {lang && (
+                <div className="flex items-center justify-between px-4 py-2 border-b border-cyber-border bg-cyber-surface/50">
+                  <span className="text-xs text-cyber-text-dim font-medium uppercase">{lang}</span>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(code)}
+                    className="text-xs text-cyber-text-dim hover:text-cyber-accent transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+              <pre className="p-4 overflow-x-auto">
+                <code className="text-sm text-gemini-blue font-mono">{code}</code>
+              </pre>
+            </div>
           );
         }
       }
       
       // Regular text with markdown-like formatting
       return (
-        <span key={i} className="whitespace-pre-wrap">
+        <span key={i} className="whitespace-pre-wrap leading-relaxed">
           {part.split(/(\*\*.*?\*\*)/g).map((segment, j) => {
             if (segment.startsWith('**') && segment.endsWith('**')) {
-              return <strong key={j} className="text-cyber-accent">{segment.slice(2, -2)}</strong>;
+              return <strong key={j} className="text-gemini-purple font-medium">{segment.slice(2, -2)}</strong>;
             }
             return segment;
           })}
@@ -89,145 +112,177 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-cyber-bg">
+    <div className="flex-1 flex flex-col" style={{ background: 'linear-gradient(180deg, #1e1f20 0%, #131314 100%)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-cyber-border">
-        <button
-          onClick={onToggleSidebar}
-          className="p-2 hover:bg-cyber-card rounded-lg transition-colors"
-          title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-        >
-          <svg className="w-5 h-5 text-cyber-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <span className="text-sm text-cyber-text-dim">
-          {messages.length} messages
-        </span>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-cyber-border/50">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onToggleSidebar}
+            className="p-2.5 hover:bg-cyber-card rounded-xl transition-all duration-200"
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <svg className="w-5 h-5 text-cyber-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl aegis-logo">🛡️</span>
+            <h1 className="text-lg font-medium gradient-text">Aegis AI</h1>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`status-badge ${isConnected ? 'status-success' : 'status-error'}`}>
+            <span className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-cyber-success' : 'bg-cyber-error'}`}></span>
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="text-6xl mb-4">🛡️</div>
-            <h2 className="text-2xl font-bold text-cyber-accent mb-2">Welcome to Aegis AI</h2>
-            <p className="text-cyber-text-dim max-w-md">
-              Your autonomous penetration testing assistant. Start by providing a target and mission rules.
-            </p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <div className="text-7xl mb-6 aegis-logo">🛡️</div>
+              <h2 className="text-3xl font-semibold gradient-text mb-3">Welcome to Aegis AI</h2>
+              <p className="text-cyber-text-dim max-w-lg text-lg leading-relaxed">
+                Your autonomous penetration testing assistant. 
+                Start by providing a target and mission rules.
+              </p>
+              <div className="mt-8 grid grid-cols-2 gap-4 max-w-md">
+                <div className="card hover-lift cursor-pointer" onClick={() => onSendMessage("Start a penetration test on my application")}>
+                  <span className="text-xl mb-2 block">🔍</span>
+                  <span className="text-sm text-cyber-text-dim">Penetration Test</span>
+                </div>
+                <div className="card hover-lift cursor-pointer" onClick={() => onSendMessage("Help me solve a CTF challenge")}>
+                  <span className="text-xl mb-2 block">🏁</span>
+                  <span className="text-sm text-cyber-text-dim">CTF Mode</span>
+                </div>
+              </div>
+            </div>
+          )}
 
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-message flex ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
-          >
+          {messages.map((message) => (
             <div
-              className={`max-w-3xl px-4 py-3 rounded-xl ${
-                message.role === 'user'
-                  ? 'bg-cyber-accent text-cyber-bg'
-                  : message.role === 'system'
-                  ? 'bg-cyber-warning/20 border border-cyber-warning/50 text-cyber-text'
-                  : 'bg-cyber-card border border-cyber-border text-cyber-text'
+              key={message.id}
+              className={`chat-message flex ${
+                message.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
-              {message.role !== 'user' && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">
-                    {message.role === 'system' ? '⚙️' : '🤖'}
-                  </span>
-                  <span className="text-xs font-medium text-cyber-text-dim uppercase">
-                    {message.role === 'system' ? 'System' : 'Aegis AI'}
-                  </span>
+              <div
+                className={`max-w-3xl px-5 py-4 rounded-2xl ${
+                  message.role === 'user'
+                    ? 'message-user'
+                    : message.role === 'system'
+                    ? 'bg-cyber-warning/10 border border-cyber-warning/30'
+                    : 'message-assistant'
+                }`}
+              >
+                {message.role !== 'user' && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">
+                      {message.role === 'system' ? '⚙️' : '🛡️'}
+                    </span>
+                    <span className="text-xs font-medium text-cyber-text-dim uppercase tracking-wider">
+                      {message.role === 'system' ? 'System' : 'Aegis AI'}
+                    </span>
+                  </div>
+                )}
+                <div className="text-[15px]">
+                  {formatContent(message.content)}
                 </div>
-              )}
-              <div className="text-sm leading-relaxed">
-                {formatContent(message.content)}
-              </div>
-              <div className="text-xs text-cyber-text-dim mt-2 opacity-60">
-                {new Date(message.timestamp * 1000).toLocaleTimeString()}
+                <div className="text-xs text-cyber-text-dim mt-3 opacity-60">
+                  {new Date(message.timestamp * 1000).toLocaleTimeString()}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {/* Thinking indicator */}
-        {isThinking && (
-          <div className="flex justify-start">
-            <div className="bg-cyber-card border border-cyber-border rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🤖</span>
-                <span className="text-xs font-medium text-cyber-text-dim uppercase">Aegis AI</span>
-              </div>
-              <div className="typing-indicator mt-2">
-                <span></span>
-                <span></span>
-                <span></span>
+          {/* Thinking indicator */}
+          {isThinking && (
+            <div className="flex justify-start">
+              <div className="message-assistant rounded-2xl px-5 py-4 max-w-3xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">🛡️</span>
+                  <span className="text-xs font-medium text-cyber-text-dim uppercase tracking-wider">Aegis AI</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="text-sm text-cyber-text-dim">Analyzing...</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-cyber-border">
-        <div className="flex items-end gap-3">
-          {/* File Upload Button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-shrink-0 p-3 bg-cyber-card border border-cyber-border rounded-xl hover:border-cyber-accent transition-colors"
-            title="Upload file"
-          >
-            <svg className="w-5 h-5 text-cyber-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileChange}
-            accept=".txt,.json,.xml,.html,.css,.js,.py,.php,.java,.c,.cpp,.h,.md,.yaml,.yml,.log,.csv,.sql,.sh,.rb,.go,.rs,.png,.jpg,.jpeg,.gif,.bmp,.svg,.pdf,.doc,.docx,.pcap,.pcapng"
-          />
-
-          {/* Text Input */}
-          <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
-              disabled={!isConnected}
-              rows={1}
-              className="w-full bg-cyber-card border border-cyber-border rounded-xl px-4 py-3 text-cyber-text placeholder-cyber-text-dim resize-none focus:outline-none focus:border-cyber-accent transition-colors disabled:opacity-50"
-              style={{
-                minHeight: '48px',
-                maxHeight: '200px',
-              }}
+      <div className="px-6 py-5 border-t border-cyber-border/50">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-end gap-4">
+            {/* File Upload Button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-shrink-0 p-3.5 bg-cyber-card border border-cyber-border/50 rounded-xl hover:border-gemini-blue/50 hover:bg-cyber-surface transition-all duration-200"
+              title="Upload file"
+            >
+              <svg className="w-5 h-5 text-cyber-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileChange}
+              accept=".txt,.json,.xml,.html,.css,.js,.py,.php,.java,.c,.cpp,.h,.md,.yaml,.yml,.log,.csv,.sql,.sh,.rb,.go,.rs,.png,.jpg,.jpeg,.gif,.bmp,.svg,.pdf,.doc,.docx,.pcap,.pcapng"
             />
+
+            {/* Text Input */}
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={isConnected ? 'Enter a prompt here...' : 'Connecting...'}
+                disabled={!isConnected}
+                rows={1}
+                className="w-full bg-cyber-card border border-cyber-border/50 rounded-2xl px-5 py-4 text-cyber-text placeholder-cyber-text-dim resize-none focus:outline-none focus:border-gemini-blue/50 focus:ring-2 focus:ring-gemini-blue/20 transition-all duration-200 disabled:opacity-50"
+                style={{
+                  minHeight: '56px',
+                  maxHeight: '200px',
+                }}
+              />
+            </div>
+
+            {/* Send Button */}
+            <button
+              onClick={handleSend}
+              disabled={!inputValue.trim() || !isConnected}
+              className="flex-shrink-0 p-3.5 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: inputValue.trim() && isConnected 
+                  ? 'linear-gradient(135deg, #8ab4f8 0%, #c58af9 100%)' 
+                  : 'rgba(60, 64, 67, 0.5)'
+              }}
+            >
+              <svg className="w-5 h-5 text-cyber-bg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
           </div>
 
-          {/* Send Button */}
-          <button
-            onClick={handleSend}
-            disabled={!inputValue.trim() || !isConnected}
-            className="flex-shrink-0 p-3 bg-cyber-accent text-cyber-bg rounded-xl hover:bg-cyber-accent-dim transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
+          <p className="text-xs text-cyber-text-dim mt-3 text-center opacity-60">
+            Press Enter to send • Shift+Enter for new line • Aegis AI may display inaccurate info, so double-check responses
+          </p>
         </div>
-
-        <p className="text-xs text-cyber-text-dim mt-2 text-center">
-          Press Enter to send, Shift+Enter for new line
-        </p>
       </div>
     </div>
   );
