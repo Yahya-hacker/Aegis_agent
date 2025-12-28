@@ -284,6 +284,17 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
         self._db: Optional[AsyncMissionDatabase] = None  # Async database (lazy init)
         self.blackboard = MissionBlackboard()  # Mission blackboard memory
         
+        # NEW: Initialize parallel execution engine
+        from utils.parallel_execution_engine import get_parallel_engine
+        self.parallel_engine = get_parallel_engine(max_concurrent=10)
+        
+        # NEW: Initialize self-modification engine
+        from utils.self_modification_engine import get_self_modification_engine
+        self.self_mod_engine = get_self_modification_engine()
+        
+        # NEW: CTF mode (initialized later)
+        self.ctf_mode = None
+        
         # Load configurable system prompts from environment
         # NO HARDCODED PROMPTS - All configurable via .env
         self.system_prompts = {
@@ -299,6 +310,8 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
         self.next_action_system_prompt_template = os.getenv('NEXT_ACTION_SYSTEM_PROMPT', None)
         
         logger.info("📝 System prompts loaded from environment (configurable via .env)")
+        logger.info("✅ Parallel execution engine initialized")
+        logger.info("✅ Self-modification engine initialized")
         
         # PHASE 2: Business logic mapper for application-specific testing
         from utils.business_logic_mapper import get_business_logic_mapper
@@ -343,6 +356,97 @@ Categorize information into: VERIFIED FACTS, PENDING GOALS, DISCARDED VECTORS, a
         except Exception as e:
             logger.error(f"❌ Failed to initialize Enhanced AI Core: {e}", exc_info=True)
             raise
+    
+    async def activate_ctf_mode(self, ctf_name: str = "CTF Competition"):
+        """
+        Activate CTF mode for the agent.
+        
+        Args:
+            ctf_name: Name of the CTF competition
+        """
+        if not self.is_initialized:
+            raise RuntimeError("AI Core must be initialized before activating CTF mode")
+        
+        # Initialize CTF mode if not already done
+        if self.ctf_mode is None:
+            from agents.ctf_mode import CTFMode
+            from utils.dynamic_tool_loader import get_tool_loader
+            
+            tool_loader = get_tool_loader()
+            self.ctf_mode = CTFMode(
+                ai_core=self,
+                tools_loader=tool_loader,
+                parallel_engine=self.parallel_engine
+            )
+        
+        # Activate CTF mode
+        await self.ctf_mode.activate(ctf_name)
+        
+        logger.info(f"🎯 CTF Mode activated: {ctf_name}")
+        return True
+    
+    async def create_custom_tool(
+        self,
+        tool_name: str,
+        description: str,
+        requirements: str,
+        expected_inputs: List[str],
+        expected_outputs: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Create a custom tool on-the-fly using the self-modification engine.
+        
+        Args:
+            tool_name: Name of the tool to create
+            description: What the tool should do
+            requirements: Detailed requirements
+            expected_inputs: List of expected input parameters
+            expected_outputs: List of expected outputs
+            
+        Returns:
+            Tool metadata if successful, None otherwise
+        """
+        logger.info(f"🔧 Creating custom tool: {tool_name}")
+        
+        return await self.self_mod_engine.create_custom_tool(
+            tool_name=tool_name,
+            description=description,
+            requirements=requirements,
+            expected_inputs=expected_inputs,
+            expected_outputs=expected_outputs,
+            ai_orchestrator=self.orchestrator
+        )
+    
+    async def execute_parallel_tasks(
+        self,
+        tasks: List[Dict[str, Any]],
+        max_concurrent: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute multiple tasks in parallel.
+        
+        Args:
+            tasks: List of task dictionaries with 'name' and 'coroutine' keys
+            max_concurrent: Optional override for max concurrent tasks
+            
+        Returns:
+            Execution results
+        """
+        logger.info(f"🚀 Executing {len(tasks)} tasks in parallel")
+        
+        # Submit all tasks
+        for task in tasks:
+            await self.parallel_engine.submit_task(
+                task_id=task.get('id', f"task_{tasks.index(task)}"),
+                name=task['name'],
+                coroutine=task['coroutine'],
+                priority=task.get('priority', None)
+            )
+        
+        # Execute all tasks
+        results = await self.parallel_engine.execute_all()
+        
+        return results
     
     def _prune_memory(self, history: List[Dict]) -> List[Dict]:
         """

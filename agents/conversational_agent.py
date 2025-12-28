@@ -119,6 +119,18 @@ class AegisConversation:
                     self.use_ui_queue = True
                     print("📱 UI mode enabled. Commands will be read from the Streamlit dashboard.")
                     print("   Run: streamlit run app.py")
+                elif user_input.lower() in ['activate ctf mode', 'ctf mode', 'ctf']:
+                    # Activate CTF mode
+                    await self._activate_ctf_mode()
+                elif user_input.lower().startswith('create tool'):
+                    # Create a custom tool
+                    await self._handle_create_tool(user_input)
+                elif user_input.lower() in ['status', 'info', 'stats']:
+                    # Show status
+                    await self._show_status()
+                elif user_input.lower() == 'list available tools':
+                    # List available tools
+                    await self._list_tools()
                 else:
                     # Add user input to conversation history
                     conversation_history.append({
@@ -719,7 +731,148 @@ UI COMMANDS (during mission):
 QUICK ACTIONS:
 • "help" - Affiche ce message
 • "quit" - Quitte Aegis AI
+
+NEW FEATURES:
+• "activate ctf mode" or "ctf" - Activate CTF competition mode
+• "create tool <description>" - Create a custom tool on-the-fly
+• "status" - Show agent status and metrics
+• "list available tools" - List all available tools
         """)
+    
+    async def _activate_ctf_mode(self):
+        """Activate CTF mode"""
+        print("\n🎯 Activating CTF Mode...")
+        try:
+            ctf_name = input("CTF Name (or press Enter for default): ").strip()
+            if not ctf_name:
+                ctf_name = "CTF Competition"
+            
+            await self.ai_core.activate_ctf_mode(ctf_name)
+            
+            print("\n✅ CTF Mode activated!")
+            print("   Available commands:")
+            print("   • Register challenges manually or auto-detect from directory")
+            print("   • 'solve all' - Solve all challenges in parallel")
+            print("   • 'scoreboard' - View current scoreboard")
+            
+        except Exception as e:
+            logger.error(f"Failed to activate CTF mode: {e}", exc_info=True)
+            print(f"❌ Failed to activate CTF mode: {e}")
+    
+    async def _handle_create_tool(self, user_input: str):
+        """Handle custom tool creation"""
+        print("\n🔧 Custom Tool Creation")
+        
+        # Extract tool name and description from input
+        # Format: "create tool <tool_name> that does <description>"
+        parts = user_input.lower().replace("create tool", "").strip()
+        
+        tool_name = input("Tool name: ").strip()
+        if not tool_name:
+            print("❌ Tool name required")
+            return
+        
+        description = input("Description (what should this tool do?): ").strip()
+        if not description:
+            print("❌ Description required")
+            return
+        
+        requirements = input("Detailed requirements (optional, press Enter to skip): ").strip()
+        if not requirements:
+            requirements = description
+        
+        inputs_str = input("Expected inputs (comma-separated, e.g., 'url,method,payload'): ").strip()
+        inputs = [i.strip() for i in inputs_str.split(",")] if inputs_str else ["data"]
+        
+        outputs_str = input("Expected outputs (comma-separated, e.g., 'success,result,error'): ").strip()
+        outputs = [o.strip() for o in outputs_str.split(",")] if outputs_str else ["result"]
+        
+        print(f"\n🔨 Creating tool '{tool_name}'...")
+        
+        try:
+            result = await self.ai_core.create_custom_tool(
+                tool_name=tool_name,
+                description=description,
+                requirements=requirements,
+                expected_inputs=inputs,
+                expected_outputs=outputs
+            )
+            
+            if result:
+                print(f"✅ Tool '{tool_name}' created successfully!")
+                print(f"   File: {result['file_path']}")
+                print(f"   Version: {result['version']}")
+            else:
+                print(f"❌ Failed to create tool '{tool_name}'")
+                
+        except Exception as e:
+            logger.error(f"Tool creation error: {e}", exc_info=True)
+            print(f"❌ Error creating tool: {e}")
+    
+    async def _show_status(self):
+        """Show agent status and metrics"""
+        print("\n📊 AEGIS AI STATUS REPORT")
+        print("=" * 60)
+        
+        # Parallel execution metrics
+        if hasattr(self.ai_core, 'parallel_engine'):
+            metrics = self.ai_core.parallel_engine.get_metrics()
+            print("\n⚡ Parallel Execution:")
+            print(f"   Total Tasks: {metrics['total_tasks']}")
+            print(f"   Completed: {metrics['completed_tasks']}")
+            print(f"   Failed: {metrics['failed_tasks']}")
+        
+        # Self-modification metrics
+        if hasattr(self.ai_core, 'self_mod_engine'):
+            custom_tools = self.ai_core.self_mod_engine.get_all_custom_tools()
+            print(f"\n🔧 Custom Tools: {len(custom_tools)}")
+            if custom_tools:
+                for tool in custom_tools[:5]:  # Show first 5
+                    perf = tool['performance']
+                    print(f"   • {tool['name']} (v{tool['version']})")
+                    print(f"     Success: {perf['success_count']}/{perf['success_count'] + perf['failure_count']}")
+        
+        # CTF mode status
+        if hasattr(self.ai_core, 'ctf_mode') and self.ai_core.ctf_mode:
+            if self.ai_core.ctf_mode.active:
+                scoreboard = self.ai_core.ctf_mode.get_scoreboard()
+                print(f"\n🎯 CTF Mode: Active")
+                print(f"   Challenges: {scoreboard['solved_challenges']}/{scoreboard['total_challenges']} solved")
+                print(f"   Points: {scoreboard['total_points']}")
+        
+        # Learning engine status
+        if hasattr(self.ai_core, 'learning_engine'):
+            print(f"\n🧠 Learning Engine: Active")
+            print(f"   Patterns learned: Available")
+        
+        print("\n" + "=" * 60)
+    
+    async def _list_tools(self):
+        """List available tools"""
+        print("\n🛠️  AVAILABLE TOOLS")
+        print("=" * 60)
+        
+        from utils.dynamic_tool_loader import get_tool_loader
+        tool_loader = get_tool_loader()
+        stats = tool_loader.get_statistics()
+        
+        print(f"\nTotal Tools: {stats['available_tools']}/{stats['total_tools']}")
+        print(f"Categories: {', '.join(stats['categories'])}")
+        print(f"Intrusive: {stats['intrusive_tools']}")
+        print(f"Non-Intrusive: {stats['non_intrusive_tools']}")
+        
+        # List available tools by category
+        for category in stats['categories']:
+            tools_in_category = [
+                t for t in tool_loader.available_tools 
+                if t.get('category') == category
+            ]
+            if tools_in_category:
+                print(f"\n{category.upper()}:")
+                for tool in tools_in_category[:5]:  # Show first 5 per category
+                    print(f"   • {tool['tool_name']}: {tool['description'][:60]}...")
+        
+        print("\n" + "=" * 60)
     
     async def _handle_exit(self):
         print("\n🛡️ Session Aegis AI terminée.")
