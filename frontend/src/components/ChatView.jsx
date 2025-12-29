@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Send, Plus, Wrench, ChevronDown, ChevronUp, Copy, Check, Upload, FileText, Image, Binary, Network, Loader2, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { mockChatMessages } from '../data/mock';
@@ -355,7 +355,8 @@ const ChatView = () => {
   );
 };
 
-const MessageBubble = ({ message, isExpanded, onToggleReasoning }) => {
+// Memoized MessageBubble component to prevent unnecessary re-renders
+const MessageBubble = memo(({ message, isExpanded, onToggleReasoning }) => {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
 
@@ -448,6 +449,9 @@ const MessageBubble = ({ message, isExpanded, onToggleReasoning }) => {
       )}
     </div>
   );
-};
+});
+
+// Display name for debugging
+MessageBubble.displayName = 'MessageBubble';
 
 export default ChatView;

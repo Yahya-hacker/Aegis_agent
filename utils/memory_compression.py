@@ -266,8 +266,35 @@ class MemoryCompressor:
         return "\n".join(summary_parts)
     
     def _ai_summarize(self, section: List[Dict], orchestrator) -> str:
-        """Generate summary using AI (async would be better, but keeping sync for compatibility)"""
-        # For now, fall back to heuristic - in production, this would call the LLM
+        """
+        Generate summary using AI-powered summarization.
+        
+        Note: This method currently uses heuristic summarization as a fallback.
+        To enable AI-powered summarization, the orchestrator must be an async-compatible
+        LLM orchestrator. The async implementation would need to be called from an
+        async context. For now, we use the robust heuristic approach which provides
+        good results without requiring async execution.
+        
+        TODO: Implement async AI summarization when called from async contexts:
+        ```
+        if orchestrator and hasattr(orchestrator, 'call_llm'):
+            response = await orchestrator.call_llm(
+                'strategic',
+                [{"role": "system", "content": "Summarize the following conversation..."},
+                 {"role": "user", "content": json.dumps(section)}],
+                temperature=0.5
+            )
+            return response.get('content', '')
+        ```
+        
+        Args:
+            section: List of conversation messages to summarize
+            orchestrator: Optional LLM orchestrator (currently unused)
+            
+        Returns:
+            Summary string
+        """
+        # Fall back to heuristic summarization for synchronous compatibility
         facts = self._extract_key_facts(section)
         decisions = self._extract_key_decisions(section)
         errors = self._extract_errors(section)

@@ -262,6 +262,17 @@ class KnowledgeGraph:
                         if path_data:
                             paths.append(path_data)
                 except nx.NetworkXNoPath:
+                    # No path exists between asset and vulnerability - this is expected
+                    # for many node pairs and not an error condition
+                    logger.debug(f"No path found between {asset} and {vuln}")
+                    continue
+                except nx.NodeNotFound as e:
+                    # Node reference is invalid - log for debugging
+                    logger.warning(f"Node not found in graph when finding paths: {e}")
+                    continue
+                except Exception as e:
+                    # Unexpected error - log for debugging but continue processing
+                    logger.error(f"Unexpected error finding attack paths: {e}")
                     continue
         
         self.attack_paths = paths
@@ -760,7 +771,7 @@ class OmegaProtocol:
         2. Calculate risk and potentially trigger swarm debate
         3. Return modified action or halt signal
         """
-        if not self.active:
+        if not self.is_initialized:
             return {"proceed": True, "action": action, "message": "OMEGA Protocol inactive"}
         
         result = {

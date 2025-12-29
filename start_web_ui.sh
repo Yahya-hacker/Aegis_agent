@@ -61,10 +61,10 @@ start_backend() {
     echo "Installing backend dependencies..."
     pip install -q -r backend/requirements.txt 2>/dev/null || pip install -q -r requirements.txt 2>/dev/null
     
-    # Start backend server
+    # Start backend server (bind to localhost for security)
     echo -e "${GREEN}✓ Backend starting on http://localhost:8000${NC}"
     cd backend
-    uvicorn server:app --host 0.0.0.0 --port 8000 --reload &
+    uvicorn server:app --host 127.0.0.1 --port 8000 --reload &
     BACKEND_PID=$!
     cd ..
     
