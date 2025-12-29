@@ -59,6 +59,7 @@ data/http_memory/
 data/command_queue.json
 data/outputs/
 data/cortex_*.graphml
+data/uploads/
 *.jsonl
 
 # Nuclei templates (downloaded)
@@ -75,3 +76,21 @@ temp/
 temp_scripts/
 *.tmp
 test_refactoring.py
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.cache/
+frontend/coverage/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Backend
+backend/.env
+backend/__pycache__/
