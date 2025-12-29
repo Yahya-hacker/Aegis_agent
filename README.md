@@ -1,14 +1,50 @@
-# Aegis Agent v8.5 — Full-Spectrum Cyber Operations Platform
+# Aegis Agent v9.0 — Full-Spectrum Cyber Operations Platform
 
 **Aegis Agent** is an AI-powered autonomous penetration testing platform that transforms from traditional vulnerability scanning into an intelligent zero-day research system. Built with a multi-LLM architecture and advanced exploitation capabilities, it discovers vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
 
-**v8.5 NEW:** Self-Modification Engine, Parallel Execution, Enhanced CTF Mode, and Professional Gemini-Style UI.
+**v9.0 NEW:** Modern React Web Interface with Cyberpunk theme, OMEGA Protocol (Adversarial Swarm Intelligence), Mode Selector (Fast/Pro/Deep-Think), and enhanced Report Generator.
 
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
 
 ---
 
-## 🚀 Aegis v8.5: Advanced Self-Modifying Agent
+## 🚀 Aegis v9.0: Modern React Web Interface & OMEGA Protocol
+
+### NEW v9.0 Features
+
+#### 🎨 Modern React Web Interface
+Complete frontend overhaul with React + TypeScript:
+
+- **Cyberpunk Dark Theme**: Immersive dark UI with neon accents and animations
+- **Real-time Chat**: WebSocket-powered bidirectional communication
+- **Mode Selector**: One-click switching between Fast, Pro, and Deep-Think modes
+- **Mission Dashboard**: Live progress bars, tool status, and swarm monitor
+- **File Upload**: Drag-and-drop support for binaries, documents, PCAPs, screenshots
+- **MCP Integration**: Connect to any MCP server without restarting
+
+#### 🧠 OMEGA Protocol: Neuro-Symbolic Swarm Intelligence
+Advanced cognitive architecture for enhanced reasoning:
+
+| Component | Description | Key Features |
+|-----------|-------------|--------------|
+| **Knowledge Graph** | Graph-native attack surface mapping | Nodes (Assets, Tech, Creds), Edges (Attack Paths), Traversal-based testing |
+| **Adversarial Swarm** | Internal debate before risky actions | RED (Attacker), BLUE (Defender), JUDGE (Strategist) |
+| **Epistemic Priority** | Confidence-based mode shifting | Blocks exploitation until confidence ≥ 60% |
+| **Virtual Sandbox** | Safe execution with verification | Pre-compute predictions, halt on >20% deviation |
+| **Report Generator** | Multi-format export | JSON, HTML, PDF reports with attack graphs |
+
+#### ⚡ Operation Modes
+Three distinct modes optimized for different scenarios:
+
+| Mode | Models | Use Case |
+|------|--------|----------|
+| **Fast** | Llama 8B, Qwen Coder 7B, DeepSeek VL, Mistral Nemo 12B | Rapid recon, basic targets |
+| **Pro** | Hermes 3 70B, Dolphin 3.0 24B, Qwen 72B, Qwen VL 32B | Full power, most use cases |
+| **Deep-Think** | DeepSeek R1, Qwen 72B, Qwen VL 32B | Maximum reasoning, complex analysis |
+
+---
+
+## 🚀 Aegis v8.5: Self-Modifying Agent
 
 ### NEW v8.5 Features
 
@@ -71,13 +107,35 @@ Specialized mode for **Capture The Flag competitions**:
 - **Graceful Degradation**: Continues operation even with partial failures
 - **Error Pattern Learning**: Adapts strategies based on error history
 
-#### 💎 Professional Gemini-Style UI
-**Modern, intuitive interface** inspired by Google Gemini:
+#### 💎 Modern React Web Interface
+**Next-generation UI** with Cyberpunk dark theme:
 
-- **Real-time Metrics Dashboard**: Live status and performance indicators
-- **Interactive Controls**: Quick action buttons and mode selection
-- **Visual Feedback**: Color-coded status badges and animations
-- **Responsive Design**: Optimized for all screen sizes
+- **React + TypeScript Frontend**: Modern component-based architecture
+- **Real-time Chat Interface**: WebSocket-powered communication
+- **Mode Selector**: Instant switching between Fast, Pro, and Deep-Think modes
+- **Mission Dashboard**: Live status, progress bars, and swarm monitor
+- **File Upload Support**: Analyze binaries, documents, PCAPs, screenshots
+- **MCP Integration**: Dynamic tool hot-plugging without restart
+
+```bash
+# Start the modern web UI
+./start_web_ui.sh
+
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+```
+
+See [WEB_INTERFACE.md](WEB_INTERFACE.md) for detailed documentation.
+
+#### 🧠 OMEGA Protocol: Neuro-Symbolic Swarm Intelligence
+Advanced cognitive architecture for enhanced reasoning:
+
+- **Knowledge Graph**: Graph-native attack surface mapping with traversal-based testing
+- **Adversarial Swarm**: RED/BLUE/JUDGE internal debate before risky actions
+- **Epistemic Priority**: Blocks exploitation until confidence ≥ 60%
+- **Virtual Sandbox**: Pre-compute predictions, halt on >20% deviation
+- **Report Generator**: Multi-format export (JSON, HTML, PDF)
 
 ---
 
