@@ -640,8 +640,8 @@ async def get_ctf_stats():
         ctf_manager = get_ctf_manager()
         return ctf_manager.get_ctf_stats()
     except Exception as e:
-        logger.error(f"CTF stats error: {e}")
-        return {"error": str(e)}
+        logger.error(f"CTF stats error: {e}", exc_info=True)
+        return {"error": "Failed to retrieve CTF statistics"}
 
 
 @app.get("/api/ctf/tools/{challenge_id}")
@@ -675,8 +675,8 @@ async def list_generated_tools():
             "tools": generator.get_available_tools()
         }
     except Exception as e:
-        logger.error(f"List generated tools error: {e}")
-        return {"tools": [], "error": str(e)}
+        logger.error(f"List generated tools error: {e}", exc_info=True)
+        return {"tools": [], "error": "Failed to list generated tools"}
 
 
 @app.post("/api/tools/generate")
@@ -740,8 +740,8 @@ async def get_parallel_progress():
         manager = get_multi_target_manager()
         return manager.get_all_progress()
     except Exception as e:
-        logger.error(f"Get parallel progress error: {e}")
-        return {"error": str(e)}
+        logger.error(f"Get parallel progress error: {e}", exc_info=True)
+        return {"error": "Failed to get parallel progress"}
 
 
 # ============================================================================
@@ -1130,23 +1130,40 @@ if FRONTEND_DIST.exists():
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
         """Serve React frontend with path traversal protection"""
-        # Security: Prevent directory traversal attacks
-        if ".." in path or path.startswith("/"):
-            return FileResponse(FRONTEND_DIST / "index.html")
+        # Resolve frontend directory first as our trusted base path
+        frontend_base = FRONTEND_DIST.resolve()
+        index_file = frontend_base / "index.html"
+        
+        # Security: Reject obviously malicious paths early
+        if ".." in path or path.startswith("/") or "\\" in path:
+            return FileResponse(index_file)
+        
+        # Security: Reject any path with null bytes or other dangerous characters
+        if "\x00" in path:
+            return FileResponse(index_file)
         
         # Resolve and validate path is within frontend directory
         try:
-            file_path = (FRONTEND_DIST / path).resolve()
-            # Ensure resolved path is still within frontend_path
-            if not str(file_path).startswith(str(FRONTEND_DIST.resolve())):
-                return FileResponse(FRONTEND_DIST / "index.html")
+            # Construct and resolve the requested file path
+            requested_path = (frontend_base / path).resolve()
             
-            if file_path.exists() and file_path.is_file():
-                return FileResponse(file_path)
+            # Security: Use is_relative_to for proper containment check
+            # This is the correct way to verify path containment
+            if not requested_path.is_relative_to(frontend_base):
+                return FileResponse(index_file)
+            
+            # Only serve if file exists and is a regular file (not directory/symlink to outside)
+            if requested_path.exists() and requested_path.is_file():
+                # Additional check: ensure it's not a symlink pointing outside
+                if requested_path.is_symlink():
+                    real_path = requested_path.resolve(strict=True)
+                    if not real_path.is_relative_to(frontend_base):
+                        return FileResponse(index_file)
+                return FileResponse(requested_path)
         except (ValueError, OSError):
             pass
         
-        return FileResponse(FRONTEND_DIST / "index.html")
+        return FileResponse(index_file)
 
 
 # ============================================================================
