@@ -1156,8 +1156,12 @@ if FRONTEND_DIST.exists():
             if requested_path.exists() and requested_path.is_file():
                 # Additional check: ensure it's not a symlink pointing outside
                 if requested_path.is_symlink():
-                    real_path = requested_path.resolve(strict=True)
-                    if not real_path.is_relative_to(frontend_base):
+                    try:
+                        real_path = requested_path.resolve()
+                        if not real_path.is_relative_to(frontend_base):
+                            return FileResponse(index_file)
+                    except (OSError, ValueError):
+                        # If we can't resolve the symlink, reject it
                         return FileResponse(index_file)
                 return FileResponse(requested_path)
         except (ValueError, OSError):
