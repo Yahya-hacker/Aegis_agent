@@ -315,11 +315,11 @@ Four specialized AI models collaborate through **role-specific API key sharding*
 
 ```bash
 # .env configuration
-OPENROUTER_API_KEY=sk-main-key           # Fallback for all roles
-STRATEGIC_API_KEY=sk-strategic-key       # Separate account for planning
-REASONING_API_KEY=sk-reasoning-key       # Separate account for analysis
-CODE_API_KEY=sk-code-key                 # Separate account for payloads
-VISUAL_API_KEY=sk-visual-key             # Separate account for screenshots
+OPENROUTER_API_KEY=your_main_api_key_here           # Fallback for all roles
+STRATEGIC_API_KEY=your_strategic_key_here       # Separate account for planning
+REASONING_API_KEY=your_reasoning_key_here       # Separate account for analysis
+CODE_API_KEY=your_code_key_here                 # Separate account for payloads
+VISUAL_API_KEY=your_visual_key_here             # Separate account for screenshots
 ```
 
 ---
