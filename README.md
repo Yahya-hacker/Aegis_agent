@@ -4,7 +4,6 @@
 
 **v9.0 NEW: "NEXUS"** — State-of-the-Art Web UI + MCP Client Integration for dynamic tool hot-plugging.
 
-**v8.1: OMEGA PROTOCOL** — Neuro-Symbolic Swarm Intelligence for advanced reasoning and safe execution.
 
 > ⚠️ **AUTHORIZED USE ONLY**: This tool is designed for professional penetration testers and security researchers. Always obtain explicit written permission before testing any system. Unauthorized testing is illegal.
 
@@ -140,7 +139,7 @@ state = protocol.get_omega_state()
 
 ---
 
-## 🚀 Aegis v8.0: Full-Spectrum Cyber Operations
+##  Full-Spectrum Cyber Operations
 
 ### NEW: Five Specialized Capability Domains
 
@@ -156,7 +155,7 @@ Aegis v8.0 expands beyond web security into five new domains, making it a comple
 
 ### NEW: Self-Healing Infrastructure
 
-Aegis v8.0 is **Autonomous and Self-Healing**. If a required tool is missing, the agent:
+Aegis v9.0 is **Autonomous and Self-Healing**. If a required tool is missing, the agent:
 
 1. **Detects** the missing dependency
 2. **Proposes** installation (or auto-installs if self-healing mode is enabled)
