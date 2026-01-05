@@ -1127,12 +1127,16 @@ async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mod
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
     
+    # Cache resolved paths for performance (avoid filesystem calls on every request)
+    _FRONTEND_BASE = FRONTEND_DIST.resolve()
+    _INDEX_FILE = _FRONTEND_BASE / "index.html"
+    
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
         """Serve React frontend with path traversal protection"""
-        # Resolve frontend directory first as our trusted base path
-        frontend_base = FRONTEND_DIST.resolve()
-        index_file = frontend_base / "index.html"
+        # Use cached resolved paths for performance
+        frontend_base = _FRONTEND_BASE
+        index_file = _INDEX_FILE
         
         # Security: Reject obviously malicious paths early
         if ".." in path or path.startswith("/") or "\\" in path:
