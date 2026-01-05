@@ -1,3 +1,4 @@
+
 # Aegis Agent v9.0 "Nexus" — Full-Spectrum Cyber Operations Platform
 
 **Aegis Agent** is an AI-powered autonomous penetration testing platform that transforms from traditional vulnerability scanning into an intelligent zero-day research system. Built with a multi-LLM architecture and advanced exploitation capabilities, it discovers vulnerabilities through generative fuzzing, state-aware navigation, and deep protocol analysis.
