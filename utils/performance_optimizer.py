@@ -6,9 +6,15 @@ Performance Optimization Module
 Provides utilities for:
 - Profiling code execution
 - Identifying slow code paths
-- Caching mechanism for expensive operations
+- Caching mechanism for expensive operations (JSON-based, secure)
 - Parallel execution for independent tasks
 - Token usage optimization
+
+Security Note:
+    This module uses JSON serialization exclusively. Pickle is NOT used
+    due to its vulnerability to arbitrary code execution attacks.
+    For complex objects, a custom JSON encoder handles datetime objects
+    and provides safe serialization.
 """
 
 import asyncio
@@ -17,11 +23,10 @@ import time
 import functools
 import hashlib
 import json
-from typing import Dict, List, Any, Optional, Callable, TypeVar, ParamSpec
-from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional, Callable, TypeVar, ParamSpec, Union
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
-import pickle
 
 logger = logging.getLogger(__name__)
 
@@ -152,15 +157,114 @@ class PerformanceProfiler:
         print("\n" + "="*80)
 
 
+class SecureJSONEncoder(json.JSONEncoder):
+    """
+    Secure JSON encoder that handles datetime objects and other common types.
+    
+    This encoder is used instead of pickle to prevent arbitrary code execution
+    vulnerabilities that come with deserializing untrusted pickle data.
+    
+    Supported types beyond standard JSON:
+    - datetime objects (ISO format)
+    - date objects (ISO format)
+    - timedelta objects (total seconds)
+    - Path objects (string representation)
+    - bytes (base64 encoded with marker)
+    - sets (converted to lists with marker)
+    - dataclasses (converted to dict)
+    """
+    
+    def default(self, obj: Any) -> Any:
+        """
+        Encode non-standard types to JSON-safe representations.
+        
+        Args:
+            obj: Object to encode
+            
+        Returns:
+            JSON-serializable representation
+        """
+        if isinstance(obj, datetime):
+            return {"__type__": "datetime", "value": obj.isoformat()}
+        elif hasattr(obj, 'isoformat'):  # date-like objects
+            return {"__type__": "date", "value": obj.isoformat()}
+        elif isinstance(obj, timedelta):
+            return {"__type__": "timedelta", "value": obj.total_seconds()}
+        elif isinstance(obj, Path):
+            return {"__type__": "path", "value": str(obj)}
+        elif isinstance(obj, bytes):
+            import base64
+            return {"__type__": "bytes", "value": base64.b64encode(obj).decode('ascii')}
+        elif isinstance(obj, set):
+            return {"__type__": "set", "value": list(obj)}
+        elif isinstance(obj, frozenset):
+            return {"__type__": "frozenset", "value": list(obj)}
+        elif hasattr(obj, '__dataclass_fields__'):
+            return {"__type__": "dataclass", "class": type(obj).__name__, "value": asdict(obj)}
+        
+        # Let the base class raise TypeError for truly unsupported types
+        return super().default(obj)
+
+
+def secure_json_decoder(obj: Dict[str, Any]) -> Any:
+    """
+    Decode JSON objects with type markers back to Python objects.
+    
+    This function is used as an object_hook for json.load/loads to
+    reconstruct special types that were encoded by SecureJSONEncoder.
+    
+    Args:
+        obj: Dictionary that may contain type markers
+        
+    Returns:
+        Decoded Python object
+    """
+    if "__type__" not in obj:
+        return obj
+    
+    type_marker = obj["__type__"]
+    value = obj.get("value")
+    
+    if type_marker == "datetime":
+        return datetime.fromisoformat(value)
+    elif type_marker == "date":
+        from datetime import date
+        return date.fromisoformat(value)
+    elif type_marker == "timedelta":
+        return timedelta(seconds=value)
+    elif type_marker == "path":
+        return Path(value)
+    elif type_marker == "bytes":
+        import base64
+        return base64.b64decode(value.encode('ascii'))
+    elif type_marker == "set":
+        return set(value)
+    elif type_marker == "frozenset":
+        return frozenset(value)
+    elif type_marker == "dataclass":
+        # For dataclasses, return as dict (can't reconstruct without class reference)
+        return value
+    
+    return obj
+
+
 class CacheManager:
     """
-    Cache manager for expensive operations.
+    Secure cache manager for expensive operations.
     
     Supports:
     - In-memory caching
-    - Disk-based caching
+    - Disk-based caching (JSON only - no pickle for security)
     - TTL (time-to-live) expiration
     - Cache invalidation
+    
+    Security:
+        This implementation uses JSON exclusively for disk caching.
+        Pickle is NOT used due to its vulnerability to arbitrary code
+        execution attacks when deserializing untrusted data.
+        
+        For complex objects that cannot be JSON-serialized, the cache
+        will store only in memory or raise an error for disk caching.
     """
     
     def __init__(self, cache_dir: Optional[Path] = None, default_ttl: int = 3600):
@@ -176,10 +280,20 @@ class CacheManager:
         self.memory_cache: Dict[str, tuple] = {}  # key -> (value, expiry)
         
         if cache_dir:
-            cache_dir.mkdir(exist_ok=True)
+            cache_dir.mkdir(exist_ok=True, parents=True)
     
     def _make_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
-        """Generate cache key from function name and arguments"""
+        """
+        Generate cache key from function name and arguments.
+        
+        Args:
+            func_name: Name of the cached function
+            args: Positional arguments
+            kwargs: Keyword arguments
+            
+        Returns:
+            SHA256 hash of the key data
+        """
         key_data = {
             "func": func_name,
             "args": str(args),
@@ -248,7 +362,16 @@ class CacheManager:
         return decorator
     
     def _get_from_cache(self, key: str, disk: bool) -> Optional[Any]:
-        """Get value from cache"""
+        """
+        Get value from cache (memory first, then disk).
+        
+        Args:
+            key: Cache key
+            disk: Whether to check disk cache
+            
+        Returns:
+            Cached value or None if not found/expired
+        """
         # Try memory cache first
         if key in self.memory_cache:
             value, expiry = self.memory_cache[key]
@@ -257,73 +380,104 @@ class CacheManager:
             else:
                 del self.memory_cache[key]
         
-        # Try disk cache (with safe JSON parsing first)
+        # Try disk cache (JSON only - no pickle for security)
         if disk and self.cache_dir:
-            cache_file = self.cache_dir / f"{key}.cache"
-            if cache_file.exists():
-                try:
-                    # Try JSON first (safer)
+            cache_file = self.cache_dir / f"{key}.json"
+            # Also check legacy .cache files (but only parse JSON, not pickle)
+            legacy_cache_file = self.cache_dir / f"{key}.cache"
+            
+            for file_path in [cache_file, legacy_cache_file]:
+                if file_path.exists():
                     try:
-                        with open(cache_file, 'r') as f:
-                            cache_data = json.load(f)
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            cache_data = json.load(f, object_hook=secure_json_decoder)
                         
-                        expiry = datetime.fromisoformat(cache_data["expiry"])
-                        if datetime.now() < expiry:
-                            return cache_data["value"]
-                        else:
-                            cache_file.unlink()
-                    except (json.JSONDecodeError, KeyError, ValueError):
-                        # Fallback to pickle (less safe)
-                        with open(cache_file, 'rb') as f:
-                            value, expiry = pickle.load(f)
+                        # Handle both old and new format
+                        if isinstance(cache_data, dict) and "expiry" in cache_data:
+                            expiry_value = cache_data["expiry"]
+                            if isinstance(expiry_value, str):
+                                expiry = datetime.fromisoformat(expiry_value)
+                            elif isinstance(expiry_value, datetime):
+                                expiry = expiry_value
+                            else:
+                                logger.warning(f"Invalid expiry format in cache: {type(expiry_value)}")
+                                file_path.unlink(missing_ok=True)
+                                continue
+                            
+                            if datetime.now() < expiry:
+                                # Store in memory for faster future access
+                                self.memory_cache[key] = (cache_data["value"], expiry)
+                                return cache_data["value"]
+                            else:
+                                # Cache expired, delete file
+                                file_path.unlink(missing_ok=True)
                         
-                        if datetime.now() < expiry:
-                            return value
-                        else:
-                            cache_file.unlink()
-                except Exception as e:
-                    logger.warning(f"Error reading cache file: {e}")
+                    except json.JSONDecodeError as e:
+                        # Invalid JSON - could be old pickle file, delete it
+                        logger.warning(f"Invalid JSON cache file (possibly legacy pickle), removing: {e}")
+                        try:
+                            file_path.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        logger.warning(f"Error reading cache file {file_path}: {e}")
         
         return None
     
     def _put_in_cache(self, key: str, value: Any, ttl: int, disk: bool) -> None:
-        """Put value in cache"""
+        """
+        Put value in cache.
+        
+        Args:
+            key: Cache key
+            value: Value to cache
+            ttl: Time to live in seconds
+            disk: Whether to also store on disk
+            
+        Note:
+            Disk caching uses JSON only. If the value cannot be serialized
+            to JSON (even with the custom encoder), only memory caching is used.
+        """
         expiry = datetime.now() + timedelta(seconds=ttl)
         
         # Store in memory
         self.memory_cache[key] = (value, expiry)
         
-        # Store on disk using JSON where possible (safer than pickle)
+        # Store on disk using JSON only (secure - no pickle)
         if disk and self.cache_dir:
-            cache_file = self.cache_dir / f"{key}.cache"
+            cache_file = self.cache_dir / f"{key}.json"
             try:
-                # Try JSON serialization first (safer)
-                try:
-                    cache_data = {
-                        "value": value,
-                        "expiry": expiry.isoformat()
-                    }
-                    with open(cache_file, 'w') as f:
-                        json.dump(cache_data, f)
-                except (TypeError, ValueError):
-                    # Fallback to pickle for complex objects
-                    # Note: pickle can execute arbitrary code - use with caution
-                    logger.warning("Using pickle for cache storage (security risk)")
-                    with open(cache_file, 'wb') as f:
-                        pickle.dump((value, expiry), f)
+                cache_data = {
+                    "value": value,
+                    "expiry": expiry.isoformat(),
+                    "created": datetime.now().isoformat(),
+                    "ttl": ttl
+                }
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, cls=SecureJSONEncoder, indent=2)
+                    
+            except (TypeError, ValueError) as e:
+                # Cannot serialize to JSON - only keep in memory
+                # This is safer than using pickle which has code execution risks
+                logger.warning(
+                    f"Cannot serialize value to JSON for disk cache (key={key[:16]}...): {e}. "
+                    f"Value will only be cached in memory."
+                )
             except Exception as e:
                 logger.warning(f"Error writing cache file: {e}")
     
     def clear(self) -> None:
-        """Clear all caches"""
+        """Clear all caches (memory and disk)."""
         self.memory_cache.clear()
         
         if self.cache_dir:
-            for cache_file in self.cache_dir.glob("*.cache"):
-                try:
-                    cache_file.unlink()
-                except Exception as e:
-                    logger.warning(f"Error deleting cache file: {e}")
+            # Clear both .json (new format) and .cache (legacy format) files
+            for pattern in ["*.json", "*.cache"]:
+                for cache_file in self.cache_dir.glob(pattern):
+                    try:
+                        cache_file.unlink()
+                    except Exception as e:
+                        logger.warning(f"Error deleting cache file {cache_file}: {e}")
 
 
 class ParallelExecutor:
