@@ -159,10 +159,21 @@ def verify_file_signature(content: bytes, claimed_extension: str) -> tuple[bool,
             sample = content[:8192]
             # Allow some non-printable chars (newlines, tabs, etc) but flag binary
             text_chars = set(range(32, 127)) | {9, 10, 13}  # printable + tab, newline, cr
-            binary_chars = sum(1 for b in sample if b not in text_chars)
             
-            # If more than 30% non-text chars, likely not a text file
-            if len(sample) > 0 and (binary_chars / len(sample)) > 0.30:
+            # Efficient early-exit binary detection
+            # Break early if threshold exceeded to avoid scanning entire sample
+            binary_chars = 0
+            threshold = 0.30
+            for i, b in enumerate(sample):
+                if b not in text_chars:
+                    binary_chars += 1
+                    # Check threshold periodically (every 100 bytes after first 100)
+                    if i > 100 and i % 100 == 0:
+                        if binary_chars / (i + 1) > threshold:
+                            return False, f"File appears to be binary, not text ({ext_lower})"
+            
+            # Final check after processing all bytes
+            if len(sample) > 0 and (binary_chars / len(sample)) > threshold:
                 return False, f"File appears to be binary, not text ({ext_lower})"
         except Exception:
             pass

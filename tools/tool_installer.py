@@ -76,9 +76,10 @@ TRUSTED_REPOS: Dict[str, Optional[str]] = {
 }
 
 # Require commit hash for non-trusted repos (security enforcement)
+# Defaults to True for security - only accepts 'false', '0', or 'no' to disable
 REQUIRE_COMMIT_HASH_FOR_UNTRUSTED = os.environ.get(
     "AEGIS_REQUIRE_COMMIT_HASH", "true"
-).lower() == "true"
+).lower() not in ("false", "0", "no")
 
 # Regex pattern for validating commit hashes
 COMMIT_HASH_PATTERN = re.compile(r'^[a-fA-F0-9]{7,40}$')

@@ -18,6 +18,7 @@ Security Note:
 """
 
 import asyncio
+import base64
 import logging
 import time
 import functools
@@ -193,7 +194,6 @@ class SecureJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, Path):
             return {"__type__": "path", "value": str(obj)}
         elif isinstance(obj, bytes):
-            import base64
             return {"__type__": "bytes", "value": base64.b64encode(obj).decode('ascii')}
         elif isinstance(obj, set):
             return {"__type__": "set", "value": list(obj)}
@@ -235,7 +235,6 @@ def secure_json_decoder(obj: Dict[str, Any]) -> Any:
     elif type_marker == "path":
         return Path(value)
     elif type_marker == "bytes":
-        import base64
         return base64.b64decode(value.encode('ascii'))
     elif type_marker == "set":
         return set(value)

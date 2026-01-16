@@ -1022,8 +1022,9 @@ DO NOT propose the same action again. Think creatively about alternative approac
             ))
         ]
         
-        # Create named tasks
+        # Create named tasks with reverse mapping for efficient lookup
         tasks = {name: asyncio.create_task(coro) for name, coro in task_configs}
+        task_to_name = {task: name for name, task in tasks.items()}  # Reverse mapping for O(1) lookup
         results: Dict[str, Any] = {}
         completed_count = 0
         
@@ -1035,8 +1036,9 @@ DO NOT propose the same action again. Think creatively about alternative approac
                 try:
                     result = await future
                     
-                    # Find which task completed (by matching the result)
-                    for name, task in tasks.items():
+                    # Efficiently identify which task completed using reverse mapping
+                    # Note: asyncio.as_completed wraps tasks, so we need to find the matching done task
+                    for task, name in task_to_name.items():
                         if task.done() and name not in results:
                             try:
                                 task_result = task.result()
