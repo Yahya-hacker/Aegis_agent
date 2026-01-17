@@ -6,12 +6,18 @@ self-healing capabilities for JIT (Just-in-Time) tool installation.
 
 Features:
     - Human-in-the-loop confirmation for security
-    - GitHub repository validation
+    - GitHub repository validation against trusted list
+    - Commit hash verification for reproducibility
     - System package installation (apt-get)
     - Python package installation (pip)
     - Self-healing decorator for automatic tool installation
     - Installation logging and history
     - Timeout protection for long installations
+
+Security:
+    - Only whitelisted organizations/repos can be installed without explicit approval
+    - Commit hash pinning ensures reproducible installations
+    - All installations are logged for audit trails
 """
 
 import asyncio
@@ -19,9 +25,10 @@ import functools
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
-from typing import Dict, Any, Optional, Callable, List
+from typing import Dict, Any, Optional, Callable, List, Set
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -29,6 +36,53 @@ logger = logging.getLogger(__name__)
 # Global flag for self-healing mode
 # When enabled, missing tools are installed automatically without user confirmation
 SELF_HEALING_MODE = os.environ.get("AEGIS_SELF_HEALING", "false").lower() == "true"
+
+# ============================================================================
+# TRUSTED REPOSITORY CONFIGURATION
+# ============================================================================
+
+# Trusted GitHub organizations whose repositories can be installed with reduced friction
+# Repositories from these orgs still require human confirmation but are marked as "trusted"
+TRUSTED_GITHUB_ORGS: Set[str] = {
+    # Security tool organizations
+    "projectdiscovery",  # nuclei, httpx, subfinder, etc.
+    "OWASP",             # OWASP tools
+    "rapid7",            # Metasploit, etc.
+    "sqlmapproject",     # sqlmap
+    "vanhauser-thc",     # THC-Hydra
+    "SecureAuthCorp",    # Impacket
+    "portswigger",       # Burp extensions
+    "nmap",              # nmap
+    "wireshark",         # Wireshark
+    "radareorg",         # Radare2
+    "pwndbg",            # pwndbg
+    "hugsy",             # gef (GDB Enhanced Features)
+    "longld",            # peda
+    
+    # Well-known Python security packages
+    "volatilityfoundation",  # Volatility
+    "ReFirmLabs",        # binwalk
+    "Gallopsled",        # pwntools
+    
+    # Aegis ecosystem (self-trust)
+    "Yahya-hacker",
+}
+
+# Specific trusted repositories (for repos not in trusted orgs)
+# Format: "owner/repo" -> Optional[commit_hash] (None means any version)
+TRUSTED_REPOS: Dict[str, Optional[str]] = {
+    # Add specific trusted repos here
+    # Example: "user/repo": "abc123def456" or "user/repo": None
+}
+
+# Require commit hash for non-trusted repos (security enforcement)
+# Defaults to True for security - only accepts 'false', '0', or 'no' to disable
+REQUIRE_COMMIT_HASH_FOR_UNTRUSTED = os.environ.get(
+    "AEGIS_REQUIRE_COMMIT_HASH", "true"
+).lower() not in ("false", "0", "no")
+
+# Regex pattern for validating commit hashes
+COMMIT_HASH_PATTERN = re.compile(r'^[a-fA-F0-9]{7,40}$')
 
 # Dependency mapping: tool command -> package name for apt-get
 TOOL_TO_PACKAGE_MAP = {
@@ -338,64 +392,218 @@ class ToolInstaller:
             package_name = TOOL_TO_PACKAGE_MAP.get(tool_name, tool_name)
             return await self.install_system_package(package_name)
     
+    def _parse_github_url(self, repo_url: str) -> Dict[str, Optional[str]]:
+        """
+        Parse a GitHub URL to extract owner, repo, and optional commit hash.
+        
+        Supports formats:
+        - https://github.com/owner/repo
+        - https://github.com/owner/repo.git
+        - https://github.com/owner/repo@commit_hash
+        - https://github.com/owner/repo/tree/branch
+        - https://github.com/owner/repo/commit/sha
+        
+        Args:
+            repo_url: GitHub repository URL
+            
+        Returns:
+            Dict with 'owner', 'repo', 'commit_hash', 'is_valid' keys
+        """
+        result = {
+            'owner': None,
+            'repo': None,
+            'commit_hash': None,
+            'is_valid': False,
+            'error': None
+        }
+        
+        # Remove trailing slashes and .git suffix
+        url = repo_url.rstrip('/').rstrip('.git')
+        
+        # Check for commit hash in URL (format: url@commit)
+        if '@' in url:
+            url_part, commit = url.rsplit('@', 1)
+            if COMMIT_HASH_PATTERN.match(commit):
+                result['commit_hash'] = commit
+                url = url_part
+        
+        # Check for /commit/ in URL
+        if '/commit/' in url:
+            parts = url.split('/commit/')
+            if len(parts) == 2 and COMMIT_HASH_PATTERN.match(parts[1]):
+                result['commit_hash'] = parts[1]
+                url = parts[0]
+        
+        # Check for /tree/ in URL (branch - not a commit hash but we accept it)
+        if '/tree/' in url:
+            parts = url.split('/tree/')
+            url = parts[0]
+        
+        # Now parse owner/repo from base URL
+        if url.startswith('https://github.com/'):
+            path = url[len('https://github.com/'):]
+            path_parts = path.split('/')
+            
+            if len(path_parts) >= 2:
+                result['owner'] = path_parts[0]
+                result['repo'] = path_parts[1]
+                result['is_valid'] = True
+            else:
+                result['error'] = "Invalid GitHub URL: missing owner or repo"
+        else:
+            result['error'] = "Only GitHub URLs are supported (must start with https://github.com/)"
+        
+        return result
+    
+    def _is_trusted_repo(self, owner: str, repo: str) -> tuple[bool, str]:
+        """
+        Check if a repository is from a trusted source.
+        
+        Args:
+            owner: GitHub organization/user
+            repo: Repository name
+            
+        Returns:
+            Tuple of (is_trusted, trust_reason)
+        """
+        # Check if owner is in trusted organizations
+        if owner.lower() in {org.lower() for org in TRUSTED_GITHUB_ORGS}:
+            return True, f"Organization '{owner}' is in trusted list"
+        
+        # Check if specific repo is trusted
+        repo_key = f"{owner}/{repo}"
+        if repo_key in TRUSTED_REPOS:
+            return True, f"Repository '{repo_key}' is explicitly trusted"
+        
+        return False, "Not in trusted list"
+    
     async def request_install_from_github(
         self,
         repo_url: str,
         description: str,
-        package_name: Optional[str] = None
+        package_name: Optional[str] = None,
+        commit_hash: Optional[str] = None,
+        skip_trust_check: bool = False
     ) -> str:
         """
-        Request installation of a tool from GitHub (PUBLIC METHOD)
+        Request installation of a tool from GitHub with security validation.
         
-        This method DOES NOT install anything. It returns a special JSON
-        response that triggers the human-in-the-loop confirmation flow.
+        This method validates the repository against a trusted list and
+        optionally requires a commit hash for reproducibility and security.
+        
+        Security features:
+        - Validates URL format and extracts owner/repo
+        - Checks against trusted organizations and repositories
+        - Optionally requires commit hash for untrusted repos
+        - Logs all installation requests for audit
         
         Args:
             repo_url: GitHub repository URL (e.g., 'https://github.com/user/repo')
             description: What this tool does and why it's needed
             package_name: Optional package name if different from repo name
+            commit_hash: Optional specific commit hash for reproducible installs
+            skip_trust_check: If True, skip trust validation (for testing)
             
         Returns:
-            JSON string with confirmation_required flag
+            JSON string with confirmation_required flag and trust status
         """
         logger.info(f"🔧 Tool installation requested: {repo_url}")
         logger.info(f"   Description: {description}")
         
-        # Extract repo name from URL
-        if not package_name:
-            package_name = repo_url.rstrip('/').split('/')[-1]
+        # Parse and validate the GitHub URL
+        parsed = self._parse_github_url(repo_url)
         
-        # Validate the repo URL format
-        if not repo_url.startswith('https://github.com/'):
+        if not parsed['is_valid']:
             return json.dumps({
                 "confirmation_required": False,
                 "status": "error",
-                "error": "Only GitHub repositories are supported (must start with https://github.com/)"
+                "error": parsed.get('error', "Invalid GitHub URL")
             })
+        
+        owner = parsed['owner']
+        repo = parsed['repo']
+        
+        # Use provided commit hash or the one parsed from URL
+        effective_commit = commit_hash or parsed['commit_hash']
+        
+        # Check if repo is trusted
+        is_trusted, trust_reason = self._is_trusted_repo(owner, repo)
+        
+        # For untrusted repos, require commit hash if enforcement is enabled
+        if not is_trusted and not skip_trust_check and REQUIRE_COMMIT_HASH_FOR_UNTRUSTED:
+            if not effective_commit:
+                return json.dumps({
+                    "confirmation_required": False,
+                    "status": "error",
+                    "error": (
+                        f"Repository '{owner}/{repo}' is not trusted. "
+                        f"A specific commit hash is required for untrusted repositories. "
+                        f"Use format: {repo_url}@<commit_hash> or provide commit_hash parameter. "
+                        f"Set AEGIS_REQUIRE_COMMIT_HASH=false to disable this requirement."
+                    ),
+                    "trusted": False,
+                    "owner": owner,
+                    "repo": repo
+                })
+        
+        # Validate commit hash format if provided
+        if effective_commit and not COMMIT_HASH_PATTERN.match(effective_commit):
+            return json.dumps({
+                "confirmation_required": False,
+                "status": "error",
+                "error": f"Invalid commit hash format: {effective_commit}. Must be 7-40 hex characters."
+            })
+        
+        # Extract repo name from URL if not provided
+        if not package_name:
+            package_name = repo
+        
+        # Build the install URL with optional commit hash
+        if effective_commit:
+            install_url = f"git+https://github.com/{owner}/{repo}.git@{effective_commit}"
+        else:
+            install_url = f"git+https://github.com/{owner}/{repo}.git"
+        
+        # Build trust status message
+        if is_trusted:
+            trust_status = f"✅ TRUSTED ({trust_reason})"
+            trust_icon = "✅"
+        else:
+            trust_status = f"⚠️  UNTRUSTED - Review carefully before approving"
+            trust_icon = "⚠️"
         
         # Build the confirmation request
         confirmation_request = {
             "confirmation_required": True,
             "action": "install_tool",
             "repo_url": repo_url,
+            "owner": owner,
+            "repo": repo,
             "package_name": package_name,
             "description": description,
-            "install_command": f"pip install git+{repo_url}",
+            "commit_hash": effective_commit,
+            "trusted": is_trusted,
+            "trust_reason": trust_reason,
+            "install_command": f"pip install {install_url}",
             "message": f"""
-🔧 TOOL INSTALLATION REQUEST
-============================
+{trust_icon} TOOL INSTALLATION REQUEST
+{'='*40}
 Package: {package_name}
-Repository: {repo_url}
+Repository: https://github.com/{owner}/{repo}
+Commit: {effective_commit or 'latest (HEAD)'}
+Trust Status: {trust_status}
+
 Description: {description}
 
 Command to execute:
-  pip install git+{repo_url}
+  pip install {install_url}
 
+{'⚠️  WARNING: This repository is not in the trusted list. Review the source code before approving.' if not is_trusted else ''}
 This action requires your approval to proceed.
 """
         }
         
-        logger.info("📋 Installation request prepared, awaiting human confirmation")
+        logger.info(f"📋 Installation request prepared (trusted={is_trusted}), awaiting confirmation")
         
         return json.dumps(confirmation_request, indent=2)
     

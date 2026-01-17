@@ -973,56 +973,132 @@ DO NOT propose the same action again. Think creatively about alternative approac
         context: str,
         strategic_question: str,
         vulnerability_question: str,
-        coding_question: str
+        coding_question: str,
+        timeout: float = 120.0,
+        fail_fast: bool = False
     ) -> Dict[str, Any]:
         """
-        Perform collaborative analysis using all three LLMs
-        Each LLM contributes its specialized perspective
+        Perform collaborative analysis using multiple LLMs with timeout protection.
+        
+        Uses asyncio.as_completed to process results as they arrive, preventing
+        one slow model from blocking the entire operation.
         
         Args:
             context: Shared context for all LLMs
             strategic_question: Question for strategic LLM
             vulnerability_question: Question for vulnerability LLM
             coding_question: Question for coder LLM
+            timeout: Maximum time to wait for all responses (default: 120s)
+            fail_fast: If True, return as soon as one model fails
             
         Returns:
-            Dictionary with responses from all three LLMs
+            Dictionary with responses from all three LLMs (may include partial results)
+            Each entry is either the response dict or an error dict with 'error' key
         """
-        logger.info("🤝 Starting collaborative analysis with all LLMs...")
+        logger.info("🤝 Starting collaborative analysis with all LLMs (timeout-protected)...")
         
-        # Call all three LLMs in parallel
-        strategic_task = self.call_llm(
-            'strategic',
-            [
-                {"role": "system", "content": f"You are a strategic pentesting planner. Context: {context}"},
-                {"role": "user", "content": strategic_question}
-            ]
-        )
+        # Define tasks with their names for tracking
+        task_configs = [
+            ('strategic', self.call_llm(
+                'strategic',
+                [
+                    {"role": "system", "content": f"You are a strategic pentesting planner. Context: {context}"},
+                    {"role": "user", "content": strategic_question}
+                ]
+            )),
+            ('vulnerability', self.call_llm(
+                'vulnerability',
+                [
+                    {"role": "system", "content": f"You are a vulnerability analyst. Context: {context}"},
+                    {"role": "user", "content": vulnerability_question}
+                ]
+            )),
+            ('coder', self.call_llm(
+                'coder',
+                [
+                    {"role": "system", "content": f"You are a code analyst and payload engineer. Context: {context}"},
+                    {"role": "user", "content": coding_question}
+                ]
+            ))
+        ]
         
-        vulnerability_task = self.call_llm(
-            'vulnerability',
-            [
-                {"role": "system", "content": f"You are a vulnerability analyst. Context: {context}"},
-                {"role": "user", "content": vulnerability_question}
-            ]
-        )
+        # Create named tasks with reverse mapping for efficient lookup
+        tasks = {name: asyncio.create_task(coro) for name, coro in task_configs}
+        task_to_name = {task: name for name, task in tasks.items()}  # Reverse mapping for O(1) lookup
+        results: Dict[str, Any] = {}
+        completed_count = 0
         
-        coder_task = self.call_llm(
-            'coder',
-            [
-                {"role": "system", "content": f"You are a code analyst and payload engineer. Context: {context}"},
-                {"role": "user", "content": coding_question}
-            ]
-        )
+        # Process results as they complete using as_completed
+        try:
+            start_time = asyncio.get_event_loop().time()
+            
+            for future in asyncio.as_completed(tasks.values(), timeout=timeout):
+                try:
+                    result = await future
+                    
+                    # Efficiently identify which task completed using reverse mapping
+                    # Note: asyncio.as_completed wraps tasks, so we need to find the matching done task
+                    for task, name in task_to_name.items():
+                        if task.done() and name not in results:
+                            try:
+                                task_result = task.result()
+                                results[name] = task_result
+                                completed_count += 1
+                                elapsed = asyncio.get_event_loop().time() - start_time
+                                logger.info(f"✅ {name} LLM completed ({elapsed:.1f}s)")
+                                
+                                # Show progress with reasoning display
+                                self.reasoning_display.show_thought(
+                                    f"Collaborative analysis: {name} completed ({completed_count}/3)",
+                                    thought_type="progress",
+                                    metadata={
+                                        "elapsed": elapsed,
+                                        "completed": completed_count,
+                                        "remaining": 3 - completed_count
+                                    }
+                                )
+                                break
+                            except Exception:
+                                pass
+                                
+                except asyncio.CancelledError:
+                    logger.warning("Task was cancelled during collaborative analysis")
+                except Exception as e:
+                    logger.error(f"Error in collaborative analysis task: {e}")
+                    if fail_fast:
+                        # Cancel remaining tasks and return partial results
+                        for task in tasks.values():
+                            if not task.done():
+                                task.cancel()
+                        break
+                        
+        except asyncio.TimeoutError:
+            elapsed = asyncio.get_event_loop().time() - start_time
+            logger.warning(f"⚠️ Collaborative analysis timeout after {elapsed:.1f}s")
+            
+            # Collect whatever results we have and mark timed-out ones
+            for name, task in tasks.items():
+                if name not in results:
+                    if task.done():
+                        try:
+                            results[name] = task.result()
+                        except Exception as e:
+                            results[name] = {'error': f'Task failed: {str(e)}'}
+                    else:
+                        task.cancel()
+                        results[name] = {'error': f'Timeout after {timeout}s'}
+                        logger.warning(f"⏱️ {name} LLM timed out")
         
-        # Wait for all responses
-        results = await asyncio.gather(strategic_task, vulnerability_task, coder_task)
+        # Fill in any missing results
+        for name in ['strategic', 'vulnerability', 'coder']:
+            if name not in results:
+                results[name] = {'error': 'Unknown error - no result received'}
         
-        return {
-            'strategic': results[0],
-            'vulnerability': results[1],
-            'coder': results[2]
-        }
+        # Log summary
+        success_count = sum(1 for r in results.values() if 'error' not in r)
+        logger.info(f"🤝 Collaborative analysis complete: {success_count}/3 LLMs responded successfully")
+        
+        return results
     
     async def execute_multimodal_task(
         self,

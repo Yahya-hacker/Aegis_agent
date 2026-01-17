@@ -13,23 +13,30 @@ Features:
 - MCP (Model Context Protocol) server connection management
 - Real-time tool status and swarm monitoring
 - Mode switching (Pentest/CTF/Red Teaming/Audit)
+
+Security Features:
+- Magic byte (file signature) verification for uploads
+- Path traversal protection
+- Filename sanitization
 """
 
 import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
+from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -62,6 +69,258 @@ logger = logging.getLogger(__name__)
 
 # Add project root to PYTHONPATH
 sys.path.insert(0, str(SCRIPT_DIR))
+
+
+# ============================================================================
+# FILE SIGNATURE (MAGIC BYTE) VERIFICATION
+# ============================================================================
+
+# Magic byte signatures for common file types
+# Format: extension -> (magic_bytes, offset)
+# Reference: https://en.wikipedia.org/wiki/List_of_file_signatures
+FILE_SIGNATURES: Dict[str, List[tuple]] = {
+    # Images
+    '.png': [(b'\x89PNG\r\n\x1a\n', 0)],
+    '.jpg': [(b'\xff\xd8\xff', 0)],
+    '.jpeg': [(b'\xff\xd8\xff', 0)],
+    '.gif': [(b'GIF87a', 0), (b'GIF89a', 0)],
+    '.bmp': [(b'BM', 0)],
+    '.webp': [(b'RIFF', 0)],  # WebP is RIFF-based
+    
+    # Documents
+    '.pdf': [(b'%PDF', 0)],
+    '.doc': [(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1', 0)],  # OLE compound
+    '.docx': [(b'PK\x03\x04', 0)],  # ZIP-based (Office Open XML)
+    '.xlsx': [(b'PK\x03\x04', 0)],
+    '.pptx': [(b'PK\x03\x04', 0)],
+    
+    # Archives
+    '.zip': [(b'PK\x03\x04', 0), (b'PK\x05\x06', 0)],
+    '.gz': [(b'\x1f\x8b', 0)],
+    '.tar': [(b'ustar', 257)],  # ustar at offset 257
+    
+    # Network captures
+    '.pcap': [(b'\xd4\xc3\xb2\xa1', 0), (b'\xa1\xb2\xc3\xd4', 0)],
+    '.pcapng': [(b'\x0a\x0d\x0d\x0a', 0)],
+    
+    # Executables (blocked but checked for masquerading detection)
+    '.exe': [(b'MZ', 0)],
+    '.dll': [(b'MZ', 0)],
+    '.elf': [(b'\x7fELF', 0)],
+    '.so': [(b'\x7fELF', 0)],
+}
+
+# Text-based extensions that don't have magic bytes
+TEXT_EXTENSIONS = {
+    '.txt', '.json', '.xml', '.html', '.css', '.js', '.py',
+    '.php', '.java', '.c', '.cpp', '.h', '.md', '.yaml', '.yml',
+    '.log', '.csv', '.sql', '.sh', '.rb', '.go', '.rs', '.svg',
+    '.ts', '.tsx', '.jsx', '.vue', '.scss', '.less'
+}
+
+
+def verify_file_signature(content: bytes, claimed_extension: str) -> tuple[bool, Optional[str]]:
+    """
+    Verify that file content matches the claimed file extension using magic bytes.
+    
+    This function detects file masquerading attacks where a malicious file
+    (e.g., executable) is renamed to appear as a safe file type (e.g., .txt).
+    
+    Args:
+        content: The file content bytes
+        claimed_extension: The file extension claimed by the filename (e.g., '.png')
+        
+    Returns:
+        Tuple of (is_valid, detected_type_or_error_message)
+        - (True, None) if file is valid text or matches signature
+        - (True, detected_type) if file matches its claimed signature
+        - (False, error_message) if file signature doesn't match extension
+    """
+    ext_lower = claimed_extension.lower()
+    
+    # Text files don't have magic bytes - check they're not executables
+    if ext_lower in TEXT_EXTENSIONS:
+        # Check if content starts with executable signatures (masquerading detection)
+        dangerous_signatures = [
+            (b'MZ', 'Windows executable'),
+            (b'\x7fELF', 'Linux executable'),
+            (b'\xca\xfe\xba\xbe', 'macOS Mach-O'),
+            (b'\xfe\xed\xfa\xce', 'macOS Mach-O'),
+            (b'\xfe\xed\xfa\xcf', 'macOS Mach-O 64-bit'),
+        ]
+        
+        for sig, file_type in dangerous_signatures:
+            if content.startswith(sig):
+                return False, f"File masquerading detected: content is {file_type}, not {ext_lower}"
+        
+        # For text files, try to verify it's actually text
+        try:
+            # Check first 8KB for text validity (utf-8 or ascii-ish)
+            sample = content[:8192]
+            # Allow some non-printable chars (newlines, tabs, etc) but flag binary
+            text_chars = set(range(32, 127)) | {9, 10, 13}  # printable + tab, newline, cr
+            
+            # Efficient early-exit binary detection
+            # Break early if threshold exceeded to avoid scanning entire sample
+            binary_chars = 0
+            threshold = 0.30
+            for i, b in enumerate(sample):
+                if b not in text_chars:
+                    binary_chars += 1
+                    # Check threshold periodically (every 100 bytes after first 100)
+                    if i > 100 and i % 100 == 0:
+                        if binary_chars / (i + 1) > threshold:
+                            return False, f"File appears to be binary, not text ({ext_lower})"
+            
+            # Final check after processing all bytes
+            if len(sample) > 0 and (binary_chars / len(sample)) > threshold:
+                return False, f"File appears to be binary, not text ({ext_lower})"
+        except Exception:
+            pass
+        
+        return True, None
+    
+    # Check magic bytes for known binary formats
+    if ext_lower in FILE_SIGNATURES:
+        signatures = FILE_SIGNATURES[ext_lower]
+        
+        for magic_bytes, offset in signatures:
+            if len(content) > offset + len(magic_bytes):
+                if content[offset:offset + len(magic_bytes)] == magic_bytes:
+                    return True, ext_lower
+        
+        # No signature matched - check if it's masquerading
+        # Try to detect what the file actually is
+        detected_type = detect_file_type(content)
+        if detected_type:
+            return False, f"File signature mismatch: claims to be {ext_lower} but appears to be {detected_type}"
+        
+        return False, f"File does not have valid {ext_lower} signature"
+    
+    # Unknown extension - allow but warn
+    logger.warning(f"No signature check available for extension: {ext_lower}")
+    return True, None
+
+
+def detect_file_type(content: bytes) -> Optional[str]:
+    """
+    Attempt to detect the actual file type from magic bytes.
+    
+    Args:
+        content: File content bytes
+        
+    Returns:
+        Detected file type string or None
+    """
+    # Check against known signatures
+    detections = [
+        (b'MZ', 'Windows executable (.exe/.dll)'),
+        (b'\x7fELF', 'Linux executable (.elf/.so)'),
+        (b'\xca\xfe\xba\xbe', 'macOS executable'),
+        (b'\x89PNG\r\n\x1a\n', '.png image'),
+        (b'\xff\xd8\xff', '.jpg image'),
+        (b'GIF8', '.gif image'),
+        (b'%PDF', '.pdf document'),
+        (b'PK\x03\x04', '.zip archive or Office document'),
+        (b'\xd4\xc3\xb2\xa1', '.pcap network capture'),
+    ]
+    
+    for signature, file_type in detections:
+        if content.startswith(signature):
+            return file_type
+    
+    return None
+
+
+# ============================================================================
+# STATE ABSTRACTION LAYER (Repository Pattern)
+# ============================================================================
+
+class ChatHistoryRepository(ABC):
+    """Abstract interface for chat history storage."""
+    
+    @abstractmethod
+    async def add_message(self, message: Dict[str, Any]) -> None:
+        """Add a message to chat history."""
+        pass
+    
+    @abstractmethod
+    async def get_messages(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get recent messages from chat history."""
+        pass
+    
+    @abstractmethod
+    async def clear(self) -> None:
+        """Clear all chat history."""
+        pass
+
+
+class ToolStatusRepository(ABC):
+    """Abstract interface for tool status storage."""
+    
+    @abstractmethod
+    async def update_status(self, name: str, status: 'ToolStatus') -> None:
+        """Update status of a tool."""
+        pass
+    
+    @abstractmethod
+    async def get_status(self, name: str) -> Optional['ToolStatus']:
+        """Get status of a specific tool."""
+        pass
+    
+    @abstractmethod
+    async def get_all_statuses(self) -> Dict[str, 'ToolStatus']:
+        """Get all tool statuses."""
+        pass
+
+
+class InMemoryChatHistoryRepository(ChatHistoryRepository):
+    """
+    In-memory implementation of chat history repository.
+    
+    Designed to be easily swapped for Redis/Database implementations.
+    """
+    
+    def __init__(self, max_messages: int = 1000):
+        self._messages: List[Dict[str, Any]] = []
+        self._max_messages = max_messages
+    
+    async def add_message(self, message: Dict[str, Any]) -> None:
+        """Add a message, maintaining max size."""
+        self._messages.append(message)
+        if len(self._messages) > self._max_messages:
+            self._messages = self._messages[-self._max_messages:]
+    
+    async def get_messages(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get the most recent messages."""
+        return self._messages[-limit:]
+    
+    async def clear(self) -> None:
+        """Clear all messages."""
+        self._messages = []
+
+
+class InMemoryToolStatusRepository(ToolStatusRepository):
+    """
+    In-memory implementation of tool status repository.
+    
+    Designed to be easily swapped for Redis/Database implementations.
+    """
+    
+    def __init__(self):
+        self._statuses: Dict[str, 'ToolStatus'] = {}
+    
+    async def update_status(self, name: str, status: 'ToolStatus') -> None:
+        """Update tool status."""
+        self._statuses[name] = status
+    
+    async def get_status(self, name: str) -> Optional['ToolStatus']:
+        """Get status of a specific tool."""
+        return self._statuses.get(name)
+    
+    async def get_all_statuses(self) -> Dict[str, 'ToolStatus']:
+        """Get all tool statuses."""
+        return self._statuses.copy()
 
 
 # ============================================================================
@@ -115,25 +374,181 @@ class SwarmDecision(BaseModel):
 
 
 # ============================================================================
-# APPLICATION STATE
+# APPLICATION STATE INTERFACE & IMPLEMENTATION
 # ============================================================================
 
-class AppState:
-    """Application state manager"""
+class AgentStateInterface(ABC):
+    """
+    Abstract interface for agent state management.
+    
+    This interface enables horizontal scaling by abstracting the storage layer.
+    Implementations can use in-memory storage (default), Redis, or databases.
+    """
+    
+    @abstractmethod
+    async def get_chat_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get chat history."""
+        pass
+    
+    @abstractmethod
+    async def add_chat_message(self, message: Dict[str, Any]) -> None:
+        """Add a chat message."""
+        pass
+    
+    @abstractmethod
+    async def clear_chat_history(self) -> None:
+        """Clear chat history."""
+        pass
+    
+    @abstractmethod
+    async def update_tool_status(self, name: str, status: str, 
+                                  progress: Optional[float] = None, 
+                                  output: Optional[str] = None) -> None:
+        """Update tool status."""
+        pass
+    
+    @abstractmethod
+    async def get_tool_statuses(self) -> Dict[str, ToolStatus]:
+        """Get all tool statuses."""
+        pass
+
+
+class AppState(AgentStateInterface):
+    """
+    Application state manager with repository pattern.
+    
+    Uses Set for WebSocket tracking (O(1) operations) and repository
+    pattern for chat/tool storage to enable easy swapping to Redis/DB.
+    
+    Attributes:
+        active_websockets: Set of connected WebSocket clients (O(1) add/remove)
+        chat_repository: Repository for chat history storage
+        tool_repository: Repository for tool status storage
+    """
     
     def __init__(self):
-        self.active_websockets: List[WebSocket] = []
+        """Initialize application state with repositories."""
+        # Use Set for O(1) WebSocket operations
+        self.active_websockets: Set[WebSocket] = set()
+        self._websocket_lock = asyncio.Lock()  # Thread-safe WebSocket management
+        
+        # Operation mode and mission
         self.current_mode: OperationMode = OperationMode.PENETRATION_TESTING
         self.mission_config: Optional[MissionConfig] = None
-        self.tool_statuses: Dict[str, ToolStatus] = {}
+        
+        # Repository pattern for scalable storage
+        self._chat_repository = InMemoryChatHistoryRepository()
+        self._tool_repository = InMemoryToolStatusRepository()
+        
+        # Swarm decisions (could also be moved to repository)
         self.swarm_decisions: List[SwarmDecision] = []
+        
+        # MCP server configurations
         self.mcp_servers: Dict[str, MCPServerConfig] = {}
+        
+        # Agent components
         self.agent_initialized: bool = False
         self.ai_core = None
         self.conversation = None
         self.learning_engine = None
-        self.chat_history: List[Dict[str, Any]] = []
         self.mcp_client = None
+    
+    # ---- Chat History (Repository Pattern) ----
+    
+    async def get_chat_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get chat history from repository."""
+        return await self._chat_repository.get_messages(limit)
+    
+    async def add_chat_message(self, message: Dict[str, Any]) -> None:
+        """Add a chat message to repository."""
+        await self._chat_repository.add_message(message)
+    
+    async def clear_chat_history(self) -> None:
+        """Clear chat history in repository."""
+        await self._chat_repository.clear()
+    
+    # ---- Tool Status (Repository Pattern) ----
+    
+    async def update_tool_status(self, name: str, status: str, 
+                                  progress: Optional[float] = None, 
+                                  output: Optional[str] = None) -> None:
+        """Update tool status in repository."""
+        tool_status = ToolStatus(
+            name=name,
+            status=status,
+            progress=progress,
+            output=output
+        )
+        await self._tool_repository.update_status(name, tool_status)
+    
+    async def get_tool_statuses(self) -> Dict[str, ToolStatus]:
+        """Get all tool statuses from repository."""
+        return await self._tool_repository.get_all_statuses()
+    
+    # ---- Backward Compatibility Properties ----
+    
+    @property
+    def chat_history(self) -> List[Dict[str, Any]]:
+        """Backward compatible sync access to chat history."""
+        return self._chat_repository._messages
+    
+    @property
+    def tool_statuses(self) -> Dict[str, ToolStatus]:
+        """Backward compatible sync access to tool statuses."""
+        return self._tool_repository._statuses
+    
+    # ---- WebSocket Management (O(1) with Set) ----
+    
+    async def add_websocket(self, ws: WebSocket) -> None:
+        """Add a WebSocket connection (O(1) operation)."""
+        async with self._websocket_lock:
+            self.active_websockets.add(ws)
+    
+    async def remove_websocket(self, ws: WebSocket) -> None:
+        """Remove a WebSocket connection (O(1) operation)."""
+        async with self._websocket_lock:
+            self.active_websockets.discard(ws)
+    
+    async def broadcast_message(self, message: Dict[str, Any]) -> None:
+        """
+        Broadcast message to all connected WebSocket clients.
+        
+        Handles disconnected clients robustly to prevent zombie connections.
+        """
+        disconnected: Set[WebSocket] = set()
+        
+        # Create a copy of the set to iterate over
+        async with self._websocket_lock:
+            websockets_copy = self.active_websockets.copy()
+        
+        for ws in websockets_copy:
+            try:
+                await ws.send_json(message)
+            except Exception as e:
+                logger.debug(f"WebSocket send failed, marking for removal: {e}")
+                disconnected.add(ws)
+        
+        # Clean up disconnected websockets
+        if disconnected:
+            async with self._websocket_lock:
+                self.active_websockets -= disconnected
+            logger.info(f"🧹 Cleaned up {len(disconnected)} disconnected WebSocket(s)")
+    
+    # ---- Sync helper for backward compatibility ----
+    
+    def update_tool_status_sync(self, name: str, status: str, 
+                                 progress: Optional[float] = None, 
+                                 output: Optional[str] = None) -> None:
+        """Synchronous tool status update for backward compatibility."""
+        tool_status = ToolStatus(
+            name=name,
+            status=status,
+            progress=progress,
+            output=output
+        )
+        self._tool_repository._statuses[name] = tool_status
+    
+    # ---- Agent Initialization ----
         
     async def initialize_agent(self):
         """Initialize the Aegis AI agent components"""
@@ -173,31 +588,29 @@ class AppState:
         except Exception as e:
             logger.error(f"❌ Failed to initialize agent: {e}", exc_info=True)
             raise
-    
-    async def broadcast_message(self, message: Dict[str, Any]):
-        """Broadcast message to all connected WebSocket clients"""
-        disconnected = []
-        for ws in self.active_websockets:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                disconnected.append(ws)
-        
-        for ws in disconnected:
-            self.active_websockets.remove(ws)
-    
-    def update_tool_status(self, name: str, status: str, progress: float = None, output: str = None):
-        """Update tool status and broadcast to clients"""
-        self.tool_statuses[name] = ToolStatus(
-            name=name,
-            status=status,
-            progress=progress,
-            output=output
-        )
 
 
-# Global application state
+# Global application state instance
 app_state = AppState()
+
+
+# ============================================================================
+# DEPENDENCY INJECTION
+# ============================================================================
+
+async def get_app_state() -> AppState:
+    """
+    FastAPI dependency that provides the application state.
+    
+    This enables dependency injection for the app state, making it easier
+    to swap implementations for testing or horizontal scaling.
+    
+    Usage:
+        @app.get("/api/status")
+        async def get_status(state: AppState = Depends(get_app_state)):
+            return {"initialized": state.agent_initialized}
+    """
+    return app_state
 
 
 # ============================================================================
@@ -481,17 +894,36 @@ async def disconnect_mcp_server(server_name: str):
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Upload a file for analysis"""
+    """
+    Upload a file for analysis with security validation.
+    
+    Security measures:
+    - Extension whitelist validation
+    - Magic byte (file signature) verification to prevent masquerading
+    - Path traversal protection
+    - Filename sanitization
+    
+    Args:
+        file: The uploaded file
+        
+    Returns:
+        JSON with upload status, filename, path, and size
+        
+    Raises:
+        HTTPException: 400 for invalid file type or masquerading
+        HTTPException: 500 for server errors
+    """
     try:
         # Validate file type - security-focused list
         # Analysis files (source code, docs, configs)
         safe_extensions = {
             '.txt', '.json', '.xml', '.html', '.css', '.js', '.py',
             '.php', '.java', '.c', '.cpp', '.h', '.md', '.yaml', '.yml',
-            '.log', '.csv', '.sql', '.sh', '.rb', '.go', '.rs'
+            '.log', '.csv', '.sql', '.sh', '.rb', '.go', '.rs', '.ts',
+            '.tsx', '.jsx', '.vue', '.scss', '.less'
         }
         # Image files for visual analysis
-        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg'}
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'}
         # Document files
         doc_extensions = {'.pdf', '.doc', '.docx'}
         # Network captures (for forensics)
@@ -513,28 +945,45 @@ async def upload_file(file: UploadFile = File(...)):
         if ".." in file.filename or "/" in file.filename or "\\" in file.filename:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid filename"
+                detail="Invalid filename: path traversal detected"
             )
+        
+        # Read file content for verification
+        content = await file.read()
+        
+        # SECURITY: Magic byte (file signature) verification
+        # This prevents malicious file masquerading (e.g., executable disguised as .txt)
+        is_valid, error_or_type = verify_file_signature(content, file_ext)
+        
+        if not is_valid:
+            logger.warning(f"🚨 File signature mismatch rejected: {file.filename} - {error_or_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"File signature verification failed: {error_or_type}"
+            )
+        
+        # Log if we detected a specific type
+        if error_or_type:
+            logger.debug(f"File signature verified: {file.filename} is valid {error_or_type}")
         
         # Save file with sanitized name
         file_id = str(uuid.uuid4())[:8]
         # Only keep alphanumeric, dots, underscores and hyphens in filename
-        import re
         safe_basename = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename).name)
         safe_filename = f"{file_id}_{safe_basename}"
         file_path = UPLOADS_DIR / safe_filename
         
         with open(file_path, "wb") as f:
-            content = await file.read()
             f.write(content)
         
-        logger.info(f"📁 File uploaded: {safe_filename}")
+        logger.info(f"📁 File uploaded (verified): {safe_filename} ({len(content)} bytes)")
         
         return {
             "status": "uploaded",
             "filename": safe_filename,
             "path": str(file_path),
-            "size": len(content)
+            "size": len(content),
+            "verified": True
         }
         
     except HTTPException:
@@ -750,9 +1199,16 @@ async def get_parallel_progress():
 
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
-    """WebSocket endpoint for real-time chat"""
+    """
+    WebSocket endpoint for real-time chat with robust connection handling.
+    
+    Uses Set-based storage for O(1) connection management and handles
+    disconnections gracefully to prevent zombie connections.
+    """
     await websocket.accept()
-    app_state.active_websockets.append(websocket)
+    
+    # Add to Set (O(1) operation)
+    await app_state.add_websocket(websocket)
     
     logger.info(f"🔗 WebSocket client connected ({len(app_state.active_websockets)} active)")
     
@@ -776,12 +1232,13 @@ async def websocket_chat(websocket: WebSocket):
                 await websocket.send_json({"type": "pong"})
             
     except WebSocketDisconnect:
-        logger.info("🔌 WebSocket client disconnected")
+        logger.info("🔌 WebSocket client disconnected gracefully")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
-        if websocket in app_state.active_websockets:
-            app_state.active_websockets.remove(websocket)
+        # Remove from Set (O(1) operation) - handles missing entries gracefully
+        await app_state.remove_websocket(websocket)
+        logger.debug(f"WebSocket cleanup complete ({len(app_state.active_websockets)} remaining)")
 
 
 async def handle_chat_message(websocket: WebSocket, data: Dict[str, Any]):
@@ -1012,17 +1469,17 @@ async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mod
             "type": "tool_status",
             "tool": {"name": "AI Planning", "status": "running", "progress": None}
         })
-        app_state.update_tool_status("AI Planning", "running")
+        app_state.update_tool_status_sync("AI Planning", "running")
         
         # Get next action from AI
         try:
             action = await app_state.ai_core.get_next_action_async(enhanced_rules, agent_memory)
         except Exception as e:
             logger.error(f"Error getting next action: {e}")
-            app_state.update_tool_status("AI Planning", "failed")
+            app_state.update_tool_status_sync("AI Planning", "failed")
             break
         
-        app_state.update_tool_status("AI Planning", "completed")
+        app_state.update_tool_status_sync("AI Planning", "completed")
         
         if not action:
             break
@@ -1058,7 +1515,7 @@ async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mod
             "type": "tool_status",
             "tool": {"name": tool_name, "status": "running", "progress": None}
         })
-        app_state.update_tool_status(tool_name, "running")
+        app_state.update_tool_status_sync(tool_name, "running")
         
         # Send progress message
         args_str = json.dumps(action.get("args", {}), indent=2) if action.get("args") else ""
@@ -1072,7 +1529,7 @@ async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mod
         # Execute the tool
         try:
             result = await scanner.execute_action(action)
-            app_state.update_tool_status(tool_name, "completed")
+            app_state.update_tool_status_sync(tool_name, "completed")
             
             # Broadcast result
             result_preview = str(result)[:500] + "..." if len(str(result)) > 500 else str(result)
@@ -1092,7 +1549,7 @@ async def run_autonomous_loop(websocket: WebSocket, target: str, rules: str, mod
             
         except Exception as e:
             logger.error(f"Tool execution error: {e}")
-            app_state.update_tool_status(tool_name, "failed")
+            app_state.update_tool_status_sync(tool_name, "failed")
             
             await app_state.broadcast_message({
                 "type": "chat",
