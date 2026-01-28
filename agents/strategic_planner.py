@@ -468,6 +468,190 @@ Generate the strategic plan now:"""
         except (EOFError, KeyboardInterrupt):
             print(f"\n{Colors.WARNING}❌ Input cancelled. Mission aborted.{Colors.ENDC}")
             return False
+    
+    async def proactive_tree_of_thought(
+        self,
+        tech_stack: List[str],
+        attack_surface: Dict[str, Any],
+        objective: str = "vulnerability_discovery"
+    ) -> Dict[str, Any]:
+        """
+        Use Tree-of-Thought reasoning BEFORE taking any action to select the best approach.
+        
+        This implements proactive ToT:
+        1. Divergence: Propose 3 distinct attack vectors
+        2. Simulation: Estimate outcomes based on tech stack
+        3. Pruning: Discard costly branches (MFA, honeypots, etc.)
+        4. Selection: Execute branch with highest success probability
+        
+        Args:
+            tech_stack: Detected technologies on target
+            attack_surface: Mapped attack surface
+            objective: Mission objective
+        
+        Returns:
+            Dictionary with selected attack vector and reasoning
+        """
+        logger.info("🌳 Running proactive Tree-of-Thought analysis")
+        print("\n" + "─"*60)
+        print("🌳 TREE-OF-THOUGHT: STRATEGIC DECISION")
+        print("─"*60)
+        
+        # Define attack vector templates
+        attack_vectors = [
+            {
+                "id": "auth_bypass",
+                "name": "Authentication Bypass",
+                "description": "Test login mechanisms for bypass vulnerabilities",
+                "techniques": ["SQL injection in login", "JWT manipulation", "Session fixation"],
+                "high_cost_indicators": ["mfa", "2fa", "two-factor", "captcha", "recaptcha"],
+                "base_probability": 0.3
+            },
+            {
+                "id": "injection",
+                "name": "Injection Attacks",
+                "description": "Test input validation for SQLi, XSS, Command injection",
+                "techniques": ["SQL injection", "XSS", "Command injection", "SSTI"],
+                "high_cost_indicators": ["waf", "cloudflare", "akamai", "f5"],
+                "base_probability": 0.4
+            },
+            {
+                "id": "ssrf_lfi",
+                "name": "SSRF/LFI/Path Traversal",
+                "description": "Test file access and server-side requests",
+                "techniques": ["Local file inclusion", "Path traversal", "SSRF"],
+                "high_cost_indicators": ["aws", "gcp", "azure", "kubernetes"],  # Cloud = valuable SSRF target
+                "base_probability": 0.25
+            },
+            {
+                "id": "business_logic",
+                "name": "Business Logic Flaws",
+                "description": "Test application-specific logic vulnerabilities",
+                "techniques": ["IDOR", "Race conditions", "Price manipulation"],
+                "high_cost_indicators": [],  # Logic flaws rarely have defenses
+                "base_probability": 0.35
+            }
+        ]
+        
+        # Phase 1: Divergence - Score each vector based on context
+        print("\n📊 Phase 1: DIVERGENCE (Scoring Attack Vectors)")
+        
+        scored_vectors = []
+        for vector in attack_vectors:
+            score = vector["base_probability"]
+            reasoning = []
+            
+            # Adjust based on tech stack
+            tech_lower = [t.lower() for t in tech_stack]
+            
+            # SQL injection more likely with certain backends
+            if vector["id"] == "injection":
+                if any(t in tech_lower for t in ["mysql", "postgres", "mssql", "oracle"]):
+                    score += 0.15
+                    reasoning.append("Database detected - injection likely")
+                if any(t in tech_lower for t in ["php", "asp"]):
+                    score += 0.1
+                    reasoning.append("PHP/ASP detected - historically vulnerable")
+            
+            # Auth bypass more likely with custom auth
+            if vector["id"] == "auth_bypass":
+                if attack_surface.get("authentication"):
+                    score += 0.1
+                    reasoning.append("Authentication detected")
+                if any(t in tech_lower for t in ["jwt", "oauth"]):
+                    score += 0.05
+                    reasoning.append("JWT/OAuth present")
+            
+            # SSRF valuable in cloud environments
+            if vector["id"] == "ssrf_lfi":
+                if any(t in tech_lower for t in ["aws", "gcp", "azure", "docker", "kubernetes"]):
+                    score += 0.2  # Bonus: cloud metadata access
+                    reasoning.append("Cloud environment - SSRF high value")
+            
+            # Check for costly defenses
+            for indicator in vector["high_cost_indicators"]:
+                if indicator in str(tech_stack).lower():
+                    if vector["id"] != "ssrf_lfi":  # SSRF benefits from cloud
+                        score -= 0.15
+                        reasoning.append(f"Defense detected: {indicator}")
+            
+            scored_vectors.append({
+                **vector,
+                "adjusted_score": min(score, 0.95),  # Cap at 95%
+                "reasoning": reasoning
+            })
+            
+            print(f"  • {vector['name']}: {score:.0%}")
+            for r in reasoning:
+                print(f"    └─ {r}")
+        
+        # Phase 2: Simulation - Estimate outcomes
+        print("\n🎯 Phase 2: SIMULATION (Estimating Outcomes)")
+        
+        for vector in scored_vectors:
+            # Simulate potential outcomes
+            if vector["adjusted_score"] > 0.5:
+                vector["simulated_outcome"] = "HIGH probability of findings"
+            elif vector["adjusted_score"] > 0.3:
+                vector["simulated_outcome"] = "MEDIUM probability of findings"
+            else:
+                vector["simulated_outcome"] = "LOW probability - consider alternatives"
+            
+            print(f"  • {vector['name']}: {vector['simulated_outcome']}")
+        
+        # Phase 3: Pruning - Remove low-value branches
+        print("\n✂️ Phase 3: PRUNING (Removing Low-Value Branches)")
+        
+        pruned_vectors = [v for v in scored_vectors if v["adjusted_score"] >= 0.2]
+        pruned_count = len(scored_vectors) - len(pruned_vectors)
+        
+        if pruned_count > 0:
+            print(f"  Pruned {pruned_count} low-probability vectors")
+        else:
+            print("  No vectors pruned - all viable")
+        
+        # Phase 4: Selection - Choose best branch
+        print("\n🏆 Phase 4: SELECTION (Best Attack Vector)")
+        
+        if not pruned_vectors:
+            pruned_vectors = scored_vectors  # Fallback to all if all pruned
+        
+        best_vector = max(pruned_vectors, key=lambda v: v["adjusted_score"])
+        
+        print(f"  ✅ SELECTED: {best_vector['name']}")
+        print(f"     Confidence: {best_vector['adjusted_score']:.0%}")
+        print(f"     Techniques: {', '.join(best_vector['techniques'][:3])}")
+        
+        # Sort alternatives
+        alternatives = sorted(
+            [v for v in pruned_vectors if v["id"] != best_vector["id"]],
+            key=lambda v: v["adjusted_score"],
+            reverse=True
+        )[:2]  # Top 2 alternatives
+        
+        if alternatives:
+            print(f"     Fallbacks: {', '.join(v['name'] for v in alternatives)}")
+        
+        print("─"*60)
+        
+        return {
+            "selected_vector": best_vector,
+            "alternatives": alternatives,
+            "pruned_count": pruned_count,
+            "total_evaluated": len(attack_vectors),
+            "decision_reasoning": best_vector.get("reasoning", []),
+            "recommended_tools": self._get_tools_for_vector(best_vector["id"])
+        }
+    
+    def _get_tools_for_vector(self, vector_id: str) -> List[str]:
+        """Get recommended tools for an attack vector"""
+        tool_mapping = {
+            "auth_bypass": ["nuclei", "hydra", "jwt_tool", "burp_intruder"],
+            "injection": ["sqlmap", "genesis_fuzzer", "xsstrike", "commix"],
+            "ssrf_lfi": ["ffuf", "genesis_fuzzer", "nuclei"],
+            "business_logic": ["logic_tester", "race_engine", "burp_repeater"]
+        }
+        return tool_mapping.get(vector_id, ["genesis_fuzzer", "nuclei"])
 
 
 # Color codes for output

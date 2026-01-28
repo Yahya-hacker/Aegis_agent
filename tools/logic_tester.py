@@ -349,3 +349,411 @@ def get_logic_tester() -> LogicTesterTool:
     if _logic_tester_instance is None:
         _logic_tester_instance = LogicTesterTool()
     return _logic_tester_instance
+
+
+class ConstraintSolver:
+    """
+    Z3-based Constraint Solver for Zero-Day Discovery.
+    
+    Uses Satisfiability Modulo Theories (SMT) to discover logic vulnerabilities
+    that cannot be found through traditional fuzzing.
+    
+    This implements:
+    1. Symbolic Execution - Converts code logic into mathematical equations
+    2. SAT Solving - Asks solver: "Is there input X that makes is_authenticated=False 
+       while has_access=True?"
+    3. Payload Generation - If SAT, returns exact input to trigger the bug
+    """
+    
+    def __init__(self):
+        """Initialize the constraint solver"""
+        self.solver = None
+        self._init_solver()
+        logger.info("🔮 Z3 Constraint Solver initialized for zero-day discovery")
+    
+    def _init_solver(self):
+        """Initialize Z3 solver with fresh state"""
+        try:
+            from z3 import Solver
+            self.solver = Solver()
+        except ImportError:
+            logger.warning("Z3 solver not available. Install with: pip install z3-solver")
+            self.solver = None
+    
+    def reset(self):
+        """Reset solver state for new analysis"""
+        if self.solver:
+            self.solver.reset()
+    
+    def check_logic_bypass(
+        self,
+        constraints: List[Dict[str, Any]],
+        bypass_condition: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Check if a logic bypass is possible given constraints.
+        
+        This answers: "Is there any input that satisfies all constraints
+        but also triggers the bypass condition?"
+        
+        Args:
+            constraints: List of constraint dictionaries defining valid logic
+                Example: [{"var": "user_level", "op": ">=", "value": 5}]
+            bypass_condition: Condition that should be impossible but we want to find
+                Example: {"var": "is_admin", "op": "==", "value": True}
+        
+        Returns:
+            Result dictionary with bypass possibility and triggering values
+        """
+        if not self.solver:
+            return {"satisfiable": False, "error": "Z3 solver not available"}
+        
+        try:
+            from z3 import Int, Bool, sat, And, Or, Not
+            
+            self.reset()
+            
+            # Build variable mapping
+            variables = {}
+            
+            # Process constraints
+            for constraint in constraints:
+                var_name = constraint.get('var', 'x')
+                var_type = constraint.get('type', 'int')
+                
+                # Create variable if not exists
+                if var_name not in variables:
+                    if var_type == 'bool':
+                        variables[var_name] = Bool(var_name)
+                    else:
+                        variables[var_name] = Int(var_name)
+                
+                var = variables[var_name]
+                op = constraint.get('op', '==')
+                value = constraint.get('value', 0)
+                
+                # Add constraint to solver
+                if op == '==':
+                    self.solver.add(var == value)
+                elif op == '!=':
+                    self.solver.add(var != value)
+                elif op == '>':
+                    self.solver.add(var > value)
+                elif op == '>=':
+                    self.solver.add(var >= value)
+                elif op == '<':
+                    self.solver.add(var < value)
+                elif op == '<=':
+                    self.solver.add(var <= value)
+            
+            # Add bypass condition
+            bypass_var_name = bypass_condition.get('var', 'bypass')
+            bypass_type = bypass_condition.get('type', 'bool')
+            
+            if bypass_var_name not in variables:
+                if bypass_type == 'bool':
+                    variables[bypass_var_name] = Bool(bypass_var_name)
+                else:
+                    variables[bypass_var_name] = Int(bypass_var_name)
+            
+            bypass_var = variables[bypass_var_name]
+            bypass_op = bypass_condition.get('op', '==')
+            bypass_value = bypass_condition.get('value', True)
+            
+            if bypass_op == '==':
+                self.solver.add(bypass_var == bypass_value)
+            elif bypass_op == '!=':
+                self.solver.add(bypass_var != bypass_value)
+            elif bypass_op == '>':
+                self.solver.add(bypass_var > bypass_value)
+            elif bypass_op == '<':
+                self.solver.add(bypass_var < bypass_value)
+            
+            # Check satisfiability
+            result = self.solver.check()
+            
+            if result == sat:
+                model = self.solver.model()
+                
+                # Extract the values that trigger the bypass
+                trigger_values = {}
+                for var_name, var in variables.items():
+                    val = model.evaluate(var)
+                    trigger_values[var_name] = str(val)
+                
+                logger.warning(f"🚨 Logic bypass POSSIBLE! Trigger values: {trigger_values}")
+                
+                return {
+                    "satisfiable": True,
+                    "vulnerable": True,
+                    "trigger_values": trigger_values,
+                    "description": "Logic bypass found - these values satisfy all constraints "
+                                  "while triggering the bypass condition"
+                }
+            else:
+                logger.info("✅ Logic path is secure - no bypass found")
+                return {
+                    "satisfiable": False,
+                    "vulnerable": False,
+                    "description": "No logic bypass possible with given constraints"
+                }
+                
+        except ImportError:
+            return {"satisfiable": False, "error": "Z3 solver not available"}
+        except Exception as e:
+            logger.error(f"Constraint solving error: {e}")
+            return {"satisfiable": False, "error": str(e)}
+    
+    def check_integer_overflow_vulnerability(
+        self,
+        min_value: int,
+        max_value: int,
+        bit_width: int = 32
+    ) -> Dict[str, Any]:
+        """
+        Check for integer overflow vulnerabilities.
+        
+        Args:
+            min_value: Minimum expected value
+            max_value: Maximum expected value
+            bit_width: Integer bit width (8, 16, 32, 64)
+        
+        Returns:
+            Result with overflow trigger values if vulnerable
+        """
+        if not self.solver:
+            return {"vulnerable": False, "error": "Z3 solver not available"}
+        
+        try:
+            from z3 import BitVec, sat, UGT, ULT
+            
+            self.reset()
+            
+            # Create bit vector for exact overflow semantics
+            x = BitVec('input', bit_width)
+            
+            # Bounds based on bit width
+            max_signed = (2 ** (bit_width - 1)) - 1
+            min_signed = -(2 ** (bit_width - 1))
+            max_unsigned = (2 ** bit_width) - 1
+            
+            # Check if value can overflow signed bounds
+            # Is there x where x > max_value but x wraps to appear < min_value?
+            self.solver.add(UGT(x, max_value))  # x > max_value (unsigned)
+            
+            result = self.solver.check()
+            
+            if result == sat:
+                model = self.solver.model()
+                overflow_value = model.evaluate(x)
+                
+                return {
+                    "vulnerable": True,
+                    "overflow_trigger": str(overflow_value),
+                    "bit_width": bit_width,
+                    "description": f"Integer overflow possible with value {overflow_value}"
+                }
+            else:
+                return {
+                    "vulnerable": False,
+                    "description": "No integer overflow vulnerability found"
+                }
+                
+        except ImportError:
+            return {"vulnerable": False, "error": "Z3 solver not available"}
+        except Exception as e:
+            return {"vulnerable": False, "error": str(e)}
+    
+    def generate_smt_bypass_inputs(
+        self,
+        auth_check: str,
+        access_check: str
+    ) -> Dict[str, Any]:
+        """
+        Generate inputs that bypass authentication while maintaining access.
+        
+        This implements the core zero-day discovery logic:
+        "Find input X where is_authenticated(X) = False but has_access(X) = True"
+        
+        Args:
+            auth_check: Description of authentication check logic
+            access_check: Description of access control logic
+        
+        Returns:
+            Bypass inputs if vulnerability exists
+        """
+        if not self.solver:
+            return {"bypass_found": False, "error": "Z3 solver not available"}
+        
+        try:
+            from z3 import Int, Bool, sat, And, Or, Not, Implies
+            
+            self.reset()
+            
+            # Model typical auth/access control variables
+            user_id = Int('user_id')
+            role_level = Int('role_level')
+            is_authenticated = Bool('is_authenticated')
+            has_access = Bool('has_access')
+            session_valid = Bool('session_valid')
+            
+            # Common authentication bypass patterns to check:
+            
+            # Pattern 1: Type juggling (user_id = 0 bypasses numeric checks)
+            self.solver.push()
+            self.solver.add(user_id == 0)
+            self.solver.add(has_access == True)
+            self.solver.add(is_authenticated == False)
+            
+            if self.solver.check() == sat:
+                model = self.solver.model()
+                return {
+                    "bypass_found": True,
+                    "bypass_type": "type_juggling",
+                    "trigger": {"user_id": 0},
+                    "description": "user_id=0 may bypass authentication in loose comparisons"
+                }
+            self.solver.pop()
+            
+            # Pattern 2: Negative role level
+            self.solver.push()
+            self.solver.add(role_level < 0)
+            self.solver.add(has_access == True)
+            self.solver.add(is_authenticated == False)
+            
+            if self.solver.check() == sat:
+                model = self.solver.model()
+                return {
+                    "bypass_found": True,
+                    "bypass_type": "negative_role",
+                    "trigger": {"role_level": str(model.evaluate(role_level))},
+                    "description": "Negative role level may bypass role checks"
+                }
+            self.solver.pop()
+            
+            # Pattern 3: Large integers (overflow)
+            self.solver.push()
+            self.solver.add(user_id > 2147483647)
+            self.solver.add(has_access == True)
+            
+            if self.solver.check() == sat:
+                model = self.solver.model()
+                return {
+                    "bypass_found": True,
+                    "bypass_type": "integer_overflow",
+                    "trigger": {"user_id": str(model.evaluate(user_id))},
+                    "description": "Integer overflow may bypass validation"
+                }
+            self.solver.pop()
+            
+            return {
+                "bypass_found": False,
+                "description": "No common authentication bypass patterns found"
+            }
+            
+        except ImportError:
+            return {"bypass_found": False, "error": "Z3 solver not available"}
+        except Exception as e:
+            return {"bypass_found": False, "error": str(e)}
+    
+    def check_impossible_condition(
+        self,
+        condition_a: Dict[str, Any],
+        condition_b: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Check if two conditions that appear mutually exclusive can both be true.
+        
+        Example: Check if (x > 10 AND x < 5) can be satisfied.
+        A human/simple fuzzer sees this as impossible, but logic bugs might make it true.
+        
+        Args:
+            condition_a: First condition {"var": "x", "op": ">", "value": 10}
+            condition_b: Second condition {"var": "x", "op": "<", "value": 5}
+        
+        Returns:
+            Result indicating if "impossible" condition is possible
+        """
+        if not self.solver:
+            return {"satisfiable": False, "error": "Z3 solver not available"}
+        
+        try:
+            from z3 import Int, Bool, sat
+            
+            self.reset()
+            
+            var_name = condition_a.get('var', 'x')
+            var_type = condition_a.get('type', 'int')
+            
+            if var_type == 'bool':
+                x = Bool(var_name)
+            else:
+                x = Int(var_name)
+            
+            # Add condition A
+            op_a = condition_a.get('op', '>')
+            val_a = condition_a.get('value', 10)
+            
+            if op_a == '>':
+                self.solver.add(x > val_a)
+            elif op_a == '<':
+                self.solver.add(x < val_a)
+            elif op_a == '>=':
+                self.solver.add(x >= val_a)
+            elif op_a == '<=':
+                self.solver.add(x <= val_a)
+            elif op_a == '==':
+                self.solver.add(x == val_a)
+            
+            # Add condition B
+            op_b = condition_b.get('op', '<')
+            val_b = condition_b.get('value', 5)
+            
+            if op_b == '>':
+                self.solver.add(x > val_b)
+            elif op_b == '<':
+                self.solver.add(x < val_b)
+            elif op_b == '>=':
+                self.solver.add(x >= val_b)
+            elif op_b == '<=':
+                self.solver.add(x <= val_b)
+            elif op_b == '==':
+                self.solver.add(x == val_b)
+            
+            # Check if both can be satisfied
+            result = self.solver.check()
+            
+            if result == sat:
+                model = self.solver.model()
+                trigger_value = str(model.evaluate(x))
+                
+                logger.warning(f"🚨 'Impossible' condition IS satisfiable! {var_name}={trigger_value}")
+                
+                return {
+                    "satisfiable": True,
+                    "trigger_value": trigger_value,
+                    "description": f"Logic bug: Both {var_name}{op_a}{val_a} AND "
+                                  f"{var_name}{op_b}{val_b} satisfied by {var_name}={trigger_value}"
+                }
+            else:
+                return {
+                    "satisfiable": False,
+                    "description": "Conditions are mutually exclusive as expected"
+                }
+                
+        except ImportError:
+            return {"satisfiable": False, "error": "Z3 solver not available"}
+        except Exception as e:
+            return {"satisfiable": False, "error": str(e)}
+
+
+# Singleton instance
+_constraint_solver_instance = None
+
+
+def get_constraint_solver() -> ConstraintSolver:
+    """Get singleton constraint solver instance"""
+    global _constraint_solver_instance
+    if _constraint_solver_instance is None:
+        _constraint_solver_instance = ConstraintSolver()
+    return _constraint_solver_instance

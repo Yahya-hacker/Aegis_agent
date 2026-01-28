@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import logging
 from pathlib import Path
 import networkx as nx
@@ -799,6 +799,222 @@ class CortexMemory:
                     path_str += f"      └─> {action}\n"
         
         return path_str
+    
+    def get_optimal_attack_path(self, target_heuristic: str = "vulnerability") -> Optional[List[str]]:
+        """
+        Use A* Search to find the optimal attack path to the most vulnerable state.
+        
+        This implements algorithmic pathfinding to prioritize paths with the highest
+        "Vulnerability Probability" based on node weighting and heuristic cost calculation.
+        
+        Args:
+            target_heuristic: Strategy for identifying target nodes
+                - "vulnerability": Prioritize nodes with high vulnerability potential
+                - "admin": Prioritize nodes with admin/sensitive keywords
+                - "forms": Prioritize nodes with interactive forms
+        
+        Returns:
+            List of node IDs representing the optimal path, or None if no path found
+        """
+        if self.graph.number_of_nodes() <= 1:
+            logger.warning("[Cortex] Not enough nodes for pathfinding")
+            return None
+        
+        # Step 1: Calculate vulnerability scores for all nodes (Node Weighting)
+        for node in self.graph.nodes:
+            node_data = self.graph.nodes[node]
+            
+            # Parse artifacts if stored as string
+            artifacts = node_data.get('artifacts', {})
+            if isinstance(artifacts, str):
+                try:
+                    artifacts = json.loads(artifacts)
+                except (json.JSONDecodeError, ValueError):
+                    artifacts = {}
+            
+            # Calculate vulnerability potential score
+            # f(n) = g(n) + h(n) where:
+            # - g(n) = actual cost (number of steps/edges)
+            # - h(n) = heuristic (inverse of vulnerability potential)
+            
+            vulnerability_score = 0.0
+            url = node_data.get('url', '')
+            
+            # Weight for forms (interactive elements = higher attack surface)
+            forms = artifacts.get('forms', [])
+            vulnerability_score += len(forms) * 1.5
+            
+            # Weight for input fields
+            inputs = artifacts.get('inputs', [])
+            vulnerability_score += len(inputs) * 0.5
+            
+            # High priority for admin/sensitive paths
+            sensitive_keywords = ['admin', 'dashboard', 'config', 'settings', 
+                                  'upload', 'api', 'debug', 'backup', 'database']
+            for keyword in sensitive_keywords:
+                if keyword in url.lower():
+                    vulnerability_score += 10
+            
+            # Additional weight for endpoints with parameters
+            if '?' in url or '&' in url:
+                vulnerability_score += 3
+            
+            # Weight based on technology-specific patterns
+            tech_patterns = artifacts.get('tech_stack', [])
+            vulnerable_techs = ['php', 'asp', 'jsp', 'cgi']
+            for tech in tech_patterns:
+                if any(vt in str(tech).lower() for vt in vulnerable_techs):
+                    vulnerability_score += 5
+            
+            # Store computed vulnerability potential
+            self.graph.nodes[node]['vulnerability_potential'] = vulnerability_score
+        
+        # Step 2: Find the target node with highest vulnerability potential
+        if target_heuristic == "admin":
+            # Filter for admin-related nodes first
+            admin_nodes = [n for n in self.graph.nodes 
+                          if 'admin' in str(self.graph.nodes[n].get('url', '')).lower()]
+            if admin_nodes:
+                target_node = max(admin_nodes, 
+                                 key=lambda n: self.graph.nodes[n].get('vulnerability_potential', 0))
+            else:
+                target_node = max(self.graph.nodes, 
+                                 key=lambda n: self.graph.nodes[n].get('vulnerability_potential', 0))
+        elif target_heuristic == "forms":
+            # Prioritize nodes with forms
+            form_nodes = []
+            for n in self.graph.nodes:
+                artifacts = self.graph.nodes[n].get('artifacts', {})
+                if isinstance(artifacts, str):
+                    try:
+                        artifacts = json.loads(artifacts)
+                    except (json.JSONDecodeError, ValueError):
+                        artifacts = {}
+                if artifacts.get('forms', []):
+                    form_nodes.append(n)
+            
+            if form_nodes:
+                target_node = max(form_nodes,
+                                 key=lambda n: self.graph.nodes[n].get('vulnerability_potential', 0))
+            else:
+                target_node = max(self.graph.nodes,
+                                 key=lambda n: self.graph.nodes[n].get('vulnerability_potential', 0))
+        else:  # "vulnerability" - default
+            target_node = max(self.graph.nodes,
+                             key=lambda n: self.graph.nodes[n].get('vulnerability_potential', 0))
+        
+        if target_node == "root":
+            logger.info("[Cortex] Target is root node, no path needed")
+            return ["root"]
+        
+        # Step 3: Use A* to find the optimal path
+        # For A*, we need a heuristic function h(n)
+        def heuristic(node, target):
+            """
+            A* heuristic: estimate distance to target based on vulnerability potential difference.
+            Lower vulnerability potential = higher heuristic cost.
+            """
+            node_potential = self.graph.nodes[node].get('vulnerability_potential', 0)
+            target_potential = self.graph.nodes[target].get('vulnerability_potential', 0)
+            
+            # Heuristic is the "remaining potential" to reach max vulnerability
+            # This ensures A* prioritizes paths through high-value nodes
+            return max(0, target_potential - node_potential)
+        
+        def get_edge_weight(u, v, edge_data):
+            """Get numeric weight from edge data (handles string conversion from GraphML)"""
+            weight = edge_data.get('weight', 1)
+            try:
+                return float(weight)
+            except (ValueError, TypeError):
+                return 1.0
+        
+        try:
+            # NetworkX A* implementation with custom weight function
+            path = nx.astar_path(
+                self.graph,
+                source="root",
+                target=target_node,
+                heuristic=lambda n, t: heuristic(n, t),
+                weight=get_edge_weight  # Use custom weight function
+            )
+            
+            logger.info(f"[Cortex] A* found optimal path: {len(path)} steps to {target_node}")
+            logger.info(f"[Cortex] Target vulnerability score: "
+                       f"{self.graph.nodes[target_node].get('vulnerability_potential', 0):.2f}")
+            
+            return path
+            
+        except nx.NetworkXNoPath:
+            logger.warning(f"[Cortex] No path found from root to {target_node}")
+            
+            # Fallback: try Dijkstra to any high-value reachable node
+            try:
+                # Find all reachable nodes from root
+                reachable = nx.descendants(self.graph, "root")
+                reachable.add("root")
+                
+                # Find highest-value reachable node
+                reachable_scores = {n: self.graph.nodes[n].get('vulnerability_potential', 0) 
+                                   for n in reachable}
+                
+                if reachable_scores:
+                    best_reachable = max(reachable_scores, key=reachable_scores.get)
+                    if best_reachable != "root":
+                        path = nx.shortest_path(self.graph, source="root", target=best_reachable)
+                        logger.info(f"[Cortex] Fallback: Dijkstra path to {best_reachable}")
+                        return path
+                        
+            except Exception as e:
+                logger.warning(f"[Cortex] Fallback pathfinding failed: {e}")
+            
+            return None
+    
+    def get_central_assets(self) -> List[Tuple[str, float]]:
+        """
+        Identify "central" assets in the network using graph centrality measures.
+        
+        Central nodes are those connected to many other nodes - they represent
+        key targets that could provide access to multiple other resources.
+        
+        Returns:
+            List of (node_id, centrality_score) tuples, sorted by centrality
+        """
+        if self.graph.number_of_nodes() <= 1:
+            return []
+        
+        try:
+            # Use betweenness centrality - nodes that lie on many shortest paths
+            centrality = nx.betweenness_centrality(self.graph)
+            
+            # Also consider degree centrality (number of connections)
+            degree_centrality = nx.degree_centrality(self.graph)
+            
+            # Combine both metrics (weighted average)
+            combined_centrality = {}
+            for node in self.graph.nodes:
+                combined = (centrality.get(node, 0) * 0.6 + 
+                           degree_centrality.get(node, 0) * 0.4)
+                combined_centrality[node] = combined
+            
+            # Sort by centrality score (descending)
+            sorted_nodes = sorted(combined_centrality.items(), 
+                                 key=lambda x: x[1], 
+                                 reverse=True)
+            
+            # Filter out root and return top results
+            results = [(n, score) for n, score in sorted_nodes 
+                      if n != "root" and score > 0]
+            
+            if results:
+                logger.info(f"[Cortex] Top central asset: {results[0][0]} "
+                           f"(centrality: {results[0][1]:.3f})")
+            
+            return results[:10]  # Return top 10
+            
+        except Exception as e:
+            logger.warning(f"[Cortex] Centrality calculation failed: {e}")
+            return []
     
     def clear(self) -> None:
         """Clear all cortex memory"""

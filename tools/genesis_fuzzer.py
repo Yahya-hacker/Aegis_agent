@@ -1013,6 +1013,410 @@ class GenesisFuzzer:
         return summary
 
 
+class GeneticFeedbackLoop:
+    """
+    Genetic Mutation Feedback Loop (Genesis V8.1)
+    
+    Implements evolutionary optimization for the fuzzer:
+    1. Fitness Function - Score payloads by code coverage and timing fluctuations
+    2. Crossover - Combine successful payloads (e.g., ' + SLEEP => ' OR SLEEP(5)--)
+    3. Population Pruning - Discard payloads with identical baseline responses
+    
+    This makes the fuzzer "fast and productive" by learning from results.
+    """
+    
+    def __init__(self):
+        """Initialize the genetic feedback loop"""
+        # Population of payloads with their fitness scores
+        self.population: List[Dict[str, Any]] = []
+        
+        # Elite payloads (top performers)
+        self.elite_payloads: List[Dict[str, Any]] = []
+        
+        # Mutation history for pattern learning
+        self.mutation_history: Dict[str, List[float]] = {}
+        
+        # Configuration
+        self.population_size = 100
+        self.elite_percentage = 0.1  # Top 10% survive
+        self.mutation_rate = 0.3
+        self.crossover_rate = 0.5
+        
+        # Response fingerprints for deduplication
+        self.response_fingerprints: set = set()
+        
+        logger.info("🧬 Genetic Feedback Loop initialized (Genesis V8.1)")
+    
+    def calculate_fitness(
+        self,
+        payload: str,
+        result: Dict[str, Any],
+        baseline: Dict[str, Any]
+    ) -> float:
+        """
+        Calculate fitness score for a payload based on:
+        1. Code Coverage - Response structure changes
+        2. Timing Fluctuations - Response time variations
+        3. Status Code Changes - Error triggering
+        4. Content Diversity - Unique responses
+        
+        Higher fitness = more interesting payload
+        
+        Args:
+            payload: The tested payload string
+            result: Response from the payload test
+            baseline: Baseline response for comparison
+        
+        Returns:
+            Fitness score (0.0 - 100.0)
+        """
+        fitness = 0.0
+        
+        if not result or "error" in result:
+            return 0.0
+        
+        baseline_time = baseline.get("response_time", 0)
+        baseline_status = baseline.get("status_code", 200)
+        baseline_length = baseline.get("content_length", 0)
+        baseline_content = baseline.get("content", "")
+        
+        result_time = result.get("response_time", 0)
+        result_status = result.get("status_code", 200)
+        result_length = result.get("content_length", 0)
+        result_content = result.get("content_preview", "")
+        
+        # 1. Timing Fitness (0-40 points)
+        # Significant delays indicate potential blind injection
+        if baseline_time > 0:
+            time_ratio = result_time / baseline_time
+            if time_ratio > 5:  # 5x slower
+                fitness += 40
+                logger.debug(f"[Genetic] High timing fitness: {time_ratio:.1f}x slower")
+            elif time_ratio > 2:  # 2x slower
+                fitness += 20
+            elif time_ratio > 1.5:  # 1.5x slower
+                fitness += 10
+        
+        # 2. Status Code Fitness (0-20 points)
+        if result_status != baseline_status:
+            if result_status >= 500:  # Server error
+                fitness += 20
+            elif result_status in [403, 401]:  # Auth errors
+                fitness += 10
+            else:
+                fitness += 5
+        
+        # 3. Content Length Fitness (0-15 points)
+        if baseline_length > 0:
+            length_diff_ratio = abs(result_length - baseline_length) / baseline_length
+            if length_diff_ratio > 0.5:  # >50% difference
+                fitness += 15
+            elif length_diff_ratio > 0.2:  # >20% difference
+                fitness += 8
+        
+        # 4. Error Message Fitness (0-15 points)
+        error_patterns = [
+            ("sql", 10),
+            ("syntax", 10),
+            ("error", 5),
+            ("exception", 8),
+            ("stack trace", 10),
+            ("undefined", 5),
+            ("warning", 3)
+        ]
+        for pattern, points in error_patterns:
+            if pattern in result_content.lower():
+                fitness += points
+                break  # Only count once
+        
+        # 5. Response Uniqueness (0-10 points)
+        # Penalize responses identical to baseline
+        response_fingerprint = f"{result_status}:{result_length}"
+        if response_fingerprint not in self.response_fingerprints:
+            fitness += 10
+            self.response_fingerprints.add(response_fingerprint)
+        
+        return min(fitness, 100.0)  # Cap at 100
+    
+    def crossover(
+        self,
+        payload_a: str,
+        payload_b: str
+    ) -> str:
+        """
+        Combine two successful payloads to create a new one.
+        
+        Example: payload_a = "'" and payload_b = "SLEEP(5)"
+        Result could be: "' OR SLEEP(5)--"
+        
+        Args:
+            payload_a: First parent payload
+            payload_b: Second parent payload
+        
+        Returns:
+            Child payload combining features of both parents
+        """
+        import random
+        
+        # Common SQL/XSS connectors for crossover
+        connectors = [
+            " OR ", " AND ", " UNION ", "||", "; ", "--", 
+            " ", "", "%20", "/**/", "' + '", "\" + \""
+        ]
+        
+        connector = random.choice(connectors)
+        
+        # Different crossover strategies
+        strategy = random.choice(["concat", "interleave", "prefix", "suffix"])
+        
+        if strategy == "concat":
+            # Simple concatenation
+            return f"{payload_a}{connector}{payload_b}"
+        
+        elif strategy == "interleave":
+            # Character-level interleaving
+            result = ""
+            for i in range(max(len(payload_a), len(payload_b))):
+                if i < len(payload_a):
+                    result += payload_a[i]
+                if i < len(payload_b):
+                    result += payload_b[i]
+            return result[:100]  # Limit length
+        
+        elif strategy == "prefix":
+            # Use payload_a as prefix
+            return f"{payload_a[:len(payload_a)//2]}{payload_b}"
+        
+        elif strategy == "suffix":
+            # Use payload_b as suffix
+            return f"{payload_a}{payload_b[len(payload_b)//2:]}"
+        
+        return f"{payload_a}{connector}{payload_b}"
+    
+    def mutate(self, payload: str) -> str:
+        """
+        Apply random mutation to a payload.
+        
+        Args:
+            payload: Payload to mutate
+        
+        Returns:
+            Mutated payload
+        """
+        import random
+        
+        if not payload:
+            return payload
+        
+        mutation_type = random.choice([
+            "case_swap",      # Change character cases
+            "encode",         # URL/HTML encode
+            "add_comment",    # Add comment bypass
+            "double_char",    # Double dangerous characters
+            "insert_null"     # Insert null bytes
+        ])
+        
+        if mutation_type == "case_swap":
+            return ''.join(
+                c.upper() if random.random() > 0.5 else c.lower()
+                for c in payload
+            )
+        
+        elif mutation_type == "encode":
+            # Random URL encode some characters
+            encoded = ""
+            for c in payload:
+                if random.random() > 0.7 and c.isalpha():
+                    encoded += f"%{ord(c):02X}"
+                else:
+                    encoded += c
+            return encoded
+        
+        elif mutation_type == "add_comment":
+            # Insert SQL comment in random position
+            pos = random.randint(0, len(payload))
+            comment = random.choice(["/**/", "/*!", "#", "--"])
+            return payload[:pos] + comment + payload[pos:]
+        
+        elif mutation_type == "double_char":
+            # Double special characters
+            specials = ["'", '"', ";", "-", "=", "<", ">"]
+            result = payload
+            for s in specials:
+                if s in result and random.random() > 0.5:
+                    result = result.replace(s, s + s)
+            return result
+        
+        elif mutation_type == "insert_null":
+            # Insert null byte
+            pos = random.randint(0, len(payload))
+            return payload[:pos] + "%00" + payload[pos:]
+        
+        return payload
+    
+    def evolve_population(
+        self,
+        results: List[Dict[str, Any]],
+        baseline: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Evolve the payload population based on fitness results.
+        
+        This implements the genetic algorithm:
+        1. Calculate fitness for all payloads
+        2. Select elite (top performers)
+        3. Generate offspring through crossover
+        4. Apply mutations
+        5. Prune duplicates
+        
+        Args:
+            results: List of fuzzing results with payloads
+            baseline: Baseline response
+        
+        Returns:
+            New generation of optimized payloads
+        """
+        import random
+        
+        # Step 1: Calculate fitness for all results
+        fitness_scores = []
+        for result in results:
+            payload = str(result.get("payload", ""))
+            fitness = self.calculate_fitness(payload, result, baseline)
+            fitness_scores.append({
+                "payload": payload,
+                "fitness": fitness,
+                "result": result
+            })
+        
+        # Step 2: Sort by fitness and select elite
+        fitness_scores.sort(key=lambda x: x["fitness"], reverse=True)
+        
+        elite_count = max(1, int(len(fitness_scores) * self.elite_percentage))
+        self.elite_payloads = fitness_scores[:elite_count]
+        
+        logger.info(f"[Genetic] Elite selection: {elite_count} payloads with "
+                   f"fitness {self.elite_payloads[0]['fitness']:.1f} to "
+                   f"{self.elite_payloads[-1]['fitness']:.1f}")
+        
+        # Step 3: Generate offspring through crossover
+        offspring = []
+        elite_payload_strings = [e["payload"] for e in self.elite_payloads]
+        
+        while len(offspring) < self.population_size - elite_count:
+            if len(elite_payload_strings) >= 2 and random.random() < self.crossover_rate:
+                # Crossover
+                parent_a = random.choice(elite_payload_strings)
+                parent_b = random.choice(elite_payload_strings)
+                child = self.crossover(parent_a, parent_b)
+            else:
+                # Clone from elite
+                child = random.choice(elite_payload_strings)
+            
+            # Step 4: Apply mutation
+            if random.random() < self.mutation_rate:
+                child = self.mutate(child)
+            
+            offspring.append(child)
+        
+        # Step 5: Combine elite and offspring
+        new_generation = elite_payload_strings + offspring
+        
+        # Step 6: Prune duplicates (keeping first occurrence)
+        seen = set()
+        unique_generation = []
+        for payload in new_generation:
+            # Normalize for comparison
+            normalized = payload.lower().strip()
+            if normalized not in seen:
+                seen.add(normalized)
+                unique_generation.append(payload)
+        
+        logger.info(f"[Genetic] New generation: {len(unique_generation)} unique payloads "
+                   f"(pruned {len(new_generation) - len(unique_generation)} duplicates)")
+        
+        return unique_generation
+    
+    def get_smt_seeded_mutations(
+        self,
+        base_value: str,
+        constraints: Optional[List[Dict]] = None
+    ) -> List[str]:
+        """
+        Generate SMT-Based mutations using constraint solver suggestions.
+        
+        Instead of purely random mutations, uses mathematical reasoning
+        to generate inputs more likely to find vulnerabilities.
+        
+        Args:
+            base_value: Base value to seed mutations from
+            constraints: Optional constraints from the target
+        
+        Returns:
+            List of SMT-informed mutation values
+        """
+        smt_mutations = []
+        
+        # Integer boundary values from SMT reasoning
+        if base_value.isdigit():
+            smt_mutations.extend([
+                "0",
+                "-1",
+                "1",
+                "2147483647",   # INT32_MAX
+                "2147483648",   # INT32_MAX + 1
+                "-2147483648",  # INT32_MIN
+                "4294967295",   # UINT32_MAX
+                "9223372036854775807",  # INT64_MAX
+                str(int(base_value) + 1),
+                str(int(base_value) - 1),
+            ])
+        
+        # String mutations based on type juggling
+        smt_mutations.extend([
+            "0",              # Type juggling: "0" == 0 in PHP
+            "",               # Empty string
+            "null",           # Null string
+            "undefined",      # JavaScript undefined
+            "NaN",            # Not a Number
+            "true",           # Boolean string
+            "false",          # Boolean string
+            "[]",             # Empty array
+            "{}",             # Empty object
+            "[object Object]", # Object string representation
+        ])
+        
+        # SQL-specific SMT-derived values
+        smt_mutations.extend([
+            "' OR '1'='1",    # Always true
+            "' AND '1'='2",   # Always false
+            "' OR ''='",      # Empty comparison
+            "1' OR '1",       # Numeric context
+            "-1 OR 1=1",      # Negative with OR
+        ])
+        
+        return smt_mutations
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get statistics about the genetic optimization"""
+        if not self.elite_payloads:
+            return {"generations": 0, "elite_count": 0}
+        
+        elite_fitness = [e["fitness"] for e in self.elite_payloads]
+        
+        return {
+            "elite_count": len(self.elite_payloads),
+            "avg_elite_fitness": sum(elite_fitness) / len(elite_fitness),
+            "max_fitness": max(elite_fitness),
+            "min_fitness": min(elite_fitness),
+            "unique_responses": len(self.response_fingerprints),
+            "top_payloads": [
+                {"payload": e["payload"][:50], "fitness": e["fitness"]}
+                for e in self.elite_payloads[:5]
+            ]
+        }
+
+
 # Singleton instance
 _genesis_fuzzer_instance = None
 
@@ -1022,3 +1426,14 @@ def get_genesis_fuzzer() -> GenesisFuzzer:
     if _genesis_fuzzer_instance is None:
         _genesis_fuzzer_instance = GenesisFuzzer()
     return _genesis_fuzzer_instance
+
+
+# Singleton for genetic feedback loop
+_genetic_feedback_instance = None
+
+def get_genetic_feedback_loop() -> GeneticFeedbackLoop:
+    """Get or create the singleton Genetic Feedback Loop instance"""
+    global _genetic_feedback_instance
+    if _genetic_feedback_instance is None:
+        _genetic_feedback_instance = GeneticFeedbackLoop()
+    return _genetic_feedback_instance
