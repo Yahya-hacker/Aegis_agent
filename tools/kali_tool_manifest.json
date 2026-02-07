@@ -30,7 +30,9 @@
           "description": "Protocol grammar definition for smart mutations"
         }
       },
-      "json_prompt_template": "{\"tool\": \"genesis_fuzz_api\", \"args\": {\"url\": \"<API_URL>\", \"method\": \"POST\", \"base_payload\": {}}}"
+      "json_prompt_template": "{\"tool\": \"genesis_fuzz_api\", \"args\": {\"url\": \"<API_URL>\", \"method\": \"POST\", \"base_payload\": {}}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "subdomain_enumeration",
@@ -45,7 +47,9 @@
           "description": "Target domain to enumerate"
         }
       },
-      "json_prompt_template": "{\"tool\": \"subdomain_enumeration\", \"args\": {\"domain\": \"<DOMAIN>\"}}"
+      "json_prompt_template": "{\"tool\": \"subdomain_enumeration\", \"args\": {\"domain\": \"<DOMAIN>\"}}",
+      "_available": false,
+      "_path": null
     },
     {
       "tool_name": "port_scanning",
@@ -60,7 +64,9 @@
           "description": "Target host or IP"
         }
       },
-      "json_prompt_template": "{\"tool\": \"port_scanning\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"port_scanning\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": false,
+      "_path": null
     },
     {
       "tool_name": "nmap_scan",
@@ -80,7 +86,9 @@
           "description": "Comma-separated port list (default: 80,443,8080,8443)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\"}}"
+      "json_prompt_template": "{\"tool\": \"nmap_scan\", \"args\": {\"target\": \"<TARGET>\", \"ports\": \"<PORTS>\"}}",
+      "_available": true,
+      "_path": "/usr/bin/nmap"
     },
     {
       "tool_name": "url_discovery",
@@ -95,7 +103,9 @@
           "description": "Target domain"
         }
       },
-      "json_prompt_template": "{\"tool\": \"url_discovery\", \"args\": {\"domain\": \"<DOMAIN>\"}}"
+      "json_prompt_template": "{\"tool\": \"url_discovery\", \"args\": {\"domain\": \"<DOMAIN>\"}}",
+      "_available": false,
+      "_path": null
     },
     {
       "tool_name": "tech_detection",
@@ -110,7 +120,9 @@
           "description": "Target URL"
         }
       },
-      "json_prompt_template": "{\"tool\": \"tech_detection\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"tech_detection\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "vulnerability_scan",
@@ -125,7 +137,9 @@
           "description": "Target URL to scan"
         }
       },
-      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"vulnerability_scan\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": false,
+      "_path": null
     },
     {
       "tool_name": "run_sqlmap",
@@ -140,7 +154,9 @@
           "description": "Target URL with parameter"
         }
       },
-      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"run_sqlmap\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": true,
+      "_path": "/usr/bin/sqlmap"
     },
     {
       "tool_name": "discover_interactables",
@@ -155,7 +171,9 @@
           "description": "Target URL"
         }
       },
-      "json_prompt_template": "{\"tool\": \"discover_interactables\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"discover_interactables\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "test_form_payload",
@@ -180,7 +198,9 @@
           "description": "Dictionary of field names to payload values"
         }
       },
-      "json_prompt_template": "{\"tool\": \"test_form_payload\", \"args\": {\"target\": \"<TARGET>\", \"form_identifier\": \"<FORM_ID>\", \"input_payloads\": {\"<FIELD_NAME>\": \"<PAYLOAD>\"}}}"
+      "json_prompt_template": "{\"tool\": \"test_form_payload\", \"args\": {\"target\": \"<TARGET>\", \"form_identifier\": \"<FORM_ID>\", \"input_payloads\": {\"<FIELD_NAME>\": \"<PAYLOAD>\"}}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "fetch_url",
@@ -195,7 +215,9 @@
           "description": "Target URL to fetch"
         }
       },
-      "json_prompt_template": "{\"tool\": \"fetch_url\", \"args\": {\"target\": \"<TARGET>\"}}"
+      "json_prompt_template": "{\"tool\": \"fetch_url\", \"args\": {\"target\": \"<TARGET>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "manage_session",
@@ -215,7 +237,9 @@
           "description": "Login credentials (required for login action)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"manage_session\", \"args\": {\"action\": \"<ACTION>\", \"credentials\": {\"url\": \"<LOGIN_URL>\", \"username_field\": \"<USERNAME_SELECTOR>\", \"password_field\": \"<PASSWORD_SELECTOR>\", \"username\": \"<USERNAME>\", \"password\": \"<PASSWORD>\"}}}"
+      "json_prompt_template": "{\"tool\": \"manage_session\", \"args\": {\"action\": \"<ACTION>\", \"credentials\": {\"url\": \"<LOGIN_URL>\", \"username_field\": \"<USERNAME_SELECTOR>\", \"password_field\": \"<PASSWORD_SELECTOR>\", \"username\": \"<USERNAME>\", \"password\": \"<PASSWORD>\"}}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "db_add_finding",
@@ -250,7 +274,9 @@
           "description": "Evidence or proof"
         }
       },
-      "json_prompt_template": "{\"tool\": \"db_add_finding\", \"args\": {\"type\": \"<TYPE>\", \"url\": \"<URL>\", \"severity\": \"<SEVERITY>\", \"description\": \"<DESCRIPTION>\", \"evidence\": \"<EVIDENCE>\"}}"
+      "json_prompt_template": "{\"tool\": \"db_add_finding\", \"args\": {\"type\": \"<TYPE>\", \"url\": \"<URL>\", \"severity\": \"<SEVERITY>\", \"description\": \"<DESCRIPTION>\", \"evidence\": \"<EVIDENCE>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "db_get_findings",
@@ -270,7 +296,9 @@
           "description": "Filter by verification status"
         }
       },
-      "json_prompt_template": "{\"tool\": \"db_get_findings\", \"args\": {\"severity\": \"<SEVERITY>\", \"verified\": <VERIFIED>}}"
+      "json_prompt_template": "{\"tool\": \"db_get_findings\", \"args\": {\"severity\": \"<SEVERITY>\", \"verified\": <VERIFIED>}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "db_is_scanned",
@@ -290,7 +318,9 @@
           "description": "Specific scan type to check"
         }
       },
-      "json_prompt_template": "{\"tool\": \"db_is_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\"}}"
+      "json_prompt_template": "{\"tool\": \"db_is_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "db_mark_scanned",
@@ -315,7 +345,9 @@
           "description": "Summary of scan results"
         }
       },
-      "json_prompt_template": "{\"tool\": \"db_mark_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\", \"result\": \"<RESULT>\"}}"
+      "json_prompt_template": "{\"tool\": \"db_mark_scanned\", \"args\": {\"target\": \"<TARGET>\", \"scan_type\": \"<SCAN_TYPE>\", \"result\": \"<RESULT>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "db_get_statistics",
@@ -324,7 +356,9 @@
       "intrusive": false,
       "category": "database",
       "args_schema": {},
-      "json_prompt_template": "{\"tool\": \"db_get_statistics\", \"args\": {}}"
+      "json_prompt_template": "{\"tool\": \"db_get_statistics\", \"args\": {}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "finish_mission",
@@ -339,7 +373,9 @@
           "description": "Reason for finishing"
         }
       },
-      "json_prompt_template": "{\"tool\": \"finish_mission\", \"args\": {\"reason\": \"<REASON>\"}}"
+      "json_prompt_template": "{\"tool\": \"finish_mission\", \"args\": {\"reason\": \"<REASON>\"}}",
+      "_available": true,
+      "_path": "internal"
     },
     {
       "tool_name": "ask_user_for_approval",
@@ -354,7 +390,9 @@
           "description": "Message to show to user"
         }
       },
-      "json_prompt_template": "{\"tool\": \"ask_user_for_approval\", \"args\": {\"message\": \"<MESSAGE>\"}}"
+      "json_prompt_template": "{\"tool\": \"ask_user_for_approval\", \"args\": {\"message\": \"<MESSAGE>\"}}",
+      "_available": true,
+      "_path": "internal"
     },
     {
       "tool_name": "application_spider.crawl_and_map_application",
@@ -374,7 +412,9 @@
           "description": "Crawling mode: 'fast', 'static_js', or 'deep_visual' (default: 'fast')"
         }
       },
-      "json_prompt_template": "{\"tool\": \"application_spider.crawl_and_map_application\", \"args\": {\"base_url\": \"<URL>\", \"mode\": \"fast\"}}"
+      "json_prompt_template": "{\"tool\": \"application_spider.crawl_and_map_application\", \"args\": {\"base_url\": \"<URL>\", \"mode\": \"fast\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "logic_tester.test_logic_flow",
@@ -404,7 +444,9 @@
           "description": "Type of test: 'sequence_bypass', 'state_manipulation', 'business_rule_violation' (default: 'sequence_bypass')"
         }
       },
-      "json_prompt_template": "{\"tool\": \"logic_tester.test_logic_flow\", \"args\": {\"flow_name\": \"<NAME>\", \"steps\": [], \"expected_behavior\": \"<BEHAVIOR>\"}}"
+      "json_prompt_template": "{\"tool\": \"logic_tester.test_logic_flow\", \"args\": {\"flow_name\": \"<NAME>\", \"steps\": [], \"expected_behavior\": \"<BEHAVIOR>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "tool_installer.request_install_from_github",
@@ -429,7 +471,9 @@
           "description": "Optional package name if different from repo name"
         }
       },
-      "json_prompt_template": "{\"tool\": \"tool_installer.request_install_from_github\", \"args\": {\"repo_url\": \"<URL>\", \"description\": \"<DESCRIPTION>\"}}"
+      "json_prompt_template": "{\"tool\": \"tool_installer.request_install_from_github\", \"args\": {\"repo_url\": \"<URL>\", \"description\": \"<DESCRIPTION>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "capture_screenshot_som",
@@ -449,7 +493,9 @@
           "description": "Capture full scrollable page (default: false)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"capture_screenshot_som\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}"
+      "json_prompt_template": "{\"tool\": \"capture_screenshot_som\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}",
+      "_available": true,
+      "_path": "playwright"
     },
     {
       "tool_name": "click_element_by_id",
@@ -469,7 +515,9 @@
           "description": "Element ID from SoM mapping (numbered badge on screenshot)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"click_element_by_id\", \"args\": {\"url\": \"<URL>\", \"element_id\": <ELEMENT_ID>}}"
+      "json_prompt_template": "{\"tool\": \"click_element_by_id\", \"args\": {\"url\": \"<URL>\", \"element_id\": <ELEMENT_ID>}}",
+      "_available": true,
+      "_path": "playwright"
     },
     {
       "tool_name": "visual_screenshot",
@@ -489,7 +537,9 @@
           "description": "Capture full scrollable page (default: false)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"visual_screenshot\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}"
+      "json_prompt_template": "{\"tool\": \"visual_screenshot\", \"args\": {\"url\": \"<URL>\", \"full_page\": <FULL_PAGE>}}",
+      "_available": true,
+      "_path": "playwright"
     },
     {
       "tool_name": "solve_crypto",
@@ -504,7 +554,9 @@
           "description": "Ciphertext, hash, or path to file containing encrypted content"
         }
       },
-      "json_prompt_template": "{\"tool\": \"solve_crypto\", \"args\": {\"text_or_file\": \"<CIPHER_TEXT>\"}}"
+      "json_prompt_template": "{\"tool\": \"solve_crypto\", \"args\": {\"text_or_file\": \"<CIPHER_TEXT>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "crack_hash",
@@ -529,7 +581,9 @@
           "description": "Path to wordlist file (default: rockyou.txt)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"crack_hash\", \"args\": {\"hash_value\": \"<HASH>\", \"hash_type\": \"<TYPE>\"}}"
+      "json_prompt_template": "{\"tool\": \"crack_hash\", \"args\": {\"hash_value\": \"<HASH>\", \"hash_type\": \"<TYPE>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "analyze_binary",
@@ -544,7 +598,9 @@
           "description": "Path to the binary file to analyze"
         }
       },
-      "json_prompt_template": "{\"tool\": \"analyze_binary\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"analyze_binary\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "disassemble_function",
@@ -564,7 +620,9 @@
           "description": "Name of function to disassemble (default: main)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"disassemble_function\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"function_name\": \"main\"}}"
+      "json_prompt_template": "{\"tool\": \"disassemble_function\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"function_name\": \"main\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "analyze_file_artifacts",
@@ -579,7 +637,9 @@
           "description": "Path to the file to analyze"
         }
       },
-      "json_prompt_template": "{\"tool\": \"analyze_file_artifacts\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"analyze_file_artifacts\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "extract_embedded",
@@ -599,7 +659,9 @@
           "description": "Directory to extract files to"
         }
       },
-      "json_prompt_template": "{\"tool\": \"extract_embedded\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"extract_embedded\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "extract_steghide",
@@ -619,7 +681,9 @@
           "description": "Passphrase for extraction (empty for no password)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"extract_steghide\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"password\": \"\"}}"
+      "json_prompt_template": "{\"tool\": \"extract_steghide\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"password\": \"\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "check_binary_protections",
@@ -634,7 +698,9 @@
           "description": "Path to the binary file"
         }
       },
-      "json_prompt_template": "{\"tool\": \"check_binary_protections\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"check_binary_protections\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "find_rop_gadgets",
@@ -654,7 +720,9 @@
           "description": "Maximum number of gadgets to return (default: 50)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"find_rop_gadgets\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"find_rop_gadgets\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "analyze_pcap",
@@ -669,7 +737,9 @@
           "description": "Path to the PCAP file"
         }
       },
-      "json_prompt_template": "{\"tool\": \"analyze_pcap\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}"
+      "json_prompt_template": "{\"tool\": \"analyze_pcap\", \"args\": {\"filepath\": \"<FILE_PATH>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "follow_tcp_stream",
@@ -689,7 +759,9 @@
           "description": "TCP stream number to follow (default: 0)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"follow_tcp_stream\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"stream_number\": 0}}"
+      "json_prompt_template": "{\"tool\": \"follow_tcp_stream\", \"args\": {\"filepath\": \"<FILE_PATH>\", \"stream_number\": 0}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "hybrid_analysis",
@@ -706,7 +778,9 @@
           "description": "Target URL to analyze for source code exposure"
         }
       },
-      "json_prompt_template": "{\"tool\": \"hybrid_analysis\", \"args\": {\"target_url\": \"<TARGET_URL>\"}}"
+      "json_prompt_template": "{\"tool\": \"hybrid_analysis\", \"args\": {\"target_url\": \"<TARGET_URL>\"}}",
+      "_available": true,
+      "_path": "python"
     },
     {
       "tool_name": "get_hive_intelligence",
@@ -723,7 +797,9 @@
           "description": "Target domain to get intelligence for"
         }
       },
-      "json_prompt_template": "{\"tool\": \"get_hive_intelligence\", \"args\": {\"target_domain\": \"<DOMAIN>\"}}"
+      "json_prompt_template": "{\"tool\": \"get_hive_intelligence\", \"args\": {\"target_domain\": \"<DOMAIN>\"}}",
+      "_available": true,
+      "_path": "internal"
     },
     {
       "tool_name": "share_waf_bypass",
@@ -760,7 +836,9 @@
           "description": "Optional special headers used for bypass"
         }
       },
-      "json_prompt_template": "{\"tool\": \"share_waf_bypass\", \"args\": {\"target_domain\": \"<DOMAIN>\", \"waf_type\": \"<WAF>\", \"bypass_technique\": \"<TECHNIQUE>\", \"payload\": \"<PAYLOAD>\"}}"
+      "json_prompt_template": "{\"tool\": \"share_waf_bypass\", \"args\": {\"target_domain\": \"<DOMAIN>\", \"waf_type\": \"<WAF>\", \"bypass_technique\": \"<TECHNIQUE>\", \"payload\": \"<PAYLOAD>\"}}",
+      "_available": true,
+      "_path": "internal"
     },
     {
       "tool_name": "ingest_documentation",
@@ -782,7 +860,9 @@
           "description": "Type of documentation: api_doc, user_manual, policy, faq (default: api_doc)"
         }
       },
-      "json_prompt_template": "{\"tool\": \"ingest_documentation\", \"args\": {\"url\": \"<DOC_URL>\", \"doc_type\": \"api_doc\"}}"
+      "json_prompt_template": "{\"tool\": \"ingest_documentation\", \"args\": {\"url\": \"<DOC_URL>\", \"doc_type\": \"api_doc\"}}",
+      "_available": true,
+      "_path": "internal"
     },
     {
       "tool_name": "audit_business_logic",
@@ -819,7 +899,15 @@
           "description": "Whether the action succeeded"
         }
       },
-      "json_prompt_template": "{\"tool\": \"audit_business_logic\", \"args\": {\"action\": \"<ACTION>\", \"endpoint\": \"<ENDPOINT>\", \"parameters\": {}, \"response\": {}, \"success\": true}}"
+      "json_prompt_template": "{\"tool\": \"audit_business_logic\", \"args\": {\"action\": \"<ACTION>\", \"endpoint\": \"<ENDPOINT>\", \"parameters\": {}, \"response\": {}, \"success\": true}}",
+      "_available": true,
+      "_path": "internal"
     }
-  ]
+  ],
+  "metadata": {
+    "last_updated": "2026-02-07T14:03:53.965437+00:00",
+    "auto_heal_enabled": true,
+    "tools_available": 37,
+    "tools_total": 41
+  }
 }

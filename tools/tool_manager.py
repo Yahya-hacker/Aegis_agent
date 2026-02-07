@@ -261,7 +261,7 @@ class RealToolManager:
             Dict with status and output or error information
         """
         if tool_name not in self.tool_paths:
-            return {"status": "error", "error": f"Outil {tool_name} non trouvé"}
+            return {"status": "error", "error": f"Tool {tool_name} not found"}
         
         # Rate limiting: enforce delay between requests
         import time
@@ -279,7 +279,7 @@ class RealToolManager:
         async with self.semaphore:
             try:
                 cmd = [self.tool_paths[tool_name]] + args
-                logger.info(f"Exécution : {' '.join(cmd)}")
+                logger.info(f"Executing: {' '.join(cmd)}")
                 
                 # Use safe command runner to prevent output bombs
                 try:

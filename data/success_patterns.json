@@ -34,5 +34,17 @@
     "target": "http://testphp.vulnweb.com/login.php",
     "result_summary": "data received",
     "timestamp": "2025-12-02T15:00:30.359427"
+  },
+  {
+    "action": "run_sqlmap",
+    "target": "testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2026-01-28T19:10:01.876030"
+  },
+  {
+    "action": "visual_recon.capture_screenshot_som",
+    "target": "http://testphp.vulnweb.com/login.php",
+    "result_summary": "data received",
+    "timestamp": "2026-01-28T19:12:19.759238"
   }
 ]

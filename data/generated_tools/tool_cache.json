@@ -1,0 +1,16 @@
+{
+  "tools": [
+    {
+      "name": "security_testing_tool_tool",
+      "description": "Security testing tool: http_request. Parameters: {\"url\": \"testphp.vulnweb.com/login.php\", \"method\": \"GET\"}",
+      "code": "import requests\n\ndef execute(input_data):\n    \"\"\"\n    Executes a given HTTP request based on the provided input data.\n    \n    :param input_data: Dictionary containing the URL and method of the request.\n    :return: A dictionary with status and data keys.\n    \"\"\"\n    try:\n        # Extracting the url and method from the input data\n        url = input_data[\"args\"][\"url\"]\n        method = input_data[\"args\"][\"method\"].upper()\n        \n        # Validating the URL\n        if not url:\n            raise ValueError(\"URL cannot be empty.\")\n        \n        # Making the HTTP request\n        if method == \"POST\":\n            response = requests.post(url)\n        elif method == \"GET\":\n            response = requests.get(url)\n        else:\n            raise ValueError(f\"Unsupported method: {method}\")\n        \n        # Checking the status code\n        if response.status_code != 200:\n            raise Exception(f\"HTTP request failed with status code: {response.status_code}\")\n        \n        # Returning the response content\n        result = {'status': 'success', 'data': response.text}\n    except Exception as e:\n        result = {'status': 'error', 'message': str(e)}\n    \n    return result\n\n# Example usage:\n# input_data = {\"args\": {\"url\": \"http://testphp.vulnweb.com/login.php\", \"method\": \"GET\"}}\n# print(execute(input_data))",
+      "created_at": "2026-01-28T18:12:42.309129",
+      "version": 1,
+      "success_count": 6,
+      "failure_count": 0,
+      "last_used": "2026-01-28T19:44:05.365279",
+      "last_error": null,
+      "category": "network"
+    }
+  ]
+}
