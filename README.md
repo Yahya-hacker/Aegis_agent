@@ -7,6 +7,16 @@
 
 ---
 
+## 🕶️ Vision — Shadow Auditor
+
+Aegis Agent is evolving. The next chapter is **Shadow Auditor** — an elite, autonomous multi-agent security CLI rebuilt from the ground up with strict typed contracts, SAST-first analysis, human-in-the-loop safety gates, and CI-grade reproducible outputs.
+
+> *"Every vulnerability has a story. Shadow Auditor reads the whole book."*
+
+📖 **[Read the full Vision →](docs/VISION.md)**
+
+---
+
 ## 🚀 What's New in v10.0 "Omega"
 
 ### AegisOmega Hybrid Agent
