@@ -1,3 +1,6 @@
+# AEGIS IS STILL UNDER DEVELOPMENT, THE PROJECT IS CURRENTLY BEIGN PORTED TO SHADOW AUDITOR, THESE TWO RPOJECTS WILL FUSIONNED, A LAUNCH IS PLANNED FOR JUNE/JULY.
+
+https://github.com/Yahya-hacker/shadow-auditor
 
 # Aegis Agent v10.0 "Omega" — OODA Loop Enhanced Autonomous Pentesting
 
